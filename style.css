@@ -1,0 +1,305 @@
+html {
+    height: 100%;
+
+    --background: rgb(3, 3, 6);
+    --foreground: rgb(255, 255, 255);
+    --terminal-btn-display: block;
+    --font: "CascadiaCode", monospace;
+    --accent-color-1: yellow; 
+    --accent-color-2: rgb(139, 195, 74);
+    --btn-color: black;
+    --error-color: red;
+}
+
+body {
+    height: 100%;
+    margin: 0;
+}
+
+#terminal {
+    width: 100%;
+    height: 100%;
+    background: var(--background);
+    transition: 0.5s;
+    --padding: 50px;
+    padding: var(--padding);
+    box-sizing: border-box;
+
+    --font-size: 1em;
+    line-height: 1.3em;
+
+    overflow-y: auto;
+    color: var(--foreground);
+    transition: color 0.5s;
+    white-space: pre-wrap;
+    word-break: break-word;
+
+    font-family: var(--font);
+    font-size: var(--font-size);
+
+    line-height: 1.1em;
+    width: max-content;
+    min-width: 100%;
+    padding-bottom: 400px;
+    padding-left: calc(2em + var(--padding));
+}
+
+#terminal-input-box {
+    display: none;
+    pointer-events: none;
+}
+
+.terminal-input-suggestion {
+    color: black;
+    display: inline-block;
+    background-color: white;
+    font-family: var(--font);
+    width: fit-content;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    margin-left: 10px;
+    pointer-events: initial;
+}
+
+#terminal-input-box.mobile {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+#terminal-input.mobile {
+    box-sizing: border-box;
+    width: 100%;
+    height: 60px;
+    font-size: 20px;
+    padding: 10px;
+    font-family: var(--font);
+    outline: none;
+    border-radius: 10px;
+    border: none;
+    pointer-events: initial;
+}
+
+#terminal-input.mobile.hidden {
+    display: none;
+}
+
+#terminal * {
+    font-family: var(--font);
+    font-size: var(--font-size);
+}
+
+#terminal pre, #terminal a {
+    display: inline;
+    cursor: default;
+    color: var(--foreground);
+    transition: color 0.5s;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.terminal-container {
+    background-color: var(--background);
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+}
+
+#terminal a {
+    cursor: pointer;
+}
+
+#terminal pre.link {
+    text-decoration: underline;
+}
+
+#terminal input {
+    border: none;
+    background: transparent;
+    color: var(--foreground);
+    margin: 0;
+    padding: 0;
+    transition: color 0.5s;
+}
+
+#terminal input:focus {
+    outline: none;
+}
+
+#terminal-buttons {
+    position: absolute;
+    right: 15%;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20%;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-row-gap: 10px;
+}
+
+#terminal-buttons.mobile {
+    position: fixed;
+    top: auto;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    transform: none;
+    padding: 10px;
+    box-sizing: border-box;
+    margin-bottom: 70px;
+}
+
+#terminal-buttons > button {
+    display: var(--terminal-btn-display);
+    background: var(--foreground);
+    border: none;
+    padding: 20px;
+    font-family: var(--font);
+    font-size: 2.8em;
+    color: var(--btn-color);
+    cursor: pointer;
+    box-sizing: border-box;
+    border: 2px solid transparent;
+    transition: 300ms;
+}
+
+#terminal-buttons.mobile > button {
+    padding: 2px;
+    font-size: 2em;
+}
+
+#terminal-buttons > button:hover {
+    background: transparent;
+    color: var(--foreground);
+    border: 2px dotted var(--foreground);
+}
+
+#turtlo-container {
+    position: fixed;
+    overflow: none;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.turtlo {
+    position: absolute;
+    z-index: 10000;
+    image-rendering: pixelated;
+    width: 50px;
+    height: 62px;
+    transition: opacity 1s, width 1s, height 1s;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.turtlo.gone {
+    width: 0px !important;
+    height: 0px !important;
+    opacity: 0;
+}
+
+.turtlo.huge {
+    width: 100px;
+    height: 124px;
+}
+
+.turtlo.hugehuge {
+    width: 300px;
+    height: 372px;
+}
+
+.terminal-img {
+    height: 50%;
+    width: 50%;
+    border: 3px solid var(--accent-color-2);
+    cursor: inherit;
+}
+
+#terminal .clickable {
+    cursor: pointer !important;
+    font-weight: bold;
+    transition: 0ms;
+}
+
+#terminal .clickable:hover {
+    color: var(--accent-color-2) !important;
+}
+
+.sorting-container {
+    width: 600px;
+}
+
+.terminal-window {
+    position: fixed;
+    z-index: 1000;
+    top: 0;
+    left: 0;
+    --header-height: 40px;
+    --margin: 20px;
+    --border-radius: 10px;
+    width: calc(100% - var(--margin) * 2);
+    height: calc(100% - var(--margin) * 2);
+    background: var(--foreground);
+    transform: translate(var(--margin), var(--margin));
+    border-radius: var(--border-radius);
+    display: grid;
+    grid-template-rows: var(--header-height) 1fr;
+}
+
+.terminal-window-header {
+    width: 100%;
+    padding: calc(var(--header-height) / 4);
+    font-size: calc(var(--header-height) / 2);
+    box-sizing: border-box;
+    position: relative;
+}
+
+.terminal-window-title {
+    width: calc(100% - 20px);
+    position: absolute;
+    font-family: var(--font);
+    font-weight: bold;
+    text-align: center;
+}
+
+.terminal-window-exit {
+    width: calc(100% - 20px);
+    position: absolute;
+    cursor: pointer;
+    text-align: right;
+    font-family: var(--font);
+    font-weight: bold;
+    transition: 300ms;
+}
+
+.terminal-window-exit:hover {
+    color: red;
+}
+
+.terminal-window-content {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.terminal-window-content > * {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-bottom-left-radius: calc(var(--border-radius) - 2px);
+    border-bottom-right-radius: calc(var(--border-radius) - 2px);
+    box-sizing: border-box;
+    border: 2px solid var(--foreground);
+}
