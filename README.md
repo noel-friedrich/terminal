@@ -36,11 +36,10 @@ The page is build to work like a Unix-Terminal, including:
   * these values are saved globally for all users to see
 * most of your favorite unix-commands should do something
 * shutdown the website using `shutdown`
-* remove your website using `rm *`
 * see your command history using `history`
   * execute a command from your history using `!<index>`
 * spawn turtlo using `turtlo` and watch it do stuff
-* see your favorite calendar using `cal`
+* see your favorite calendar using `cal` 
 * convert your favorite image file to another format
   1. upload the file using `upload`
   2. convert it using `convert <filename>.<old_ending> <filename>.<new_ending>`
