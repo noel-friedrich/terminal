@@ -54,4 +54,12 @@ terminal.modules.mathenv.setValue("PI", Math.PI)
 terminal.modules.mathenv.setValue("e", Math.E)
 terminal.modules.mathenv.setValue("E", Math.E)
 
+terminal.modules.mathenv.setValue("sum", (startX, endX, func) => {
+    let sum = 0
+    for (let x = startX; x <= endX; x++) {
+        sum += func(x)
+    }
+    return sum
+})
+
 terminal.modules.mathenv.setValue("terminal", terminal)
