@@ -1,12 +1,12 @@
-terminal.addCommand("bezier", async function() {
+terminal.addCommand("physics", async function() {
     await terminal.modules.load("window")
     let terminalWindow = terminal.modules.window.make({
-        iframeUrl: "../bezier/",
-        name: "Bezier Playground"
+        iframeUrl: "../cloth/",
+        name: "Click to add points, Space to simulate"
     })
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
 }, {
-    description: "play with bezier curves"
+    description: "start a physics simulation"
 })

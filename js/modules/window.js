@@ -22,6 +22,11 @@ terminal.modules.window = {
         exitBtn.addEventListener("click", function() {
             windowContainer.remove()
             terminal.interrupt()
+            setTimeout(() => {
+                if (terminal.currInputElement) {
+                    terminal.currInputElement.focus()
+                }
+            }, 200)
         })
 
         const content = terminal.document.createElement("div")
@@ -65,6 +70,11 @@ terminal.modules.window = {
                 windowContainer,
                 close() {
                     windowContainer.remove()
+                    setTimeout(() => {
+                        if (terminal.currInputElement) {
+                            terminal.currInputElement.focus()
+                        }
+                    }, 200)
                 }
             }
         }

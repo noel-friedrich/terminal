@@ -1,12 +1,12 @@
-terminal.addCommand("bezier", async function() {
+terminal.addCommand("cardoid", async function() {
     await terminal.modules.load("window")
     let terminalWindow = terminal.modules.window.make({
-        iframeUrl: "../bezier/",
-        name: "Bezier Playground"
+        iframeUrl: "../cardoid/",
+        name: "Cardoid Generator"
     })
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
 }, {
-    description: "play with bezier curves"
+    description: "start a cardoid generator"
 })

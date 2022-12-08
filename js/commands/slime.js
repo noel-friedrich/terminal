@@ -1,12 +1,12 @@
-terminal.addCommand("bezier", async function() {
+terminal.addCommand("slime", async function() {
     await terminal.modules.load("window")
     let terminalWindow = terminal.modules.window.make({
-        iframeUrl: "../bezier/",
-        name: "Bezier Playground"
+        iframeUrl: "../slime/",
+        name: "Slime Simulation"
     })
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
 }, {
-    description: "play with bezier curves"
+    description: "Start a slime simulation"
 })
