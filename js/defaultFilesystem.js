@@ -134,6 +134,6 @@ terminal.fileSystem.root = new Directory({
         "contact.txt": new TextFile(contact_txt),
         "melodies": MELODIES_FOLDER
     }, {"<": "cd ..", "secret": "cd secret/", "contact": "cat contact.txt", "melodies": ["cd melodies/", "cat README.txt"]}),
-    "github.url": new ExecutableFile("https://github.com/noel-friedrich/cli"),
+    "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
     "blog.url": new ExecutableFile("https://noel-friedrich.de/blobber")
 }, {"projects": ["cd projects/", "cat README.txt"], "about me": "cat about.txt", "help": "help", "my blog": "run blog.url"})
