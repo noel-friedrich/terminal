@@ -146,6 +146,7 @@ The following list can also be viewed using the `whatis *` command
 | `particle`         | start a particle simulation                             |
 | `pascal`           | print a pascal triangle                                 |
 | `password`         | Generate a random password                              |
+| `pendulum`         | start a pendulum wave simulation                        |
 | `perilious-path`   | play perilous path                                      |
 | `physics`          | start a physics simulation                              |
 | `pi`               | calculate pi to the n-th digit                          |
