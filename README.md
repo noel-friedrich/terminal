@@ -67,6 +67,7 @@ The following list can also be viewed using the `whatis *` command
 | `base64`           | encode/decode a message using base64                    |
 | `bc`               | start a bc (basic calculator) session                   |
 | `bezier`           | play with bezier curves                                 |
+| `bin`              | convert a number to another base                        |
 | `binomcdf`         | calculate the binomial cumulative distribution function |
 | `binompdf`         | calculate binomial distribution value                   |
 | `blobber`          | start blobber                                           |
@@ -183,6 +184,7 @@ The following list can also be viewed using the `whatis *` command
 | `timer`            | set a timer                                             |
 | `todo`             | manage a todo list                                      |
 | `touch`            | create a file in the current directory                  |
+| `turing`           | run a turing machine file                               |
 | `turtlo`           | spawn turtlo                                            |
 | `type-test`        | test your typing speed                                  |
 | `uname`            | print the operating system name                         |

@@ -11,7 +11,7 @@ terminal.addCommand("pendulum", async function(args) {
     description: "start a pendulum wave simulation",
     args: {
         "?n:i:1~10000": "number of pendulums",
-        "?o:n:1~10000": "offset of pendulums"
+        "?o:n:0~1": "offset of pendulums"
     },
     standardVals: {
         n: 20,
