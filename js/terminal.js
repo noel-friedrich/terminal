@@ -420,7 +420,7 @@ class TerminalParser {
                 argOptions[i].description = description
             })
 
-        function error(errMessage) {
+        function error(errMessage, isHelp=false) {
             let tempArgOptions = argOptions.filter(arg => !arg.isHelp)
 
             terminal.print("$ ", terminal.data.accentColor2)
@@ -471,6 +471,10 @@ class TerminalParser {
 
             }
 
+            if (isHelp && command.helpFunc) {
+                command.helpFunc()
+            }
+
             if (errMessage)
                 terminal.printError(errMessage, "ParseError")
 
@@ -481,7 +485,7 @@ class TerminalParser {
         let [tokens, namedArgs] = this.parseNamedArgs(tempTokens, argOptions, error, command.info.disableEqualsArgNotation)
 
         if (namedArgs.help || namedArgs.h) {
-            error()
+            error(undefined, true)
         }
 
         let requiredCount = argOptions.filter(arg => !arg.optional).length
@@ -585,6 +589,7 @@ class Command {
         this.callback = callback
         this.info = info
         this.args = info.args ?? {}
+        this.helpFunc = info.helpFunc ?? null
         this.description = info.description ?? ""
         this.defaultValues = info.defaultValues ?? info.standardVals ?? {}
     }
@@ -771,6 +776,17 @@ class Terminal {
             throw new Error(`File "${path}" not found`)
         }
         return file
+    }
+
+    async createFile(fileName, fileType, data) {
+        if (!terminal.isValidFileName(fileName))
+            throw new Error("Invalid filename")
+        if (terminal.fileExists(fileName))
+            throw new Error("File already exists")
+        let newFile = new (fileType)(data)
+        terminal.currFolder.content[fileName] = newFile
+        await terminal.fileSystem.reload()
+        return newFile
     }
 
     fileExists(path) {
@@ -989,10 +1005,10 @@ class Terminal {
         }
     }
 
-    print(text, color=undefined, {forceElement=false, element="span"}={}) {
+    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined}={}) {
         text ??= ""
         let output = undefined
-        if (color === undefined && !forceElement) {
+        if (color === undefined && !forceElement && fontStyle === undefined) {
             let textNode = document.createTextNode(text)
             this.parentNode.appendChild(textNode)
             output = textNode
@@ -1000,10 +1016,15 @@ class Terminal {
             let span = document.createElement(element)
             span.textContent = text
             if (color !== undefined) span.style.color = color.string.hex
+            if (fontStyle !== undefined) span.style.fontStyle = fontStyle
             terminal.parentNode.appendChild(span)
             output = span
         }
         return output
+    }
+
+    printItalic(text, color=undefined, opts) {
+        return this.printLine(text, color, {...opts, fontStyle: "italic"})
     }
 
     printImg(src, altText="") {

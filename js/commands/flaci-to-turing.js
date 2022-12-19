@@ -70,11 +70,23 @@ terminal.addCommand("flaci-to-turing", async function(args) {
         return
     }
 
-    terminal.printLine(outputCode)
-
+    if (args.s) { // save
+        await terminal.createFile(args.s, TextFile, outputCode)
+        terminal.printLine(`Saved as ${args.s}`)
+    } else {
+        terminal.printLine(outputCode)
+    }
 }, {
     description: "Converts a flaci.com JSON File of a turing machine to a turing machine file",
     args: {
-        "file": "file to convert"
+        "file": "file to convert",
+        "?s=save": "save the converted file"
+    },
+    helpFunc() {
+        terminal.printItalic("flaci.com lets you create Turing Machines")
+        terminal.printItalic("graphically. This command converts the")
+        terminal.printItalic("JSON file of a Turing Machine to a Turing")
+        terminal.printItalic("Machine file that can be used in this")
+        terminal.printItalic("terminal using the 'turing' command.")
     }
 })
