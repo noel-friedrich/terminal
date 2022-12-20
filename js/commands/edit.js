@@ -1,122 +1,173 @@
-terminal.addCommand("edit", async function(args) {
-    let file = terminal.getFile(args.file)
-    let fileLines = file.content.split("\n")
+const cssCode = {
+    ".editor-parent": {
+        "width": "100%",
+        "resize": "both",
+        "display": "grid",
+        "grid-template-rows": "auto 1fr",
+        "grid-template-columns": "1fr",
+    },
 
-    function createInput(width) {
-        let inputElement = document.createElement("input")
-        terminal.parentNode.appendChild(inputElement)
-        inputElement.style.width = width
-        return inputElement
+    ".editor-header-title": {
+        "width": "fit-content",
+        "color": "var(--background)",
+        "background": "var(--foreground)",
+    },
+
+    ".editor-body": {
+        "display": "grid",
+        "grid-template-rows": "1fr",
+        "grid-template-columns": "auto 1fr",
+    },
+
+    ".editor-sidebar": {
+        "color": "var(--background)",
+        "background": "var(--foreground)",
+        "padding-right": "0.1em",
+        "padding-left": "0.1em",
+    },
+
+    ".editor-content": {
+        "outline": "none",
+        "padding-right": "0.5em",
+        "padding-left": "0.5em",
+    },
+
+    ".editor-content > div:focus-visible": {
+        "outline": "none",
+        "background": "#1d1d1d",
+    },
+}
+
+function createEditorHTML() {
+    let parent = createElement("div", {className: "editor-parent"})
+    let header = createElement("div", {className: "editor-header"}, parent)
+    let headerTitle = createElement("div", {className: "editor-header-title"}, header)
+    let body = createElement("div", {className: "editor-body"}, parent)
+    let sidebar = createElement("div", {className: "editor-sidebar"}, body)
+    let contentScroll = createElement("div", {className: "editor-content-scroll"}, body)
+    let content = createElement("div", {
+        className: "editor-content",
+        contentEditable: true,
+    }, contentScroll)
+
+    return {
+        parent, header, headerTitle, body, sidebar, content, contentScroll
+    }
+}
+
+function implementCSS(code) {
+    let style = document.createElement("style")
+    for (const [selector, properties] of Object.entries(code)) {
+        let css = selector + " {"
+        for (const [property, value] of Object.entries(properties))
+            css += property + ": " + value + ";"
+        css += "}"
+        style.innerHTML += css
+    }
+    terminal.document.head.appendChild(style)
+}
+
+let tempFileContent = null
+let tempFileName = null
+let elements = null
+let lineCount = null
+let prevLineCount = null
+let currentlyEditing = false
+
+function updateLineNums() {
+    lineCount = elements.content.querySelectorAll("div").length
+    if (prevLineCount !== lineCount) {
+        elements.sidebar.textContent = ""
+        for (let i = 0; i < lineCount; i++) {
+            let line = createElement("div", {className: "editor-line-num"}, elements.sidebar)
+            line.textContent = i + 1
+        }
+        prevLineCount = lineCount
+    }
+}
+
+function createElement(tag, props, parent=null) {
+    const element = document.createElement(tag)
+    for (const [key, value] of Object.entries(props))
+        element[key] = value
+    if (parent)
+        parent.appendChild(element)
+    return element
+}
+
+function getText() {
+    let text = ""
+    for (let line of elements.content.querySelectorAll("div")) {
+        text += line.textContent + "\n"
+    }
+    return text.slice(0, -1)
+}
+
+function loadContent() {
+    let lastElement = null
+    for (let line of tempFileContent.split("\n")) {
+        let lineElement = createElement("div", {}, elements.content)
+        lineElement.textContent = line
+        if (lineElement.textContent.trim() == "")
+            lineElement.appendChild(document.createElement("br"))
+        lastElement = lineElement
+    }
+    if (lastElement)
+        setTimeout(() => lastElement.focus(), 100)
+    lineCount = tempFileContent.split("\n").length
+    updateLineNums()
+}
+
+terminal.addCommand("edit", async function(args) {
+    tempFileContent = ""
+    tempFileName = "Untitled File"
+    currentlyEditing = true
+    prevLineCount = null
+    elements = createEditorHTML()
+    
+    if (args.file) {
+        let file = terminal.getFile(args.file)
+        if (file.type == FileType.FOLDER)
+            throw new Error("cannot edit a folder")
+        tempFileContent = file.content
+        tempFileName = file.path
     }
 
-    return new Promise(resolve => {
-        let windowWidth = args.w
-        let windowHeight = args.h
-        let lineSeperator = `+--${stringMul("-", windowWidth)}--+`
-        let preElement = terminal.printLine(lineSeperator, undefined, {forceElement: true})
-        let charWidth = preElement.getBoundingClientRect().width / lineSeperator.length
-        let inputs = Array()
-        let lines = Array.from(Array(Math.max(windowHeight, fileLines.length)))
-            .map((_, i) => (fileLines[i]) ? fileLines[i] : "")
-        let numElements = Array()
-        for (let i = 0; i < windowHeight; i++) {
-            let num = terminal.print(stringPad(`${i}`, 3))
-            terminal.print(" ")
-            numElements.push(num)
-            inputs.push(createInput(`${charWidth * windowWidth}px`))
-            terminal.printLine(" |")
-        }
-        terminal.printLine("+" + stringPadMiddle(" strg-s to save, esc to exit ", windowWidth + 4, "-") + "+")
+    implementCSS(cssCode)
+    terminal.parentNode.appendChild(elements.parent)
 
-        function save() {
-            let content = lines.reduce((a, l) => a + l + "\n", "")
-            file.content = content.trim()
-            resolve()
-        }
+    elements.headerTitle.textContent = tempFileName
+    elements.content.addEventListener("input", updateLineNums)
+    loadContent()
 
-        function loadLines(startIndex) {
-            for (let i = startIndex; i < startIndex + windowHeight; i++) {
-                if (!lines[i]) lines.push("")
-                inputs[i - startIndex].value = lines[i]
-                numElements[i - startIndex].textContent = stringPad(`${i}`, 3)
-            }
-        }
-
-        let currScrollIndex = 0
-        loadLines(currScrollIndex)
-
-        setTimeout(() => inputs[0].focus(), 300)
-        inputs[inputs.length - 1].scrollIntoView({behavior: "smooth"})
-
-        for (let input of inputs) {
-            let i = inputs.indexOf(input)
-            let lineIndex = currScrollIndex + i
-            input.onkeydown = function(event) {
-                if (event.key == "Backspace") {
-                    if (input.value.length == 0 && inputs[i - 1]) {
-                        inputs[i - 1].focus()
-                        lines.splice(lineIndex, 1)
-                        loadLines(currScrollIndex)
-                        event.preventDefault()
-                    }
-                } else if (event.key == "Tab") {
-                    input.value += "    "
-                    event.preventDefault()
-                } else if (event.key == "ArrowUp") {
-                    if (inputs[i - 1]) {
-                        inputs[i - 1].focus()
-                        inputs[i - 1].selectionStart = inputs[i - 1].selectionEnd = 10000
-                    } else if (currScrollIndex > 0) {
-                        currScrollIndex--
-                        loadLines(currScrollIndex)
-                    }
-                    event.preventDefault()
-                } else if (event.key == "Enter") {
-                    lines.splice(lineIndex + 1, 0, "")
-                    let leadingSpaces = input.value.match(/^ */)[0].length
-                    lines[lineIndex] = input.value
-                    if (inputs[i + 1]) {
-                        inputs[i + 1].focus()
-                        if (inputs[i + 1].value.length == 0) {
-                            lines[lineIndex + 1] = stringMul(" ", leadingSpaces)
-                        }
-                        inputs[i + 1].selectionStart = inputs[i + 1].selectionEnd = 10000
-                    } else {
-                        currScrollIndex++
-                    }
-                    loadLines(currScrollIndex)
-                    event.preventDefault()
-                } else if (event.key == "ArrowDown") {
-                    if (inputs[i + 1]) {
-                        inputs[i + 1].focus()
-                        inputs[i + 1].selectionStart = inputs[i + 1].selectionEnd = 10000
-                    } else {
-                        currScrollIndex++
-                        loadLines(currScrollIndex)
-                    }
-                    event.preventDefault()
-                }
-                if (event.ctrlKey && event.key.toLowerCase() == "s") {
-                    save()
-                    event.preventDefault()
-                }
-                if (event.key == "Escape" || (event.ctrlKey && event.key == "c")) {
-                    resolve()
-                }
-                lines[i + currScrollIndex] = input.value
-            }
+    terminal.document.addEventListener("keydown", event => {
+        // save
+        if (event.ctrlKey && event.key == "s") {
+            currentlyEditing = false
+            event.preventDefault()
         }
     })
+
+    while (currentlyEditing) {
+        await sleep(100)
+    }
+
+    while (tempFileName == "" || tempFileName == "Untitled File") {
+        tempFileName = await terminal.prompt("file name: ")
+    }
+
+    if (terminal.fileExists(tempFileName)) {
+        let file = terminal.getFile(tempFileName)
+        if (file.type == FileType.FOLDER)
+            throw new Error("cannot edit a folder")
+        file.content = getText()
+    } else {
+        terminal.createFile(tempFileName, TextFile, getText())
+    }
 }, {
     description: "edit a file of the current directory",
     args: {
-        "file": "the file to open",
-        "?w:n:10~100": "the width of the window",
-        "?h:n:10~100": "the height of the window"
-    },
-    standardVals: {
-        "w": 64,
-        "h": 16
+        "?file": "the file to open",
     }
 })
 
