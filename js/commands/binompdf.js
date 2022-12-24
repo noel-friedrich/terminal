@@ -1,5 +1,5 @@
 terminal.addCommand("binompdf", async function(args) {
-    const binompdf = (await terminal.modules.load("binom")).binompdf
+    const binompdf = (await terminal.modules.load("binom", terminal)).binompdf
     let n = ~~args.n
     let k = ~~args.k
     if (k > n) {

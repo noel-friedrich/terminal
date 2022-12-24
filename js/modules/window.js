@@ -20,8 +20,8 @@ terminal.modules.window = {
         header.appendChild(exitBtn)
 
         exitBtn.addEventListener("click", function() {
-            windowContainer.remove()
             terminal.interrupt()
+            windowContainer.remove()
             setTimeout(() => {
                 if (terminal.currInputElement) {
                     terminal.currInputElement.focus()

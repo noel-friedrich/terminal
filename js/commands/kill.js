@@ -1,6 +1,6 @@
 terminal.addCommand("kill", async function(args) {
     if (args.process.toLowerCase() == "turtlo") {
-        await terminal.modules.load("turtlo")
+        await terminal.modules.load("turtlo", terminal)
         if (terminal.modules.turtlo.kill()) {
             terminal.printLine("done.")
         } else {

@@ -26,6 +26,14 @@ class TuringInstruction {
         this.direction = direction
         this.newState = newState
     }
+    
+    exportLinear() {
+		return [
+			this.newContent,
+			this.direction,
+			this.newState
+		]
+	}
 
 }
 
@@ -94,15 +102,25 @@ class TuringMachine {
         }
 
     }
+    
+    exportInstructionsLinear() {
+		let result = {}
+		for (let [key1, tempVal1] of Object.entries(this.instructions)) {
+			let tempResult = {}
+			for (let [key2, tempVal2] of Object.entries(tempVal1)) {
+				tempResult[key2] = tempVal2.exportLinear()
+			}
+			result[key1] = tempResult
+		}
+		return JSON.stringify(result)
+	}
 
     constructor(code, {
         startState="0",
         startTapeContent="",
         standardTapeContent="_",
-        turbo=false,
         maxSteps=100000
     }={}) {
-        this.turboMode = turbo
         this.standardTapeContent = standardTapeContent
         this.tape = Array.from(startTapeContent) || []
         this.state = startState
@@ -161,11 +179,60 @@ class TuringMachine {
         terminal.print("Current Index: ")
         this.indexOut = terminal.print("", undefined, {forceElement: true})
         terminal.addLineBreak()
-        this.draw(true)
+        this.draw()
     }
+    
+    compile(maxTapeSize=10000) {
+		let code = ""
+		let startIndex = ~~(maxTapeSize/2)
+		const writeLine = l => code += l + "\n"
+		writeLine(`onmessage = () => {`)
+		writeLine(`  const states = ${this.exportInstructionsLinear()};`)
+		writeLine(`  let index = ${startIndex};`)
+		writeLine(`  let tape = Array.from(Array(${maxTapeSize})).fill("${this.standardTapeContent}");`)
+		for (let i = 0; i < this.tape.length; i++) {
+			let tapeContent = this.tape[i]
+			writeLine(`  tape[${startIndex + i}] = "${tapeContent}";`)
+		}
+		writeLine(`  let state = ${this.state};`)
+		writeLine(`  for (let i = 0;; i++) {`)
+		writeLine(`     const instructs = states[state];`)
+		writeLine(`     if (!instructs) break;`)
+		writeLine(`     let instruction = instructs[tape[index]] ?? instructs["*"];`)
+		writeLine(`     if (!instruction) break;`)
+		writeLine(`     if (instruction[0] != "*")`)
+		writeLine(`       tape[index] = instruction[0];`)
+		writeLine(`     index += instruction[1];`)
+		writeLine(`     state = instruction[2];`)
+		writeLine(`     if (i >= ${this.maxSteps}) break;`)
+		writeLine(`  }`)
+		writeLine(`  const output = tape.filter(t => t != "${this.standardTapeContent}").join("");`)
+		writeLine(`  postMessage(output)`)
+		writeLine(`}`)
+		return code
+	}
+	
+	async executeCompiled(code) {
+		const blob = new Blob([code], {type: 'application/javascript'})
+		let worker = new Worker(URL.createObjectURL(blob))
+		let running = true
+		worker.onmessage = e => {
+			terminal.printLine(e.data)
+			worker.terminate()
+			running = false
+		}
+		worker.postMessage("")
+		let i = 0
+		while (running) {
+			i++
+			if (i == 10) {
+				terminal.printLine("This may take a bit...")
+			}
+			await sleep(100)
+		}
+	}
 
-    draw(force) {
-        if (this.turboMode && !force) return
+    draw() {
         this.tapeOut.textContent = this.tape.join("")
         this.pointerOut.textContent = " ".repeat(this.tapeIndex) + "^"
         this.stateOut.textContent = this.state
@@ -208,20 +275,26 @@ terminal.addCommand("turing", async function(args) {
     const machine = new TuringMachine(file.content, {
         startTapeContent: args.startTape,
         startState: args.startingState,
-        turbo: args.turbo,
         maxSteps: args.maxSteps
     })
+    
     if (machine.errors.length > 0) {
         machine.errors[0].print()
         return
     }
 
     terminal.machine = machine
+    
+    if (args.turbo) {
+		let compiledJS = machine.compile()
+		await machine.executeCompiled(compiledJS)
+		return
+	}
 
     machine.firstDraw()
-    for (let i = 0;; i++) {
-        if (!args.turbo)
-            await terminal.sleep(args.s)
+	terminal.scroll()
+    while (true) {
+        await terminal.sleep(args.s)
         if (!machine.step()) {
             if (machine.errors.length > 0)
                 machine.errors[0].print()
@@ -229,7 +302,8 @@ terminal.addCommand("turing", async function(args) {
         }
         machine.draw()
     }
-    machine.draw(true)
+    machine.draw()
+    
 }, {
     description: "run a turing machine file",
     args: {
@@ -237,7 +311,7 @@ terminal.addCommand("turing", async function(args) {
         "?t=startTape": "starting tape content",
         "?s=sleep:i:0~10000": "sleep time between steps (in ms)",
         "?d=startingState": "starting state",
-        "?m=maxSteps:i:0~10000000": "maximum number of steps to run",
+        "?m=maxSteps:i:0~9999999999": "maximum number of steps to run",
         "?turbo:b": "run as fast as possible",
     },
     standardVals: {

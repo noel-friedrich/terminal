@@ -1,7 +1,7 @@
 terminal.window.secretShip = null
 terminal.addCommand("lunar-lander", async function(args) {
     await terminal.modules.import("game", window)
-    await terminal.modules.load("window")
+    await terminal.modules.load("window", terminal)
 
     let terminalWindow = terminal.modules.window.make({name: "Lunar Lander"})
     const canvas = terminalWindow.CANVAS

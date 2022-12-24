@@ -4,10 +4,10 @@ terminal.addCommand("help", function() {
     let helpCommands = ["cat", "cd", "games", "ls", "lscmds", "man", "turtlo"]
     let longestCommandLength = helpCommands.reduce((p, c) => Math.max(p, c.length), 0)
     for (let command of helpCommands.sort((a, b) => a.localeCompare(b))) {
-        terminal.printCommand("  " + command, command, Color.PURPLE, false)
         let spaces = strRepeat(" ", longestCommandLength - command.length + 2)
         let description = terminal.allCommands[command]
-        terminal.printLine(`${spaces}${description}`)
+        terminal.printCommand(`  ${command}${spaces}`, command, Color.PURPLE, false)
+        terminal.printLine(`${description}`)
     }
     terminal.printLine("\n(there are also A LOT of secret ones)")
 }, {

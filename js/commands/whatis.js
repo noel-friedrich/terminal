@@ -22,6 +22,3 @@ terminal.addCommand("whatis", async function(args) {
     description: "display a short description of a command",
     args: ["command"]
 })
-
-const START_TIME = Date.now()
-

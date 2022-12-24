@@ -1,5 +1,5 @@
 terminal.addCommand("pendulum", async function(args) {
-    await terminal.modules.load("window")
+    await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
         iframeUrl: "../pendulum-wave/?n=" + encodeURIComponent(args.n) + "&o=" + encodeURIComponent(args.o),
         name: "Pendulum Wave Simulation"

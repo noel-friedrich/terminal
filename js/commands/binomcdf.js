@@ -1,5 +1,5 @@
 terminal.addCommand("binomcdf", async function(args) {
-    const binomcdf = (await terminal.modules.load("binom")).binomcdf
+    const binomcdf = (await terminal.modules.load("binom", terminal)).binomcdf
     let n = ~~args.n
     let lower = ~~args.lower
     let upper = ~~args.upper

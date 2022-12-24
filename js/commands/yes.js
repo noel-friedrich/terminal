@@ -11,6 +11,8 @@ terminal.addCommand("yes", async function(args) {
         "?message": "the message to print",
         "?s:b": "slow mode"
     },
-    standardVals: {message: "y"}
+    standardVals: {
+        message: "y"
+    }
 })
 

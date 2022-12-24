@@ -4,7 +4,7 @@ terminal.addCommand("logistic-map", async function(args) {
     const minR = args.min
     const maxR = args.max
 
-    const Vector2d = (await terminal.modules.load("game")).Vector2d
+    const Vector2d = (await terminal.modules.load("game", terminal)).Vector2d
 
     if (minR >= maxR) {
         throw new Error("max value must be greater than min value")

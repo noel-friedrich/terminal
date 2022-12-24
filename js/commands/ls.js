@@ -49,9 +49,11 @@ terminal.addCommand("ls", function(args) {
     helpVisible: true,
     description: "list all files of current directory",
     args: {
-        "?folder": "folder to list",
+        "?folder:f": "folder to list",
         "?r:b": "list recursively",
     },
-    standardVals: {folder: ""}
+    standardVals: {
+        folder: ""
+    }
 })
 

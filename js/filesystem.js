@@ -146,6 +146,7 @@ class FileSystem {
     constructor() {
         this.root = new Directory("root", {})
         this.currPath = []
+        this.tempSave = undefined
     }
 
     get currFolder() {
@@ -202,8 +203,8 @@ class FileSystem {
         localStorage.setItem("terminal-filesystem", this.toJSON())
     }
 
-    async load() {
-        let json = localStorage.getItem("terminal-filesystem")
+    async load(jsonVal=undefined) {
+        let json = jsonVal ?? localStorage.getItem("terminal-filesystem")
         if (json) {
             this.loadJSON(json)
         } else {
@@ -229,6 +230,17 @@ class FileSystem {
             }
         }
         return files
+    }
+
+    saveTemp() {
+        this.tempSave = this.toJSON()
+    }
+
+    async restoreTemp() {
+        if (!this.tempSave) {
+            throw new Error("no save to restore found")
+        }
+        await this.load(this.tempSave)
     }
 
 }

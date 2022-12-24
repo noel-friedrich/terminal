@@ -1,5 +1,5 @@
 terminal.addCommand("get", async function(args) {
-    await terminal.modules.load("cliapi")
+    await terminal.modules.load("cliapi", terminal)
     const CliApi = terminal.modules.cliapi
     if (!CliApi.KEY_REGEX.test(args.key)) {
         terminal.printError("Invalid key")

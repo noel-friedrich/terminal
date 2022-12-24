@@ -51,6 +51,8 @@ terminal.addCommand("cw", function(args) {
     args: {
         "?date": "the date to get the calendar week of"
     },
-    standardVals: {date: null}
+    standardVals: {
+        date: null
+    }
 })
 

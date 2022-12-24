@@ -186,6 +186,8 @@ terminal.addCommand("snake", async function(args) {
 }, {
     description: "play a game of snake",
     args: {"?s:n:1~10": "speed level of snake moving"},
-    standardVals: {s: 2},
+    standardVals: {
+        s: 2
+    },
     isGame: true
 })

@@ -55,7 +55,7 @@ function makeCMatrix(makeWindow) {
 }
 
 terminal.addCommand("cmatrix", async function(rawArgs) {
-    await terminal.modules.load("window")
+    await terminal.modules.load("window", terminal)
     let [terminalWindow, intervalFunc] = makeCMatrix(terminal.modules.window.make)
     let stopped = false
     terminal.document.addEventListener("keydown", function(e) {

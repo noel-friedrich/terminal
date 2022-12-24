@@ -140,6 +140,3 @@ terminal.addCommand("todo", async function(rawArgs) {
     description: "manage a todo list",
     rawArgMode: true
 })
-
-let audioContext = null
-

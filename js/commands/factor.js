@@ -27,7 +27,7 @@ terminal.addCommand("factor", async function(args) {
         }
     }
 
-    if (args.n != undefined) {
+    if (args.n != null) {
         printFactors(args.n)
         return
     }
@@ -51,6 +51,6 @@ terminal.addCommand("factor", async function(args) {
         "?n:n": "number to factorize"
     },
     standardVals: {
-        n: undefined
+        n: null
     }
 })

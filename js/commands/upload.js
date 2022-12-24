@@ -1,5 +1,5 @@
 terminal.addCommand("upload", async function() {
-    await terminal.modules.load("upload")
+    await terminal.modules.load("upload", terminal)
     try {
         var [fileName, fileContent, isDataURL] = await terminal.modules.upload.file()
     } catch {

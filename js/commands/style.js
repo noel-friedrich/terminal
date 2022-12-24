@@ -19,7 +19,7 @@ terminal.addCommand("style", async function(args) {
     PRESETS["red"] = new Preset(Color.hex("#e74645"), Color.WHITE, Color.hex("#fdfa66"), Color.hex("#fdfa66"), Color.hex("#e74645"))
     PRESETS["cold"] = new Preset(Color.hex("#3c2a4d"), Color.hex("#e0f0ea"), Color.hex("#95adbe"), Color.hex("#95adbe"))
 
-    if (args.preset == undefined) {
+    if (args.preset == null) {
         terminal.printLine("There are a few presets to choose from:")
         let lineWidth = 0
         for (let presetName of Object.keys(PRESETS)) {
@@ -46,7 +46,7 @@ terminal.addCommand("style", async function(args) {
     description: "change the style of the terminal",
     args: ["?preset"],
     standardVals: {
-        preset: undefined
+        preset: null
     }
 })
 

@@ -1,5 +1,5 @@
 terminal.addCommand("ncr", async function(args) {
-    const binom = (await terminal.modules.load("binom")).binom
+    const binom = (await terminal.modules.load("binom", terminal)).binom
     let n = ~~args.n
     let k = ~~args.k
     if (k > n) {

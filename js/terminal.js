@@ -161,6 +161,7 @@ class Color {
     static get BLACK() {return new Color(0, 0, 0)}
     static get LIGHT_GREEN() {return new Color(0, 255, 0)}
     static get PURPLE() {return new Color(79, 79, 192)}
+    static get ERROR() {return new Color(255, 128, 128)}
 
 }
 
@@ -287,6 +288,8 @@ class TerminalParser {
                 argOptions.type = "boolean"
             } else if (type == "s") {
                 argOptions.type = "string"
+            } else if (type == "f") {
+                argOptions.type = "file"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
@@ -402,7 +405,13 @@ class TerminalParser {
         return [tokensCopy, namedArgs]
     }
 
-    static parseArgs(tempTokens, command) {
+    static parseArgs(tempTokens, command={
+        defaultValues: {},
+        args: {},
+        name: "",
+        helpFunc: null,
+        info: {}
+    }, silent=false) {
         let args = command.args, defaultValues = command.defaultValues ?? {}
         if (args.length == 0 && tempTokens.length == 0)
             return {}
@@ -421,6 +430,8 @@ class TerminalParser {
             })
 
         function error(errMessage, isHelp=false) {
+            if (silent) throw new IntendedError()
+
             let tempArgOptions = argOptions.filter(arg => !arg.isHelp)
 
             terminal.print("$ ", terminal.data.accentColor2)
@@ -485,6 +496,9 @@ class TerminalParser {
         let [tokens, namedArgs] = this.parseNamedArgs(tempTokens, argOptions, error, command.info.disableEqualsArgNotation)
 
         if (namedArgs.help || namedArgs.h) {
+            if (silent) {
+                return
+            }
             error(undefined, true)
         }
 
@@ -528,6 +542,11 @@ class TerminalParser {
                     error(`At property "${argOption.name}": Expected a boolean, got "${value}"`)
                 }
                 addVal(argOption.name, value == "true")
+            } else if (argOption.type == "file") {
+                if (!terminal.fileExists(value)) {
+                    error(`File not found: "${argOption.name}"`)
+                }
+                addVal(argOption.name, value)
             } else {
                 addVal(argOption.name, value)
             }
@@ -536,7 +555,6 @@ class TerminalParser {
         for (let i = 0;; i++) {
             let token = tokens.shift()
             if (token == undefined) break
-
             
             let argOption = argOptions[i]
             if (i > 0 && argOptions[i - 1].expanding) {
@@ -592,16 +610,29 @@ class Command {
         this.helpFunc = info.helpFunc ?? null
         this.description = info.description ?? ""
         this.defaultValues = info.defaultValues ?? info.standardVals ?? {}
+        this.windowScope = null
+    }
+
+    get terminal() {
+        return this.windowScope.terminal
+    }
+
+    set terminal(newTerminal) {
+        this.windowScope.terminal = newTerminal
     }
 
     processArgs(args, rawArgs) {
         if (this.info.rawArgMode)
             return rawArgs
-        return TerminalParser.parseArgs(args, this)
+        return TerminalParser.parseArgs(args, this, this.terminal.inTestMode)
     }
 
-    async run(args, rawArgs) {
-        terminal.expectingFinishCommand = true
+    async run(args, rawArgs, {callFinishFunc=true, terminalObj=undefined}={}) {
+        if (terminalObj)
+            this.terminal = terminalObj
+        if (callFinishFunc)
+            this.terminal.expectingFinishCommand = true
+
         try {
             let argObject = this.processArgs(args, rawArgs)
             if (this.callback.constructor.name === 'AsyncFunction') {
@@ -609,13 +640,16 @@ class Command {
             } else {
                 this.callback(argObject)
             }
-            terminal.finishCommand()
+            this.terminal.finishCommand()
+            return true
         } catch (error) {
-            if (!(error instanceof IntendedError)) {
-                terminal.printError(error.message, error.name)
-                console.error(error)
-            }
-            terminal.finishCommand()
+            if (!(error instanceof IntendedError))
+                this.terminal.printError(error.message, error.name)
+            this.terminal.finishCommand()
+
+            // if the sleep command was called a max number
+            // of times, it's considered to be a success
+            return this.terminal.tempActivityCallCount === this.terminal.tempMaxActivityCallCount
         }
     }
 
@@ -707,6 +741,7 @@ const UtilityFunctions = {
     IntendedError: IntendedError,
 
     addAlias(alias, command) {
+        if (terminal.inTestMode) return
         terminal.aliases[alias] = command
         console.log(`Added alias "${alias}" for command "${command}"`)
     }
@@ -719,16 +754,22 @@ class TerminalModules {
 
     constructor() {}
 
-    async load(name) {
+    async load(name, terminalObj) {
+        if (terminalObj.inTestMode) {
+            terminalObj.tempActivityCallCount = terminalObj.tempMaxActivityCallCount
+            throw new IntendedError()
+        }
+
         if (this[name])
             return this[name]
+
         let url = `${this.modulePath}/${name}.js`
-        await terminal._loadScript(url)
+        await terminalObj._loadScript(url)
         return this[name]
     }
 
     async import(name, window) {
-        await this.load(name)
+        await this.load(name, window.terminal)
         for (let [key, value] of Object.entries(this[name])) {
             window[key] = value
         }
@@ -736,30 +777,65 @@ class TerminalModules {
 
 }
 
+let ALL_TERMINALS = {}
+let CORRECTNESS_CACHE = {}
+
+const OutputChannel = {
+    USER: "user",
+    NONE: "none"
+}
+
 class Terminal {
 
     parentNode = document.getElementById("terminal")
+    containerNode = document.querySelector(".terminal-container")
     commandListURL = "js/load-commands.js"
     defaultFileystemURL = "js/defaultFilesystem.js"
 
     currInputElement = null
+    currSuggestionElement = null
+    currInputContainer = null
+    correctIndicator = null
     expectingFinishCommand = false
     commandCache = {}
+    testProcessID = 0
+    tempActivityCallCount = 0
+    tempMaxActivityCallCount = Infinity
 
+    name = ""
     data = new TerminalData()
     fileSystem = new FileSystem()
     modules = new TerminalModules()
 
     aliases = {}
 
+    outputChannel = OutputChannel.USER
+
     scroll(behavior="smooth") {
-        this.parentNode.scrollTo({
+        const opts = {
             top: 10 ** 10, // sufficiently large number
+            left: 0,
             behavior
-        })
+        }
+        this.parentNode.scrollTo(opts)
+        this.containerNode.scrollTo(opts)
+    }
+
+    get inTestMode() {
+        return this.outputChannel == OutputChannel.NONE
+    }
+
+    removeCurrInput() {
+        if (this.currInputContainer)
+            this.currInputContainer.remove()
+        this.currInputContainer = null
+        this.currInputElement = null
+        this.currSuggestionElement = null
     }
 
     _interruptSTRGC() {
+        if (this.inTestMode)
+            return
         terminal.printError("Pressed [^c]", "\nInterrupt")
         terminal.expectingFinishCommand = true
         for (let callback of this._interruptCallbackQueue)
@@ -784,8 +860,10 @@ class Terminal {
         if (terminal.fileExists(fileName))
             throw new Error("File already exists")
         let newFile = new (fileType)(data)
-        terminal.currFolder.content[fileName] = newFile
-        await terminal.fileSystem.reload()
+        if (!terminal.inTestMode) {
+            terminal.currFolder.content[fileName] = newFile
+            await terminal.fileSystem.reload()
+        }
         return newFile
     }
 
@@ -803,10 +881,19 @@ class Terminal {
     }
 
     async copy(text) {
+        if (terminal.inTestMode)
+            return
         return await navigator.clipboard.writeText(text)
     }
 
     async sleep(ms) {
+        terminal.tempActivityCallCount++
+        if (terminal.tempActivityCallCount === terminal.tempMaxActivityCallCount)
+            throw new IntendedError()
+
+        if (terminal.outputChannel == OutputChannel.NONE)
+            return
+
         let running = true
         let aborted = false
         const intervalFunc = () => {
@@ -845,32 +932,56 @@ class Terminal {
     }
 
     href(url) {
+        if (terminal.inTestMode)
+            return
         window.location.href = url
     }
 
+    setInputCorrectness(correct) {
+        if (!this.correctIndicator)
+            return
+        if (correct) {
+            this.correctIndicator.style.color = Color.LIGHT_GREEN.toString()
+        } else {
+            this.correctIndicator.style.color = Color.ERROR.toString()
+        }
+    }
+
     getAutoCompleteOptions(text) {
-        let lastWord = text.split(" ").pop()
+        let lastWord = text.split(/\s/g).pop()
         const allRelativeFiles = terminal.fileSystem.allFiles()
             .map(file => file.path)
             .concat(terminal.fileSystem.currFolder.relativeChildPaths)
-        let possibleMatches = Object.keys(terminal.allCommands)
-            .concat(allRelativeFiles)
-            .filter(f => f.startsWith(lastWord))
 
-        possibleMatches.sort()
-        possibleMatches.sort((a, b) => a.length - b.length)
+        const configMatches = ms => ms.filter(f => f.startsWith(lastWord))
+            .sort().sort((a, b) => a.length - b.length)
 
-        return possibleMatches.map(match => {
+        const exportMatches = ms => ms.map(match => {
             let words = text.split(" ")
             words.pop()
             words.push(match)
             return words.join(" ")
         })
+
+        let commandMatches = configMatches(Object.keys(terminal.allCommands))
+        let fileMatches = configMatches(allRelativeFiles)
+        let allMatches = configMatches(commandMatches.concat(fileMatches))
+
+        text = this.refurbishInput(text)
+        let tokens = TerminalParser.tokenize(text)
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+
+        let matchingFirstWord = lastWord === text.trim()
+        if (matchingFirstWord) {
+            return exportMatches(commandMatches)
+        }
+
+        return exportMatches(allMatches)
     }
 
     refurbishInput(text) {
         text = text.replaceAll(/![0-9]+/g, match => {
-            let index = parseInt(match.slice(1))
+            let index = parseInt(match.slice(1)) - 1
             if (terminal.data.history[index])
                 return terminal.data.history[index]
             return match
@@ -885,10 +996,62 @@ class Terminal {
         return text
     }
 
+    turnToTestMode() {
+        this.outputChannel = OutputChannel.NONE
+    }
+
+    async updateInputCorrectness(text) {
+        if (text in CORRECTNESS_CACHE) {
+            this.setInputCorrectness(CORRECTNESS_CACHE[text])
+            return
+        }
+
+        if (text.trim().length == 0) {
+            this.setInputCorrectness(true)
+            return
+        }
+
+        this.testProcessID++
+
+        let virtualTerminal = new Terminal(`v${this.testProcessID}`)
+        await virtualTerminal.initFrom(this)
+        virtualTerminal.turnToTestMode()
+        virtualTerminal.testProcessID = this.testProcessID
+
+        virtualTerminal.tempActivityCallCount = 0
+        virtualTerminal.tempMaxActivityCallCount = 1
+        
+        let wentWell = true
+
+        try {
+            wentWell = await virtualTerminal.input(text, true)
+        } catch {
+            wentWell = false
+        }
+
+        if (!wentWell) {
+            wentWell = virtualTerminal.tempActivityCallCount === virtualTerminal.tempMaxActivityCallCount
+        }
+
+        if (virtualTerminal.testProcessID == this.testProcessID) {
+            this.setInputCorrectness(wentWell)
+        }
+
+        CORRECTNESS_CACHE[text] = wentWell
+    }
+
     async prompt(msg, {password=false}={}) {
+        if (this.inTestMode) {
+            this.tempActivityCallCount++
+            return ""
+        }
+
         if (msg) terminal.print(msg)
 
-        function createInput() {
+        const createInput = () => {
+            let inputContainer = document.createElement("div")
+            inputContainer.className = "terminal-input-container"
+
             let input = document.createElement("input")
             input.type = "text"
             input.className = "terminal-input"
@@ -896,29 +1059,38 @@ class Terminal {
             input.autocorrect = "off"
             input.autocapitalize = "off"
             input.spellcheck = "false"
+
+            let suggestion = document.createElement("div")
+            suggestion.className = "terminal-suggestion"
+            
+            inputContainer.appendChild(input)
+            inputContainer.appendChild(suggestion)
+
             if (password) input.type = "password"
-            return input
+            return [input, suggestion, inputContainer]
         }
 
-        let inputElement = createInput()
-        this.parentNode.appendChild(inputElement)
+        let [inputElement, suggestionElement, inputContainer] = createInput()
+        this.parentNode.appendChild(inputContainer)
         let rect = inputElement.getBoundingClientRect()
-        inputElement.style.width = `${this.parentNode.clientWidth - rect.left - rect.width}px`
+        let inputMinWidth = `${window.innerWidth - rect.width}`
+        inputContainer.style.width = `${inputMinWidth}px`
         inputElement.focus({preventScroll: true})
 
         this.scroll()
         this.currInputElement = inputElement
+        this.currSuggestionElement = suggestionElement
+        this.currInputContainer = inputContainer
 
         return new Promise(resolve => {
-
+            let inputValue = ""
             let keyListeners = {}
 
             keyListeners["Enter"] = event => {
                 let text = this.refurbishInput(inputElement.value)
                 this.printLine(password ? "•".repeat(text.length) : text)
                 resolve(text)
-                inputElement.remove()
-                this.currInputElement = null
+                this.removeCurrInput()
             }
 
             let tabIndex = 0
@@ -926,11 +1098,13 @@ class Terminal {
             keyListeners["Tab"] = event => {
                 event.preventDefault()
                 if (suggestions.length == 0)
-                    suggestions = this.getAutoCompleteOptions(inputElement.value)
+                    suggestions = this.getAutoCompleteOptions(inputValue)
                 if (suggestions.length > 0) {
                     inputElement.value = suggestions[tabIndex]
                     tabIndex = (tabIndex + 1) % suggestions.length
+                    inputValue = ""
                 }
+                inputElement.dispatchEvent(new Event("input"))
             }
 
             let historyIndex = this.data.history.length
@@ -955,19 +1129,52 @@ class Terminal {
                 }
             }
 
-            inputElement.addEventListener("keydown", event => {
+            inputElement.addEventListener("input", async event => {
+                const replaceAlreadywritten = (oldText, replacement=" ") => {
+                    let newText = ""
+                    for (let i = 0; i < oldText.length; i++) {
+                        if (inputElement.value[i]) {
+                            newText += replacement
+                        } else {
+                            newText += oldText[i]
+                        }
+                    }
+                    return newText
+                }
+
+                if (suggestions.length > 0 && inputElement.value.trim().length > 0) {
+                    suggestionElement.textContent = replaceAlreadywritten(suggestions[0])
+                } else {
+                    suggestionElement.textContent = ""
+                }
+
+                this.updateInputCorrectness(inputElement.value)
+            })
+
+            inputElement.addEventListener("keydown", async event => {
+                if (event.key.length == 1) // a, b, c, " "
+                    inputValue = inputElement.value + event.key
+                else if (event.key == "Backspace")
+                    inputValue = inputElement.value.slice(0, -1)
+                else // Tab, Enter
+                    inputValue = inputElement.value
+
                 if (keyListeners[event.key])
                     keyListeners[event.key](event)
                 else {
                     tabIndex = 0
-                    suggestions = []
+                    suggestions = this.getAutoCompleteOptions(inputValue)
                 }
 
                 if (event.key == "c" && event.ctrlKey) {
-                    inputElement.remove()
-                    terminal.currInputElement = undefined
-                    terminal._interruptSTRGC()
+                    this.removeCurrInput()
+                    this._interruptSTRGC()
                 }
+
+                let textLength = inputElement.value.length
+                // (textLength + 1) to leave room for the next character
+                let inputWidth = (textLength + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth}px, ${inputWidth}px)`
             })
 
         })
@@ -1010,14 +1217,17 @@ class Terminal {
         let output = undefined
         if (color === undefined && !forceElement && fontStyle === undefined) {
             let textNode = document.createTextNode(text)
-            this.parentNode.appendChild(textNode)
+            if (!this.inTestMode)
+                this.parentNode.appendChild(textNode)
             output = textNode
         } else {
             let span = document.createElement(element)
             span.textContent = text
             if (color !== undefined) span.style.color = color.string.hex
             if (fontStyle !== undefined) span.style.fontStyle = fontStyle
-            terminal.parentNode.appendChild(span)
+            if (!this.inTestMode) {
+                this.parentNode.appendChild(span)
+            }
             output = span
         }
         return output
@@ -1028,6 +1238,9 @@ class Terminal {
     }
 
     printImg(src, altText="") {
+        if (this.inTestMode)
+            return
+
         let img = this.parentNode.appendChild(document.createElement("img"))
         img.src = src
         img.alt = altText
@@ -1061,7 +1274,7 @@ class Terminal {
                     line += `+-${item}-`
                 }
                 line += "+"
-                terminal.printLine(line)
+                this.printLine(line)
             }
             if (rowIndex == rows.length) break
             let line = ""
@@ -1073,14 +1286,14 @@ class Terminal {
                 line += `| ${item} `
             }
             line += "|  "
-            terminal.printLine(line)
+            this.printLine(line)
         }
     }
 
     async animatePrint(text, interval=50, {newLine=true}={}) {
         for (let char of text) {
             this.print(char)
-            await terminal.sleep(interval)
+            await this.sleep(interval)
         }
         if (newLine) this.printLine()
     }
@@ -1091,12 +1304,12 @@ class Terminal {
     }
 
     printError(text, name="Error") {
-        terminal.print(name, new Color(255, 0, 0))
-        terminal.printLine(": " + text)
+        this.print(name, new Color(255, 0, 0))
+        this.printLine(": " + text)
     }
 
     printSuccess(text) {
-        terminal.printLine(text, new Color(0, 255, 0))
+        this.printLine(text, new Color(0, 255, 0))
     }
 
     addLineBreak() {
@@ -1104,28 +1317,28 @@ class Terminal {
     }
 
     printCommand(commandText, command, color, endLine=true) {
-        let element = terminal.print(commandText, color, {forceElement: true})
+        let element = this.print(commandText, color, {forceElement: true})
         element.onclick = this.makeInputFunc(command ?? commandText)
         element.classList.add("clickable")
         if (color) element.style.color = color.string.hex
-        if (endLine) terminal.printLine()
+        if (endLine) this.printLine()
     }
 
     printLink(msg, url, color, endLine=true) {
-        let element = terminal.print(msg, color, {forceElement: true, element: "a"})
+        let element = this.print(msg, color, {forceElement: true, element: "a"})
         element.href = url
-        if (endLine) terminal.printLine()
+        if (endLine) this.printLine()
     }
 
     async standardInputPrompt() {
         let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true})
         element.style.marginLeft = "-2em"
-        this.print("$ ", this.data.accentColor2)
+        this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN)
         let text = await this.prompt()
         await this.input(text)
     }
 
-    async input(text) {
+    async input(text, testMode=false) {
         let tokens = TerminalParser.tokenize(text)
         if (tokens.length == 0) {
             this.standardInputPrompt()
@@ -1139,11 +1352,18 @@ class Terminal {
         if (this.commandExists(commandText)) {
             let rawArgs = text.slice(commandText.length)
             let command = await this.getCommand(commandText)
-            await command.run(args, rawArgs)
+            return await command.run(args, rawArgs, {callFinishFunc: !testMode, terminalObj: this})
         } else {
             let cmdnotfound = await this.getCommand("cmdnotfound")
-            await cmdnotfound.run([commandText], commandText)
+            await cmdnotfound.run([commandText], commandText, {callFinishFunc: !testMode, terminalObj: this})
+            return false
         }
+    }
+
+    get allCommands() {
+        return Object.fromEntries(Object.entries(this.commandData).map(([cmd, data]) => {
+            return [cmd, data["description"]]
+        }))
     }
 
     commandExists(commandName) {
@@ -1187,12 +1407,15 @@ class Terminal {
         return elementWidth
     }
 
-    get approxWidthInChars() {
-        let firstSpan = terminal.parentNode.querySelector("span")
+    get charWidth() {
+        let firstSpan = this.parentNode.querySelector("span")
         let firstSpanWidth = firstSpan.getBoundingClientRect().width
         let textWidth = firstSpan.textContent.length
-        let charWidth = firstSpanWidth / textWidth
-        return Math.floor(this.widthPx / charWidth) - 5
+        return firstSpanWidth / textWidth
+    }
+
+    get approxWidthInChars() {
+        return Math.floor(this.widthPx / this.charWidth) - 5
     }
 
     async _loadScript(url, extraData={}) {
@@ -1228,32 +1451,42 @@ class Terminal {
         await new Promise(resolve => script.onload = resolve)
 
         console.log(`Loaded Script: ${url}`)
+
+        return iframe.contentWindow
     }
 
     async loadCommand(name, {force=false}={}) {
         if (this.commandCache[name] && !force)
             return this.commandCache[name]
-        await this._loadScript(`js/commands/${name}.js`)
-        return this.commandCache[name]
-    }
-
-    async getCommand(name) {
-        if (!this.commandCache[name]) {
-            try {
-                await this.loadCommand(name)
-            } catch {}
+        let commandWindow = await this._loadScript(`js/commands/${name}.js`)
+        this.commandCache[name].windowScope = commandWindow
+        for (let terminalInstance of Object.values(ALL_TERMINALS)) {
+            terminalInstance.commandCache[name] = this.commandCache[name]
         }
         return this.commandCache[name]
     }
 
+    async getCommand(name) {
+        if (!this.commandExists(name))
+            throw new Error(`Command not found: ${name}`)
+        if (!this.commandCache[name]) {
+            return await this.loadCommand(name)
+        } else {
+            return this.commandCache[name]
+        }
+    }
+
     async finishCommand({force=false}={}) {
-        if (!this.expectingFinishCommand && !force)
+        if ((!this.expectingFinishCommand && !force) || this.currInputElement)
             return
         this.expectingFinishCommand = false
         
         if (this.lastPrintedChar !== "\n")
             this.print("\n")
         this.print("\n")
+
+        this._interruptCallbackQueue = []
+        this._interruptSignal = false
 
         this.fileSystem.save()
 
@@ -1268,8 +1501,7 @@ class Terminal {
     makeInputFunc(text) {
         return () => {
             if (this.currInputElement) {
-                this.currInputElement.remove()
-                this.currInputElement = undefined
+                this.removeCurrInput()
                 this.printLine(text)
                 this.input(text)
             }
@@ -1277,14 +1509,23 @@ class Terminal {
     }
 
     async init() {
-        this._loadScript(this.commandListURL)
+        await this._loadScript(this.commandListURL)
         await this.fileSystem.load()
         let helloworld = await this.getCommand("helloworld")
         helloworld.run()
     }
 
-    constructor() {
+    async initFrom(otherTerminal) {
+        this.commandData = otherTerminal.commandData
+        this.fileSystem.loadJSON(otherTerminal.fileSystem.toJSON()) 
+        this.commandCache = otherTerminal.commandCache
+        this.startTime = otherTerminal.startTime 
+    }
+
+    constructor(terminalName="none") {
         this.startTime = Date.now()
+
+        this.name = terminalName
 
         // when the user clicks on the terminal, focus the input element
         this.parentNode.addEventListener("click", () => {
@@ -1322,11 +1563,13 @@ class Terminal {
 
         this._interruptSignal = false
         this._interruptCallbackQueue = []
+
+        ALL_TERMINALS[terminalName] = this
     }
 
 }
 
-const terminal = new Terminal()
+const terminal = new Terminal("main")
 terminal.init() // can't use async constructor
 // and parts of init() rely on terminal being defined
 // e.g. the fileSystem initialization/loading

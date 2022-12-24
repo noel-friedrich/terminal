@@ -2,15 +2,17 @@ terminal.addCommand("wc", function(args) {
     let text = ""
     if (args.s) {
         text = args.s
-        if (args.file) {
+        if (args.f) {
             terminal.printLine("Ignoring file argument")
         }
-    } else {
-        let file = terminal.getFile(args.file)
+    } else if (args.f) {
+        let file = terminal.getFile(args.f)
         if (file.type == FileType.FOLDER) {
             throw new Error("Cannot read file of type FOLDER")
         }
         text = file.content
+    } else {
+        throw new Error("Either String or File must be provided")
     }
 
     let fileInfos = {
@@ -25,7 +27,7 @@ terminal.addCommand("wc", function(args) {
 }, {
     description: "display word and line count of file",
     args: {
-        "?file": "file to open",
+        "?f=file": "file to open",
         "?s": "string to count instead of file"
     }
 })

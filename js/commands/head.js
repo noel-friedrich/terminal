@@ -10,6 +10,8 @@ terminal.addCommand("head", function(args) {
 }, {
     description: "display the first lines of a file",
     args: ["file", "?l:i:1~1000"],
-    standardVals: {l: 10}
+    standardVals: {
+        l: 10
+    }
 })
 

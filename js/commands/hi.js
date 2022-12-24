@@ -7,4 +7,6 @@ async function funnyPrint(msg) {
     terminal.addLineBreak()
 }
 
-terminal.addCommand("hi", async () => await funnyPrint("hello there!"), {description: "say hello to the terminal"})
+terminal.addCommand("hi", async () => await funnyPrint("hello there!"), {
+    description: "say hello to the terminal"
+})

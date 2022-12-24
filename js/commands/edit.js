@@ -119,6 +119,8 @@ function loadContent() {
 }
 
 terminal.addCommand("edit", async function(args) {
+    if (terminal.inTestMode) return
+
     tempFileContent = ""
     tempFileName = "Untitled File"
     currentlyEditing = true

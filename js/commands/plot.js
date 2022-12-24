@@ -1,5 +1,5 @@
 terminal.addCommand("plot", async function(args) {
-    await terminal.modules.load("mathenv")
+    await terminal.modules.load("mathenv", terminal)
 
     let equation = args.equation
     if (!/^[0-9x\s\\\*\.a-z+-\^\(\)]+$/.test(equation)) {
@@ -15,7 +15,7 @@ terminal.addCommand("plot", async function(args) {
         equation = equation.replace(/([0-9])x/g, "$1*x")
     while (/[0-9a-z\.]+\s*\^\s*[0-9a-z\.]+/g.test(equation))
         equation = equation.replace(/([0-9a-z\.]+)\s*\^\s*([0-9a-z\.]+)/g, "$1**$2")
-    let jsEnv = await terminal.modules.load("mathenv")
+    let jsEnv = await terminal.modules.load("mathenv", terminal)
     let grid = Array.from(Array(gridSize.y)).map(() => Array(gridSize.x).fill(" "))
     let viewBound = {
         x: {min: args.xmin, max: args.xmax},
@@ -178,5 +178,3 @@ terminal.addCommand("plot", async function(args) {
         playtime: 2500
     }
 })
-
-const OG_BACKGROUND_COLOR = "rgb(3, 3, 6)"

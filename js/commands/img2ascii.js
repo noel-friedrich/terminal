@@ -1,6 +1,6 @@
 terminal.addCommand("img2ascii", async function() {
 
-    await terminal.modules.load("upload")
+    await terminal.modules.load("upload", terminal)
 
     return new Promise(async resolve => {
 
@@ -63,42 +63,3 @@ terminal.addCommand("img2ascii", async function() {
 }, {
     description: "Convert an image to ASCII art"
 })
-
-function newMathEnv() {
-    let jsEnv = new JsEnvironment()
-    jsEnv.setValue("sin", Math.sin)
-    jsEnv.setValue("cos", Math.cos)
-    jsEnv.setValue("tan", Math.tan)
-    jsEnv.setValue("asin", Math.asin)
-    jsEnv.setValue("acos", Math.acos)
-    jsEnv.setValue("atan", Math.atan)
-    jsEnv.setValue("atan2", Math.atan2)
-    jsEnv.setValue("sinh", Math.sinh)
-    jsEnv.setValue("cosh", Math.cosh)
-    jsEnv.setValue("tanh", Math.tanh)
-    jsEnv.setValue("asinh", Math.asinh)
-    jsEnv.setValue("acosh", Math.acosh)
-    jsEnv.setValue("atanh", Math.atanh)
-    jsEnv.setValue("exp", Math.exp)
-    jsEnv.setValue("log", Math.log)
-    jsEnv.setValue("log10", Math.log10)
-    jsEnv.setValue("sqrt", Math.sqrt)
-    jsEnv.setValue("abs", Math.abs)
-    jsEnv.setValue("ceil", Math.ceil)
-    jsEnv.setValue("floor", Math.floor)
-    jsEnv.setValue("round", Math.round)
-    jsEnv.setValue("PI", Math.PI)
-    jsEnv.setValue("e", Math.E)
-    jsEnv.setValue("E", Math.E)
-    jsEnv.setValue("LN2", Math.LN2)
-    jsEnv.setValue("LN10", Math.LN10)
-    jsEnv.setValue("LOG2E", Math.LOG2E)
-    jsEnv.setValue("LOG10E", Math.LOG10E)
-    jsEnv.setValue("SQRT1_2", Math.SQRT1_2)
-    jsEnv.setValue("SQRT2", Math.SQRT2)
-    return jsEnv
-}
-
-const sin = Math.sin, cos = Math.cos, tan = Math.tan, sqrt = Math.sqrt, 
-      e = Math.E, pi = Math.PI, exp = Math.exp, abs = Math.abs
-
