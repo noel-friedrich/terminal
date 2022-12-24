@@ -544,7 +544,7 @@ class TerminalParser {
                 addVal(argOption.name, value == "true")
             } else if (argOption.type == "file") {
                 if (!terminal.fileExists(value)) {
-                    error(`File not found: "${argOption.name}"`)
+                    error(`File not found: "${value}"`)
                 }
                 addVal(argOption.name, value)
             } else {
@@ -801,6 +801,7 @@ class Terminal {
     testProcessID = 0
     tempActivityCallCount = 0
     tempMaxActivityCallCount = Infinity
+    debugMode = false
 
     name = ""
     data = new TerminalData()
@@ -1001,6 +1002,11 @@ class Terminal {
     }
 
     async updateInputCorrectness(text) {
+        if (!terminal.debugMode) {
+            this.setInputCorrectness(true)
+            return
+        }
+
         if (text in CORRECTNESS_CACHE) {
             this.setInputCorrectness(CORRECTNESS_CACHE[text])
             return
@@ -1448,6 +1454,7 @@ class Terminal {
         iframe.contentWindow["loadIndex"] = loadIndex
 
         iframeDocument.body.appendChild(script)
+
         await new Promise(resolve => script.onload = resolve)
 
         console.log(`Loaded Script: ${url}`)

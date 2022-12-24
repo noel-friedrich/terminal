@@ -1,14 +1,19 @@
 const loadIndex = localStorage.getItem("loadIndex") || 0
 
-{
-    const loadFile = (file) => {
+async function initalLoadScripts() {
+    const loadFile = async (file) => {
         const script = document.createElement("script")
         script.src = `${file}?${loadIndex}`
         document.body.appendChild(script)
+        await new Promise(resolve => script.onload = resolve)
     }
 
-    [
+    for (let file of [
         "js/filesystem.js",
         "js/terminal.js",
-    ].forEach(loadFile)
+    ]) {
+        await loadFile(file)
+    }
 }
+
+initalLoadScripts()
