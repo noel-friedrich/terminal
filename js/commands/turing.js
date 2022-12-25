@@ -195,7 +195,9 @@ class TuringMachine {
 			writeLine(`  tape[${startIndex + i}] = "${tapeContent}";`)
 		}
 		writeLine(`  let state = ${this.state};`)
-		writeLine(`  for (let i = 0;; i++) {`)
+        writeLine(`  let i = 0;`)
+        writeLine(`  let start = performance.now();`)
+		writeLine(`  for (;; i++) {`)
 		writeLine(`     const instructs = states[state];`)
 		writeLine(`     if (!instructs) break;`)
 		writeLine(`     let instruction = instructs[tape[index]] ?? instructs["*"];`)
@@ -206,8 +208,9 @@ class TuringMachine {
 		writeLine(`     state = instruction[2];`)
 		writeLine(`     if (i >= ${this.maxSteps}) break;`)
 		writeLine(`  }`)
+        writeLine(`  let ms = performance.now() - start;`)
 		writeLine(`  const output = tape.filter(t => t != "${this.standardTapeContent}").join("");`)
-		writeLine(`  postMessage(output)`)
+		writeLine(`  postMessage([output, i, ms]);`)
 		writeLine(`}`)
 		return code
 	}
@@ -217,7 +220,9 @@ class TuringMachine {
 		let worker = new Worker(URL.createObjectURL(blob))
 		let running = true
 		worker.onmessage = e => {
-			terminal.printLine(e.data)
+            let [output, steps, ms] = e.data
+            terminal.printLine(`Finished ${steps} steps in ${ms.toFixed(2)}ms.`)
+			terminal.printLine(output)
 			worker.terminate()
 			running = false
 		}

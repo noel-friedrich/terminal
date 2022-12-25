@@ -621,6 +621,17 @@ class Command {
         this.windowScope.terminal = newTerminal
     }
 
+    checkArgs(args) {
+        if (this.info.rawArgMode)
+            return true
+        try {
+            TerminalParser.parseArgs(args, this, true)
+            return true
+        } catch (error) {
+            return false
+        }
+    }
+
     processArgs(args, rawArgs) {
         if (this.info.rawArgMode)
             return rawArgs
@@ -852,6 +863,8 @@ class Terminal {
         if (file == null) {
             throw new Error(`File "${path}" not found`)
         }
+        if (fileType && file.type != fileType)
+            throw new Error(`File "${path}" is not a ${fileType}`)
         return file
     }
 
@@ -1001,21 +1014,11 @@ class Terminal {
         this.outputChannel = OutputChannel.NONE
     }
 
-    async updateInputCorrectness(text) {
-        if (!terminal.debugMode) {
-            this.setInputCorrectness(true)
-            return
-        }
-
-        if (text in CORRECTNESS_CACHE) {
-            this.setInputCorrectness(CORRECTNESS_CACHE[text])
-            return
-        }
-
-        if (text.trim().length == 0) {
-            this.setInputCorrectness(true)
-            return
-        }
+    async updateInputCorrectnessDebug(text) {
+        // experimental feature
+        // this is a very hacky way to do this
+        // and produces a lot of side effects and bugs
+        // (for now hidden in debug mode)
 
         this.testProcessID++
 
@@ -1044,6 +1047,36 @@ class Terminal {
         }
 
         CORRECTNESS_CACHE[text] = wentWell
+    }
+
+    async updateInputCorrectness(text) {
+        if (text.trim().length == 0) {
+            this.setInputCorrectness(true)
+            return
+        }
+
+        if (this.debugMode)
+            return await this.updateInputCorrectnessDebug(text)
+
+        if (text in CORRECTNESS_CACHE) {
+            this.setInputCorrectness(CORRECTNESS_CACHE[text])
+            return
+        }
+
+        let tokens = TerminalParser.tokenize(text)
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+        if (!this.commandExists(commandText)) {
+            this.setInputCorrectness(false)
+            return
+        }
+
+        let commandData = this.commandData[commandText]
+        this.setInputCorrectness(true)
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+        this.setInputCorrectness(tempCommand.checkArgs(args))
     }
 
     async prompt(msg, {password=false}={}) {
@@ -1079,7 +1112,7 @@ class Terminal {
         let [inputElement, suggestionElement, inputContainer] = createInput()
         this.parentNode.appendChild(inputContainer)
         let rect = inputElement.getBoundingClientRect()
-        let inputMinWidth = `${window.innerWidth - rect.width}`
+        let inputMinWidth = `${window.innerWidth - rect.left - rect.width}`
         inputContainer.style.width = `${inputMinWidth}px`
         inputElement.focus({preventScroll: true})
 
@@ -1162,7 +1195,7 @@ class Terminal {
                     inputValue = inputElement.value + event.key
                 else if (event.key == "Backspace")
                     inputValue = inputElement.value.slice(0, -1)
-                else // Tab, Enter
+                else // Tab, Enter, etc.
                     inputValue = inputElement.value
 
                 if (keyListeners[event.key])

@@ -33,6 +33,7 @@ body {
     transition: color 0.5s;
     white-space: pre-wrap;
     word-break: break-word;
+    position: relative;
 
     font-family: var(--font);
     font-size: var(--font-size);
@@ -276,4 +277,25 @@ body {
     border-bottom-right-radius: calc(var(--border-radius) - 2px);
     box-sizing: border-box;
     border: 2px solid var(--foreground);
+}
+
+.legal-links {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    z-index: 999;
+    text-align: right;
+    padding: 30px;
+}
+
+.legal-links > a {
+    color: var(--foreground);
+    font-family: var(--font);
+    display: block;
+    text-decoration: none;
+}
+
+.legal-links > a:hover {
+    color: var(--foreground);
+    font-family: var(--font);
 }

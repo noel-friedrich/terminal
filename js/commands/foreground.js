@@ -1,3 +1,5 @@
+const OG_FOREGROUND_COLOR = Color.rgb(255, 255, 255)
+
 terminal.addCommand("foreground", function(args) {
     if (args.color.toLowerCase() == "reset") {
         terminal.data.foreground = OG_FOREGROUND_COLOR
@@ -12,7 +14,7 @@ terminal.addCommand("foreground", function(args) {
     }
 }, {
     description: "change the foreground color of the terminal",
-    args: ["color"]
+    args: {
+        "color": "the color to change the foreground to"
+    }
 })
-
-const OG_FOREGROUND_COLOR = Color.rgb(3, 3, 6)

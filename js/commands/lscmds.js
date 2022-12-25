@@ -2,7 +2,7 @@ terminal.addCommand("lscmds", async function(args) {
     let functions = [...terminal.visibleFunctions]
         .sort((a, b) => a.name.localeCompare(b.name))
         .sort((a, b) => a.name.length - b.name.length)
-    if (args.md) {
+    if (args.m) {
         functions.sort((a, b) => a.name.localeCompare(b.name))
         let maxFuncLength = terminal.visibleFunctions.reduce((p, c) => Math.max(p, c.name.length), 0)
         const allDescriptions = functions.map(f => f.description ? f.description : "undefined")
@@ -87,7 +87,7 @@ terminal.addCommand("lscmds", async function(args) {
     description: "list all available commands",
     helpVisible: true,
     args: {
-        "?md": "format output as markdown table"
+        "?m:b": "format output as markdown table"
     }
 })
 

@@ -1,3 +1,5 @@
+const OG_BACKGROUND_COLOR = Color.rgb(3, 3, 6)
+
 terminal.addCommand("background", function(args) {
     if (args.color.toLowerCase() == "reset") {
         terminal.data.background = OG_BACKGROUND_COLOR
@@ -14,5 +16,3 @@ terminal.addCommand("background", function(args) {
     description: "change the background color of the terminal",
     args: ["color"]
 })
-
-const OG_BACKGROUND_COLOR = Color.rgb(3, 3, 6)
