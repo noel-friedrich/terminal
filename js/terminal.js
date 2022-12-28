@@ -1098,6 +1098,14 @@ class Terminal {
             input.autocorrect = "off"
             input.autocapitalize = "off"
             input.spellcheck = "false"
+            input.name = "terminal-input"
+
+            let label = document.createElement("label")
+            label.className = "terminal-input-label"
+            label.textContent = "Input a terminal command"
+            label.style.display = "none"
+            label.htmlFor = "terminal-input"
+            inputContainer.appendChild(label)
 
             let suggestion = document.createElement("div")
             suggestion.className = "terminal-suggestion"
