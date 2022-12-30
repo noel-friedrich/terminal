@@ -63,7 +63,7 @@ The following list can also be viewed using the `whatis *` command
 | `2048`             | play a game of 2048                                                         |
 | `4inarow`          | play a game of Connect Four against the computer                            |
 | `alias`            | create a new alias for a given function                                     |
-| `background`       | undefined                                                                   |
+| `background`       | change the background color of the terminal                                 |
 | `base64`           | encode/decode a message using base64                                        |
 | `bc`               | start a bc (basic calculator) session                                       |
 | `bezier`           | play with bezier curves                                                     |
@@ -80,6 +80,7 @@ The following list can also be viewed using the `whatis *` command
 | `cheese`           | take a foto with your webcam                                                |
 | `chess`            | play a game of chess against the computer                                   |
 | `clear`            | clear the terminal                                                          |
+| `clock`            | display a clock                                                             |
 | `cmatrix`          | show the matrix                                                             |
 | `cmdnotfound`      | display that a command was not found                                        |
 | `code`             | show the source code of a command                                           |
@@ -103,9 +104,10 @@ The following list can also be viewed using the `whatis *` command
 | `exit`             | exit the terminal                                                           |
 | `f`                | calculate friendship score with a friend                                    |
 | `factor`           | print the prime factors of a number                                         |
+| `fakechat`         | fake a whatsapp chat conversation                                           |
 | `fizzbuzz`         | print the fizzbuzz sequence                                                 |
 | `flaci-to-turing`  | Converts a flaci.com JSON File of a turing machine to a turing machine file |
-| `foreground`       | undefined                                                                   |
+| `foreground`       | change the foreground color of the terminal                                 |
 | `games`            | shows the game menu                                                         |
 | `get`              | get a value from the server                                                 |
 | `greed`            | play a game of greed                                                        |
@@ -183,6 +185,7 @@ The following list can also be viewed using the `whatis *` command
 | `terminal`         | a terminal inside a terminal                                                |
 | `tetris`           | play a classic game of tetris                                               |
 | `tictactoe`        | play a game of tic tac toe against the computer.                            |
+| `timer`            | set a timer                                                                 |
 | `todo`             | manage a todo list                                                          |
 | `touch`            | create a file in the current directory                                      |
 | `turing`           | run a turing machine file                                                   |

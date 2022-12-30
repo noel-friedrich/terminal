@@ -42,6 +42,7 @@ body {
     width: max-content;
     min-width: 100%;
     padding-left: calc(2em + var(--padding));
+    padding-bottom: calc(3 * var(--padding));
 }
 
 .terminal-input-container {

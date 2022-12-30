@@ -1158,7 +1158,7 @@ class Terminal {
             keyListeners["ArrowUp"] = event => {
                 event.preventDefault()
                 let history = this.data.history
-                if (historyIndex >= 0) {
+                if (historyIndex > 0) {
                     historyIndex--
                     inputElement.value = history[historyIndex]
                 }
@@ -1292,17 +1292,21 @@ class Terminal {
         img.src = src
         img.alt = altText
         img.classList.add("terminal-img")
-        img.onload = function() {
-            img.style.aspectRatio = img.naturalWidth / img.naturalHeight
-            if (img.clientHeight < img.clientWidth) {
-                img.style.width = "auto"
-                img.style.height = `${img.clientHeight}px`
-            } else {
-                img.style.height = "auto"
-                img.style.width = `${img.clientWidth}px`
-            }
-        }
+        img.onload = this._styleImgElement
         return img
+    }
+
+    _styleImgElement(img, invertSetting=false) {
+        img.style.aspectRatio = img.width / img.height
+        let changeCondition = img.clientHeight < img.clientWidth
+        if (invertSetting) changeCondition = !changeCondition
+        if (changeCondition) {
+            img.style.width = "auto"
+            img.style.height = `${img.clientHeight}px`
+        } else {
+            img.style.height = "auto"
+            img.style.width = `${img.clientWidth}px`
+        }
     }
 
     printTable(inRows, headerRow=null) {
@@ -1338,9 +1342,13 @@ class Terminal {
     }
 
     async animatePrint(text, interval=50, {newLine=true}={}) {
-        for (let char of text) {
-            this.print(char)
-            await this.sleep(interval)
+        if (interval == 0) {
+            this.print(text)
+        } else {
+            for (let char of text) {
+                this.print(char)
+                await this.sleep(interval)
+            }
         }
         if (newLine) this.printLine()
     }
