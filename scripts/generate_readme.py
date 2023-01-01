@@ -11,8 +11,6 @@ replacements = {
     "TOTAL_NUMBER_COMMANDS": len(commands)
 }
 
-import re
-
 readme_text = ""
 with open("scripts/templates/README_TEMPLATE.md", "r") as file:
     readme_text = file.read()
