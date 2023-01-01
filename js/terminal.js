@@ -1259,10 +1259,10 @@ class Terminal {
         }
     }
 
-    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined}={}) {
+    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined}={}) {
         text ??= ""
         let output = undefined
-        if (color === undefined && !forceElement && fontStyle === undefined) {
+        if (color === undefined && !forceElement && fontStyle === undefined && background === undefined) {
             let textNode = document.createTextNode(text)
             if (!this.inTestMode)
                 this.parentNode.appendChild(textNode)
@@ -1272,6 +1272,10 @@ class Terminal {
             span.textContent = text
             if (color !== undefined) span.style.color = color.string.hex
             if (fontStyle !== undefined) span.style.fontStyle = fontStyle
+            if (background !== undefined) {
+                span.style.backgroundColor = background.string.hex
+            }
+
             if (!this.inTestMode) {
                 this.parentNode.appendChild(span)
             }

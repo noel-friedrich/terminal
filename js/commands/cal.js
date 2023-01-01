@@ -7,7 +7,68 @@ terminal.addCommand("cal", async function(args) {
         "October", "November", "December"
     ]
 
+    class PrintInstruction {
+
+        constructor(text, color, backgroundColor) {
+            this.text = text
+            this.color = color
+            this.backgroundColor = backgroundColor
+        }
+    
+    }
+
+    let tempPrintInstructions = []
+
+    const monthsPerRow = 3
+    const monthSideSpacing = 4
+
+    function addPrint(text, color, backgroundColor) {
+        tempPrintInstructions.push(new PrintInstruction(text, color, backgroundColor))
+    }
+
+    function executePrintInstructions(printInstructions) {
+        for (let instruction of printInstructions) {
+            if (instruction === undefined)
+                continue
+            terminal.print(instruction.text, instruction.color, {background: instruction.backgroundColor})
+        }
+    }
+
+    function restructureInstructions(instructions) {
+        let lines = []
+        let tempLine = []
+        for (let instruction of instructions) {
+            if (instruction.text == "\n") {
+                lines.push(tempLine)
+                tempLine = []
+            } else {
+                tempLine.push(instruction)
+            }
+        }
+        if (tempLine.length > 0)
+            lines.push(tempLine)
+        return lines
+    }
+
+    function combineMonthInstructions(monthInstructions) {
+        let combinedInstructions = []
+        if (monthInstructions.length !== 12)
+            throw new Error("Invalid month instructions")
+
+        for (let startMonth = 0; startMonth < 12; startMonth += monthsPerRow) {
+            for (let lineIndex = 0; lineIndex < monthInstructions[0].length; lineIndex++) {
+                for (let monthIndex = startMonth; monthIndex < startMonth + monthsPerRow; monthIndex++) {
+                    combinedInstructions = combinedInstructions.concat(monthInstructions[monthIndex][lineIndex])
+                    combinedInstructions.push(new PrintInstruction(" ".repeat(monthSideSpacing)))
+                }
+                combinedInstructions.push(new PrintInstruction("\n"))
+            }
+        }
+        return combinedInstructions
+    }
+
     function printMonth(monthIndex, year) {
+        tempPrintInstructions = []
         let tableData = Array.from(Array(6)).map(() => Array(7).fill("  "))
         let tableHeader = "Su Mo Tu We Th Fr Sa"
         let date = new Date()
@@ -17,23 +78,28 @@ terminal.addCommand("cal", async function(args) {
 
         function printTable() {
             let headerText = `${month} ${stringPad(year, 4, "0")}`
-            let paddingWidth = Math.floor((tableHeader.length - headerText.length) / 2)
-            for (let i = 0; i < paddingWidth; i++) {
-                headerText = " " + headerText
-            }
-            terminal.printLine(headerText, Color.COLOR_1)
-            terminal.printLine(tableHeader)
+            headerText = stringPadMiddle(headerText, tableHeader.length)
+            addPrint(headerText, Color.COLOR_1)
+            addPrint("\n")
+            addPrint(tableHeader)
+            addPrint("\n")
             for (let y = 0; y < 6; y++) {
                 for (let x = 0; x < 7; x++) {
                     if (dayOfMonth == parseInt(tableData[y][x]) &&
                         today.getMonth() == monthIndex &&
                         today.getFullYear() == year) {
-                        terminal.print(tableData[y][x] + " ", Color.COLOR_1)
+                        addPrint(tableData[y][x], Color.BLACK, Color.WHITE)
                     } else {
-                        terminal.print(tableData[y][x] + " ")
+                        addPrint(tableData[y][x])
                     }
+                    if (x < 7 - 1)
+                        addPrint(" ")
                 }
-                terminal.printLine()
+                addPrint("\n")
+            }
+
+            if (monthIndex < 12 - 1) {
+                addPrint("\n")
             }
         }
 
@@ -50,6 +116,8 @@ terminal.addCommand("cal", async function(args) {
         }
 
         printTable()
+            
+        return tempPrintInstructions
     }
 
     let chosenYear = null
@@ -93,14 +161,16 @@ terminal.addCommand("cal", async function(args) {
     }
 
     if (chosenMonth == null) {
+        let monthInstructions = []
         for (let month = 0; month < 12; month++) {
-            printMonth(month, chosenYear)
-            if (month < 12 - 1) {
-                terminal.printLine()
-            }
+            let printInstructions = printMonth(month, chosenYear)
+            let structuredInstructions = restructureInstructions(printInstructions)
+            monthInstructions.push(structuredInstructions)
         }
+        let combinedInstructions = combineMonthInstructions(monthInstructions)
+        executePrintInstructions(combinedInstructions)
     } else {
-        printMonth(chosenMonth, chosenYear)
+        executePrintInstructions(printMonth(chosenMonth, chosenYear))
     }
 
 }, {
