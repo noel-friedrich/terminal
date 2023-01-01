@@ -2,6 +2,8 @@
 > simulating a terminal as my homepage  
 > available at [noel-friedrich.de/terminal](https://noel-friedrich.de/terminal/)
 
+![Screenshot of Website](https://noel-friedrich.de/terminal/res/img/screenshots/website-screenshot.png)
+
 ## Table of contents
 * [Introduction](#introduction)
   * [fun stuff to try](#fun-stuff-to-try)
@@ -11,26 +13,19 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 133 commands such as `ls`, `cd` and of course `cowsay`
+* 140 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
-* fun like TAB-autocompletion or `cmatrix`
+* TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
 * all changes made are locally saved (using the LocalStorage API)
-* very cute `turtlo`
+* very cute `turtlo` animal to keep you entertained
 
 ### fun stuff to try
 
-* execute your own code:
-  1. make a file using `touch main.js`
-  2. edit that file using `edit main.js`
-  3. write js-code inside the editor, e.g. `console.log("Hello World!")`
-  4. exit and save by hitting `Strg+S`
-  5. execute your new script using `./main.js` or `run main.js`
 * plot your favorite equation using `plot tan(2x)` (and hear them!)
 * solve your favorite equation using `solve x*x=10`
 * feel like a hacker using `cmatrix`
 * let the cow say something using `cowsay`
-* get my opinion of a programming language my typing its name into the terminal
 * convert a picture into ascii using `img2ascii`
 * set and get key-value pairs on the server using `set` and `get`
   * these values are saved globally for all users to see
@@ -39,19 +34,16 @@ The page is build to work like a Unix-Terminal, including:
 * see your command history using `history`
   * execute a command from your history using `!<index>`
 * spawn turtlo using `turtlo` and watch it do stuff
-* see your favorite calendar using `cal` 
 * convert your favorite image file to another format
   1. upload the file using `upload`
   2. convert it using `convert <filename>.<old_ending> <filename>.<new_ending>`
   3. download it using `download <filename>.<new_ending>`
-* play some games against an artificial opponent player
-  * play [`lunar-lander`](https://noel-friedrich.de/cli/?cmd=lunar-lander)
-  * play [`chess`](https://noel-friedrich.de/cli/?cmd=chess)
-  * play [`4inarow`](https://noel-friedrich.de/cli/?cmd=4inarow)
-  * play [`snake`](https://noel-friedrich.de/cli/?cmd=snake)
-  * play [`2048`](https://noel-friedrich.de/terminal/?cmd=2048)
-  * play [`stacker`](https://noel-friedrich.de/terminal/?cmd=stacker)
+* play fun terminal-style games
+  * list all available games using `games`
   * view highscores using `highscores <game-name>`
+* generate fake whatsapp conversations using `fakechat`  
+
+_and so much more_
 
 ## Commands
 
@@ -60,148 +52,146 @@ The following list can also be viewed using the `whatis *` command
 
 | Command      | Description                                                     |
 | ------------ | --------------------------------------------------------------- |
-| `2048`             | play a game of 2048                                                         |
-| `4inarow`          | play a game of Connect Four against the computer                            |
-| `alias`            | create a new alias for a given function                                     |
-| `background`       | change the background color of the terminal                                 |
-| `base64`           | encode/decode a message using base64                                        |
-| `bc`               | start a bc (basic calculator) session                                       |
-| `bezier`           | play with bezier curves                                                     |
-| `bin`              | convert a number to another base                                            |
-| `binomcdf`         | calculate the binomial cumulative distribution function                     |
-| `binompdf`         | calculate binomial distribution value                                       |
-| `blobber`          | start blobber                                                               |
-| `brainfuck`        | parse given brainfuck code                                                  |
-| `cal`              | print a calendar                                                            |
-| `cardoid`          | start a cardoid generator                                                   |
-| `cat`              | print file content                                                          |
-| `cd`               | change current directory                                                    |
-| `ceasar`           | shift the letters of a text                                                 |
-| `cheese`           | take a foto with your webcam                                                |
-| `chess`            | play a game of chess against the computer                                   |
-| `clear`            | clear the terminal                                                          |
-| `clock`            | display a clock                                                             |
-| `cmatrix`          | show the matrix                                                             |
-| `cmdnotfound`      | display that a command was not found                                        |
-| `code`             | show the source code of a command                                           |
-| `collatz`          | Calculate the Collatz Sequence (3x+1) for a given Number                    |
-| `color-test`       | undefined                                                                   |
-| `compliment`       | get info about yourself                                                     |
-| `copy`             | copy the file content to the clipboard                                      |
-| `cowsay`           | let the cow say something                                                   |
-| `cowthink`         | let the cow think something                                                 |
-| `cp`               | copy a file                                                                 |
-| `curl`             | download a file from the internet                                           |
-| `cw`               | get the calendar week of a date                                             |
-| `debug`            | activate the debug mode to enable untested new features                     |
-| `donut`            | display a spinning donut                                                    |
-| `download`         | download a file                                                             |
-| `draw`             | start simple drawing app                                                    |
-| `du`               | display disk usage of current directory                                     |
-| `echo`             | print a line of text                                                        |
-| `edit`             | edit a file of the current directory                                        |
-| `eval`             | evaluate javascript code                                                    |
-| `exit`             | exit the terminal                                                           |
-| `f`                | calculate friendship score with a friend                                    |
-| `factor`           | print the prime factors of a number                                         |
-| `fakechat`         | fake a whatsapp chat conversation                                           |
-| `fizzbuzz`         | print the fizzbuzz sequence                                                 |
-| `flaci-to-turing`  | Converts a flaci.com JSON File of a turing machine to a turing machine file |
-| `foreground`       | change the foreground color of the terminal                                 |
-| `games`            | shows the game menu                                                         |
-| `get`              | get a value from the server                                                 |
-| `greed`            | play a game of greed                                                        |
-| `grep`             | search for a pattern in a file                                              |
-| `head`             | display the first lines of a file                                           |
-| `helloworld`       | display the hello-world text                                                |
-| `help`             | shows this help menu                                                        |
-| `hi`               | say hello to the terminal                                                   |
-| `highscore-admin`  | Login as Admin                                                              |
-| `highscore-remove` | Remove a highscore                                                          |
-| `highscores`       | Show global highscores for a game                                           |
-| `history`          | print the command history                                                   |
-| `href`             | open a link in another tab                                                  |
-| `hugehugeturtlo`   | spawn huge turtlo                                                           |
-| `hugeturtlo`       | spawn huge turtlo                                                           |
-| `image-crop`       | start image cropper program                                                 |
-| `img2ascii`        | Convert an image to ASCII art                                               |
-| `joke`             | tell a joke                                                                 |
-| `kaprekar`         | display the kaprekar steps of a number                                      |
-| `kill`             | kill a process                                                              |
-| `labyrinth`        | play a game of labyrinth                                                    |
-| `letters`          | prints the given text in ascii art                                          |
-| `lettre`           | start lettre                                                                |
-| `loadall`          | preload all possible commands                                               |
-| `logistic-map`     | draw the logistic map                                                       |
-| `ls`               | list all files of current directory                                         |
-| `lscmds`           | list all available commands                                                 |
-| `lscpu`            | get some helpful info about your cpu                                        |
-| `lsusb`            | list all usb devices                                                        |
-| `lunar-lander`     | play a classic game of moon-lander                                          |
-| `man`              | show the manual page for a command                                          |
-| `mandelbrot`       | draws the mandelbrot set                                                    |
-| `mill2player`      | play a game of mill with a friend locally                                   |
-| `mkdir`            | create a new directory                                                      |
-| `morse`            | translate latin to morse or morse to latin                                  |
-| `mv`               | move a file                                                                 |
-| `name`             | set a default name for the highscore system to use                          |
-| `name-gen`         | start a name generator                                                      |
-| `ncr`              | calculate binomial distribution value                                       |
-| `number-guess`     | guess a random number                                                       |
-| `particle`         | start a particle simulation                                                 |
-| `pascal`           | print a pascal triangle                                                     |
-| `password`         | Generate a random password                                                  |
-| `pendulum`         | start a pendulum wave simulation                                            |
-| `perilious-path`   | play perilous path                                                          |
-| `physics`          | start a physics simulation                                                  |
-| `pi`               | calculate pi to the n-th digit                                              |
-| `plot`             | plot a mathematical function within bounds                                  |
-| `plotter`          | plot mathematical functions                                                 |
-| `pong`             | play a game of pong against the computer                                    |
-| `pv`               | print a message with a typing animation                                     |
-| `pwd`              | print the current working directory                                         |
-| `qr`               | generate a qr code                                                          |
-| `rate`             | undefined                                                                   |
-| `raycasting`       | play with raycasting                                                        |
-| `reboot`           | reboot the website                                                          |
-| `reload`           | Reloads the terminal                                                        |
-| `reset`            | reset the terminal                                                          |
-| `reverse`          | reverse a message                                                           |
-| `rm`               | remove a file                                                               |
-| `rmdir`            | remove a directory                                                          |
-| `rndm`             | generate a random number based on the current time                          |
-| `search`           | search something via google.com                                             |
-| `set`              | set a value on the server                                                   |
-| `sha256`           | calculate the SHA-256 hash of a message                                     |
-| `shutdown`         | shutdown the terminal                                                       |
-| `sleep`            | sleep for a number of seconds                                               |
-| `slime`            | Start a slime simulation                                                    |
-| `snake`            | play a game of snake                                                        |
-| `solve`            | solve a mathematical equation for x                                         |
-| `sorting`          | display a sorting algorithm                                                 |
-| `stacker`          | play a stacker game                                                         |
-| `style`            | change the style of the terminal                                            |
-| `sudo`             | try to use sudo                                                             |
-| `terminal`         | a terminal inside a terminal                                                |
-| `tetris`           | play a classic game of tetris                                               |
-| `tictactoe`        | play a game of tic tac toe against the computer.                            |
-| `timer`            | set a timer                                                                 |
-| `todo`             | manage a todo list                                                          |
-| `touch`            | create a file in the current directory                                      |
-| `turing`           | run a turing machine file                                                   |
-| `turtlo`           | spawn turtlo                                                                |
-| `type-test`        | test your typing speed                                                      |
-| `uname`            | print the operating system name                                             |
-| `upload`           | upload a file from your computer                                            |
-| `vigenere`         | encrypt/decrypt a message using the vigenere cipher                         |
-| `w`                | print the current time elapsed                                              |
-| `wave`             | play with a wave                                                            |
-| `wc`               | display word and line count of file                                         |
-| `whatday`          | get the weekday of a date                                                   |
-| `whatis`           | display a short description of a command                                    |
-| `whoami`           | get client info                                                             |
-| `yes`              | print a message repeatedly                                                  |
-| `zip`              | zip a file                                                                  |
+| `binompdf` | calculate binomial distribution value |
+| `greed` | play a game of greed |
+| `upload` | upload a file from your computer |
+| `password` | Generate a random password |
+| `pong` | play a game of pong against the computer |
+| `slime` | Start a slime simulation |
+| `mkdir` | create a new directory |
+| `joke` | tell a joke |
+| `fakechat` | fake a whatsapp chat conversation |
+| `physics` | start a physics simulation |
+| `cmdnotfound` | display that a command was not found |
+| `ncr` | calculate binomial distribution value |
+| `wave` | play with a wave |
+| `fizzbuzz` | print the fizzbuzz sequence |
+| `grep` | search for a pattern in a file |
+| `tictactoe` | play a game of tic tac toe against the computer. |
+| `pendulum` | start a pendulum wave simulation |
+| `loadall` | preload all possible commands |
+| `whatis` | display a short description of a command |
+| `rmdir` | remove a directory |
+| `bc` | start a bc (basic calculator) session |
+| `hugehugeturtlo` | spawn huge turtlo |
+| `eval` | evaluate javascript code |
+| `head` | display the first lines of a file |
+| `cw` | get the calendar week of a date |
+| `whatday` | get the weekday of a date |
+| `brainfuck` | parse given brainfuck code |
+| `clock` | display a clock |
+| `color-test` | test the color capabilities of the terminal |
+| `pascal` | print a pascal triangle |
+| `base64` | encode/decode a message using base64 |
+| `mv` | move a file |
+| `img2ascii` | Convert an image to ASCII art |
+| `helloworld` | display the hello-world text |
+| `touch` | create a file in the current directory |
+| `hi` | say hello to the terminal |
+| `reboot` | reboot the website |
+| `highscores` | Show global highscores for a game |
+| `pwd` | print the current working directory |
+| `rm` | remove a file |
+| `chess` | play a game of chess against the computer |
+| `turtlo` | spawn turtlo |
+| `binomcdf` | calculate the binomial cumulative distribution function |
+| `factor` | print the prime factors of a number |
+| `sha256` | calculate the SHA-256 hash of a message |
+| `kill` | kill a process |
+| `help` | shows this help menu |
+| `du` | display disk usage of current directory |
+| `vigenere` | encrypt/decrypt a message using the vigenere cipher |
+| `cal` | print a calendar |
+| `rndm` | generate a random number based on the current time |
+| `2048` | play a game of 2048 |
+| `history` | print the command history |
+| `cp` | copy a file |
+| `morse` | translate latin to morse or morse to latin |
+| `sorting` | display a sorting algorithm |
+| `cowthink` | let the cow think something |
+| `number-guess` | guess a random number |
+| `turing` | run a turing machine file |
+| `qr` | generate a qr code |
+| `exit` | exit the terminal |
+| `search` | search something via google.com |
+| `plotter` | plot mathematical functions |
+| `f` | calculate friendship score with a friend |
+| `cmatrix` | show the matrix |
+| `wc` | display word and line count of file |
+| `particle` | start a particle simulation |
+| `highscore-remove` | Remove a highscore |
+| `echo` | print a line of text |
+| `donut` | display a spinning donut |
+| `rate` | rate a programming language |
+| `labyrinth` | play a game of labyrinth |
+| `lunar-lander` | play a classic game of moon-lander |
+| `lscmds` | list all available commands |
+| `foreground` | change the foreground color of the terminal |
+| `hugeturtlo` | spawn huge turtlo |
+| `kaprekar` | display the kaprekar steps of a number |
+| `type-test` | test your typing speed |
+| `ls` | list all files of current directory |
+| `timer` | set a timer |
+| `copy` | copy the file content to the clipboard |
+| `cd` | change current directory |
+| `bin` | convert a number to another base |
+| `letters` | prints the given text in ascii art |
+| `cowsay` | let the cow say something |
+| `4inarow` | play a game of Connect Four against the computer |
+| `name` | set a default name for the highscore system to use |
+| `tetris` | play a classic game of tetris |
+| `reset` | reset the terminal |
+| `highscore-admin` | Login as Admin |
+| `pv` | print a message with a typing animation |
+| `lsusb` | list all usb devices |
+| `reload` | Reloads the terminal |
+| `w` | print the current time elapsed |
+| `terminal` | a terminal inside a terminal |
+| `flaci-to-turing` | Converts a flaci.com JSON File of a turing machine to a turing machine file |
+| `style` | change the style of the terminal |
+| `cheese` | take a foto with your webcam |
+| `uname` | print the operating system name |
+| `sudo` | try to use sudo |
+| `raycasting` | play with raycasting |
+| `cardoid` | start a cardoid generator |
+| `ceasar` | shift the letters of a text |
+| `cat` | print file content |
+| `image-crop` | start image cropper program |
+| `name-gen` | start a name generator |
+| `pi` | calculate pi to the n-th digit |
+| `logistic-map` | draw the logistic map |
+| `debug` | activate the debug mode to enable untested new features |
+| `yes` | print a message repeatedly |
+| `compliment` | get info about yourself |
+| `games` | shows the game menu |
+| `curl` | download a file from the internet |
+| `code` | show the source code of a command |
+| `clear` | clear the terminal |
+| `alias` | create a new alias for a given function |
+| `perilious-path` | play perilous path |
+| `set` | set a value on the server |
+| `download` | download a file |
+| `collatz` | Calculate the Collatz Sequence (3x+1) for a given Number |
+| `draw` | start simple drawing app |
+| `background` | change the background color of the terminal |
+| `mandelbrot` | draws the mandelbrot set |
+| `snake` | play a game of snake |
+| `plot` | plot a mathematical function within bounds |
+| `reverse` | reverse a message |
+| `edit` | edit a file of the current directory |
+| `zip` | zip a file |
+| `mill2player` | play a game of mill with a friend locally |
+| `stacker` | play a stacker game |
+| `solve` | solve a mathematical equation for x |
+| `man` | show the manual page for a command |
+| `todo` | manage a todo list |
+| `lscpu` | get some helpful info about your cpu |
+| `bezier` | play with bezier curves |
+| `shutdown` | shutdown the terminal |
+| `sleep` | sleep for a number of seconds |
+| `whoami` | get client info |
+| `get` | get a value from the server |
+| `href` | open a link in another tab |
 
 ## Status
 Project is _IN PROGRESS_

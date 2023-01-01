@@ -38,6 +38,3 @@ terminal.addCommand("rate", function(args) {
     description: "rate a programming language",
     args: ["language"]
 })
-
-addAlias("github", "run home/github.exe")
-

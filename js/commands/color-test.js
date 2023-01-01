@@ -16,7 +16,6 @@ terminal.addCommand("color-test", function() {
         }
         terminal.printLine()
     }
-}, {description: "test the color capabilities of the terminal"})
-
-addAlias("tree", "ls -r")
-
+}, {
+    description: "test the color capabilities of the terminal"
+})

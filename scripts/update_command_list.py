@@ -33,9 +33,10 @@ for file in files:
     
     commands[command_name] = command_data
 
-with open("./js/load-commands.js", "w") as file:
-    dumps = json.dumps(commands)
-    content = f"terminal.commandData = {dumps}"
-    file.write(content)
+if __name__ == "__main__":
+    with open("./js/load-commands.js", "w") as file:
+        dumps = json.dumps(commands)
+        content = f"terminal.commandData = {dumps}"
+        file.write(content)
 
-print(f"Successfully added {len(commands.items())} Commands to load-commands.js file.")
+    print(f"Successfully added {len(commands.items())} Commands to load-commands.js file.")
