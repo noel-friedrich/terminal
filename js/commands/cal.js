@@ -67,10 +67,14 @@ terminal.addCommand("cal", async function(args) {
         return combinedInstructions
     }
 
+    Date.prototype.getRealDay = function() {
+        return this.getDay() == 0 ? 6 : this.getDay() - 1
+    }
+
     function printMonth(monthIndex, year) {
         tempPrintInstructions = []
         let tableData = Array.from(Array(6)).map(() => Array(7).fill("  "))
-        let tableHeader = "Su Mo Tu We Th Fr Sa"
+        let tableHeader = "Mo Tu We Th Fr Sa Su"
         let date = new Date()
         date.setFullYear(year, monthIndex, 1)
         let month = monthNames[date.getMonth()]
@@ -109,10 +113,10 @@ terminal.addCommand("cal", async function(args) {
             if (date.getMonth() != monthNames.indexOf(month)) {
                 break
             }
-            if (date.getDay() == 0) {
+            if (date.getRealDay() == 0) {
                 weekIndex++
             }
-            tableData[weekIndex][date.getDay()] = stringPad(String(i), 2)
+            tableData[weekIndex][date.getRealDay()] = stringPad(String(i), 2)
         }
 
         printTable()
