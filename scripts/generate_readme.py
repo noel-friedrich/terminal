@@ -1,4 +1,5 @@
 from update_command_list import commands
+commands = dict(sorted(commands.items()))
 
 def generate_commands_list():
     output_str = ""
