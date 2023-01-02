@@ -1,4 +1,4 @@
-const welcome_txt_content = `This is my personal Homepage!
+const welcome_txt_content0 = `This is my personal Homepage!
                   _    __      _          _      _      _     
                  | |  / _|    (_)        | |    (_)    | |    
  _ __   ___   ___| | | |_ _ __ _  ___  __| |_ __ _  ___| |__  
@@ -10,8 +10,7 @@ I'm a hobbyist programmer and like to play around with stuff.
 
 This site is built to work like a terminal:
 - use 'help' to see a list of available commands
-- or just use the buttons instead
-`
+- have lots of fun messing around`
 
 terminal.addCommand("helloworld", async function() {
     terminal.printLine(welcome_txt_content)
