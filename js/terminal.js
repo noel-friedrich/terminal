@@ -1079,10 +1079,20 @@ class Terminal {
         this.setInputCorrectness(tempCommand.checkArgs(args))
     }
 
-    async prompt(msg, {password=false}={}) {
+    async prompt(msg, {password=false, affectCorrectness=false,
+        getHistory = () => this.data.history,
+        addToHistory = (data) => this.data.addToHistory(data),
+        inputCleaning=true,
+        inputSuggestions=true,
+    }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
             return ""
+        }
+
+        function lastItemOfHistory() {
+            let history = getHistory()
+            return history[history.length - 1]
         }
 
         if (msg) terminal.print(msg)
@@ -1134,16 +1144,26 @@ class Terminal {
             let keyListeners = {}
 
             keyListeners["Enter"] = event => {
-                let text = this.refurbishInput(inputElement.value)
+                let text = inputElement.value
+                if (inputCleaning) {
+                    text = this.refurbishInput(inputElement.value)
+                }
                 this.printLine(password ? "•".repeat(text.length) : text)
-                resolve(text)
+                if (text !== lastItemOfHistory())
+                    addToHistory(text)
                 this.removeCurrInput()
+                resolve(text)
             }
 
             let tabIndex = 0
             let suggestions = []
             keyListeners["Tab"] = event => {
                 event.preventDefault()
+                if (!inputSuggestions) {
+                    inputElement.value += "    "
+                    inputElement.oninput()
+                    return
+                }
                 if (suggestions.length == 0)
                     suggestions = this.getAutoCompleteOptions(inputValue)
                 if (suggestions.length > 0) {
@@ -1151,22 +1171,23 @@ class Terminal {
                     tabIndex = (tabIndex + 1) % suggestions.length
                     inputValue = ""
                 }
-                inputElement.dispatchEvent(new Event("input"))
+                inputElement.oninput()
             }
 
-            let historyIndex = this.data.history.length
+            let historyIndex = getHistory().length
             keyListeners["ArrowUp"] = event => {
                 event.preventDefault()
-                let history = this.data.history
+                let history = getHistory()
                 if (historyIndex > 0) {
                     historyIndex--
                     inputElement.value = history[historyIndex]
                 }
+                inputElement.oninput()
             }
 
             keyListeners["ArrowDown"] = event => {
                 event.preventDefault()
-                let history = this.data.history
+                let history = getHistory()
                 historyIndex++
                 if (historyIndex > history.length - 1) {
                     historyIndex = history.length
@@ -1174,9 +1195,15 @@ class Terminal {
                 } else {
                     inputElement.value = history[historyIndex]
                 }
+                inputElement.oninput()
             }
 
-            inputElement.addEventListener("input", async event => {
+            inputElement.oninput = async event => {
+                if (!inputSuggestions) {
+                    suggestionElement.textContent = ""
+                    return
+                }
+
                 const replaceAlreadywritten = (oldText, replacement=" ") => {
                     let newText = ""
                     for (let i = 0; i < oldText.length; i++) {
@@ -1195,8 +1222,9 @@ class Terminal {
                     suggestionElement.textContent = ""
                 }
 
-                this.updateInputCorrectness(inputElement.value)
-            })
+                if (affectCorrectness)
+                    this.updateInputCorrectness(inputElement.value)
+            }
 
             inputElement.addEventListener("keydown", async event => {
                 if (event.key.length == 1) // a, b, c, " "
@@ -1393,7 +1421,7 @@ class Terminal {
         let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true})
         element.style.marginLeft = "-2em"
         this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN)
-        let text = await this.prompt()
+        let text = await this.prompt("", {affectCorrectness: true})
         await this.input(text)
     }
 
@@ -1403,9 +1431,6 @@ class Terminal {
             this.standardInputPrompt()
             return
         }
-
-        if (text !== this.data.lastItemOfHistory)
-            this.data.addToHistory(text)
 
         let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
         if (this.commandExists(commandText)) {

@@ -179,6 +179,9 @@ terminal.addCommand("cal", async function(args) {
 
 }, {
     description: "print a calendar",
-    args: ["?month", "?year"]
+    args: {
+        "?month": "the month to print",
+        "?year": "the year to print"
+    }
 })
 
