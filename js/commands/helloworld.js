@@ -1,4 +1,4 @@
-const welcome_txt_content0 = `This is my personal Homepage!
+const welcome_txt_content = `This is my personal Homepage!
                   _    __      _          _      _      _     
                  | |  / _|    (_)        | |    (_)    | |    
  _ __   ___   ___| | | |_ _ __ _  ___  __| |_ __ _  ___| |__  
