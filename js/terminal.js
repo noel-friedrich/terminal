@@ -820,7 +820,10 @@ class Terminal {
     fileSystem = new FileSystem()
     modules = new TerminalModules()
 
-    aliases = {}
+    aliases = {
+        "tree": "ls -r",
+        "github": "cat /root/github.url"
+    }
 
     outputChannel = OutputChannel.USER
 
@@ -978,23 +981,26 @@ class Terminal {
             return words.join(" ")
         })
 
-        let commandMatches = configMatches(Object.keys(terminal.allCommands))
+        let commandMatches = configMatches(Object.keys(terminal.allCommands)
+            .concat(Object.keys(terminal.aliases)))
         let fileMatches = configMatches(allRelativeFiles)
         let allMatches = configMatches(commandMatches.concat(fileMatches))
 
-        text = this.refurbishInput(text)
-        let tokens = TerminalParser.tokenize(text)
+        let cleanText = this.sanetizeInput(text)
+        let tokens = TerminalParser.tokenize(cleanText)
         let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
 
         let matchingFirstWord = lastWord === text.trim()
         if (matchingFirstWord) {
+            // ignore fileMatches when dealing with the first word
+            // as all prompts must start with a command name
             return exportMatches(commandMatches)
         }
 
         return exportMatches(allMatches)
     }
 
-    refurbishInput(text) {
+    sanetizeInput(text) {
         text = text.replaceAll(/![0-9]+/g, match => {
             let index = parseInt(match.slice(1)) - 1
             if (terminal.data.history[index])
@@ -1163,7 +1169,7 @@ class Terminal {
             keyListeners["Enter"] = event => {
                 let text = inputElement.value
                 if (inputCleaning) {
-                    text = this.refurbishInput(inputElement.value)
+                    text = this.sanetizeInput(inputElement.value)
                 }
                 this.printLine(password ? "•".repeat(text.length) : text)
                 if (text !== lastItemOfHistory())
@@ -1239,8 +1245,10 @@ class Terminal {
                     suggestionElement.textContent = ""
                 }
 
-                if (affectCorrectness)
-                    this.updateInputCorrectness(inputElement.value)
+                if (affectCorrectness) {
+                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    this.updateInputCorrectness(cleanedInput)
+                }
             }
 
             inputElement.addEventListener("keydown", async event => {
