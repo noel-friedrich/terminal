@@ -813,6 +813,7 @@ class Terminal {
     tempActivityCallCount = 0
     tempMaxActivityCallCount = Infinity
     debugMode = false
+    tempCommandInputHistory = []
 
     name = ""
     data = new TerminalData()
@@ -1079,11 +1080,27 @@ class Terminal {
         this.setInputCorrectness(tempCommand.checkArgs(args))
     }
 
+    _createDefaultGetHistoryFunc() {
+        if (this.commandIsExecuting) {
+            return () => this.tempCommandInputHistory
+        } else {
+            return () => this.data.history
+        }
+    }
+
+    _createDefaultAddToHistoryFunc() {
+        if (this.commandIsExecuting) {
+            return data => this.tempCommandInputHistory.push(data)
+        } else {
+            return data => this.data.addToHistory(data)
+        }
+    }
+
     async prompt(msg, {password=false, affectCorrectness=false,
-        getHistory = () => this.data.history,
-        addToHistory = (data) => this.data.addToHistory(data),
-        inputCleaning=true,
-        inputSuggestions=true,
+        getHistory = this._createDefaultGetHistoryFunc(),
+        addToHistory = this._createDefaultAddToHistoryFunc(),
+        inputCleaning=!this.commandIsExecuting,
+        inputSuggestions=!this.commandIsExecuting,
     }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
@@ -1464,6 +1481,10 @@ class Terminal {
         })
     }
 
+    get commandIsExecuting() {
+        return this.expectingFinishCommand
+    }
+
     get visibleFunctions() {
         return this.functions
     }
@@ -1572,6 +1593,7 @@ class Terminal {
 
         this._interruptCallbackQueue = []
         this._interruptSignal = false
+        this.tempCommandInputHistory = []
 
         this.fileSystem.save()
 
