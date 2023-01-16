@@ -1168,10 +1168,10 @@ class Terminal {
 
             keyListeners["Enter"] = event => {
                 let text = inputElement.value
+                this.printLine(password ? "•".repeat(text.length) : text)
                 if (inputCleaning) {
                     text = this.sanetizeInput(inputElement.value)
                 }
-                this.printLine(password ? "•".repeat(text.length) : text)
                 if (text !== lastItemOfHistory())
                     addToHistory(text)
                 this.removeCurrInput()
