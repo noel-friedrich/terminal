@@ -1,6 +1,5 @@
 terminal.addCommand("clear", async function() {
-    terminal.clear()
-    terminal.standardInputPrompt()
+    terminal.clear(true)
 }, {
     description: "clear the terminal"
 })

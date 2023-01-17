@@ -796,6 +796,26 @@ const OutputChannel = {
     NONE: "none"
 }
 
+class KeyboardShortcut {
+
+    constructor(key, callback, {
+        ctrl=undefined,
+        alt=undefined,
+        shift=undefined
+    }={}) {
+        this.key = key
+        this.callback = callback
+        this.ctrl = ctrl
+        this.alt = alt
+        this.shift = shift
+    }
+
+    run() {
+        this.callback.call(this)
+    }
+
+}
+
 class Terminal {
 
     parentNode = document.getElementById("terminal")
@@ -814,6 +834,8 @@ class Terminal {
     tempMaxActivityCallCount = Infinity
     debugMode = false
     tempCommandInputHistory = []
+
+    keyboardShortcuts = []
 
     name = ""
     data = new TerminalData()
@@ -839,6 +861,10 @@ class Terminal {
 
     get inTestMode() {
         return this.outputChannel == OutputChannel.NONE
+    }
+
+    addKeyboardShortcut(shortcut) {
+        this.keyboardShortcuts.push(shortcut)
     }
 
     removeCurrInput() {
@@ -1637,15 +1663,47 @@ class Terminal {
         this.startTime = otherTerminal.startTime 
     }
 
-    clear() {
+    clear(addPrompt=false) {
+        let newPromptValue = ""
+        if (this.currInputElement)
+            newPromptValue = this.currInputElement.value
+
         this.removeCurrInput()
         this.parentNode.innerHTML = ""
+
+        if (addPrompt) {
+            this.standardInputPrompt()
+            this.currInputElement.value = newPromptValue
+        }
+    }
+
+    _onkeydownShortcut(event) {
+        let key = event.key
+
+        let shortcut = this.keyboardShortcuts.find(shortcut => {
+            if (shortcut.key.toLowerCase() != key.toLowerCase())
+                return false
+            if (shortcut.ctrl !== undefined && shortcut.ctrl !== event.ctrlKey)
+                return false
+            if (shortcut.alt !== undefined && shortcut.alt !== event.altKey)
+                return false
+            if (shortcut.shift !== undefined && shortcut.shift !== event.shiftKey)
+                return false
+            return true
+        })
+
+        if (shortcut) {
+            event.preventDefault()
+            shortcut.run()
+        }
     }
 
     constructor(terminalName="none") {
         this.startTime = Date.now()
 
         this.name = terminalName
+        
+        addEventListener("keydown", this._onkeydownShortcut.bind(this))
 
         // when the user clicks on the terminal, focus the input element
         this.parentNode.addEventListener("click", () => {
@@ -1692,3 +1750,10 @@ class Terminal {
 const terminal = new Terminal("main")
 terminal.clear()
 terminal.init()
+
+// add shortcuts
+
+terminal.addKeyboardShortcut(new KeyboardShortcut(
+    "L", terminal.clear.bind(terminal, true),
+    {ctrl: true, shift: undefined}
+))
