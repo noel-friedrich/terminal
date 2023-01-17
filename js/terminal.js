@@ -1637,6 +1637,10 @@ class Terminal {
         this.startTime = otherTerminal.startTime 
     }
 
+    clear() {
+        this.parentNode.innerHTML = ""
+    }
+
     constructor(terminalName="none") {
         this.startTime = Date.now()
 
@@ -1685,6 +1689,5 @@ class Terminal {
 }
 
 const terminal = new Terminal("main")
-terminal.init() // can't use async constructor
-// and parts of init() rely on terminal being defined
-// e.g. the fileSystem initialization/loading
+terminal.clear()
+terminal.init()
