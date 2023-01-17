@@ -5,8 +5,8 @@ terminal.addCommand("bin", async function(args) {
     description: "convert a number to another base",
     args: {
         "n": "number to convert",
-        "?t:i:2~36": "base to convert to",
-        "?f:i:2~36": "base to convert from"
+        "?t=to-base:i:2~36": "base to convert to",
+        "?f=from-base:i:2~36": "base to convert from"
     },
     standardVals: {
         t: 2,

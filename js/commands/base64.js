@@ -7,10 +7,14 @@ terminal.addCommand("base64", async function(args) {
         output = btoa(msg)
     }
     terminal.printLine(output)
+
+    if (args.c)
+        await terminal.copy(output, {printMessage: true})
 }, {
     description: "encode/decode a message using base64",
     args: {
         "*message": "the message to encode/decode",
-        "?d": "decode the message instead of encoding it"
+        "?d=decode:b": "decode the message instead of encoding it",
+        "?c=copy:b": "copy the result to the clipboard"
     },
 })
