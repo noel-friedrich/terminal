@@ -924,10 +924,14 @@ class Terminal {
         return name.match(/^[a-zA-Z0-9_\-\.]+$/)
     }
 
-    async copy(text) {
+    async copy(text, {printMessage=false}={}) {
         if (terminal.inTestMode)
             return
-        return await navigator.clipboard.writeText(text)
+        
+        await navigator.clipboard.writeText(text)
+
+        if (printMessage)
+            terminal.printLine("Copied to Clipboard ✓")
     }
 
     async sleep(ms) {

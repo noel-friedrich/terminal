@@ -10,20 +10,30 @@ terminal.addCommand("vigenere", async function(args) {
     let output = ""
 
     Array.from(args.message).forEach((character, i) => {
-        let charValue = getCharValue(character)
-        let keyValue = getCharValue(args.key[i % args.key.length])
-        let newValue = (charValue + keyValue) % 26
-        if (args.d) newValue = (charValue - keyValue + 26) % 26
-        output += getCharFromValue(newValue)
+        if (/[a-zA-Z]/.test(character)) {
+            let charValue = getCharValue(character)
+            let keyValue = getCharValue(args.key[i % args.key.length])
+            let newValue = (charValue + keyValue) % 26
+            if (args.d)
+                newValue = (charValue - keyValue + 26) % 26
+            output += getCharFromValue(newValue)
+        } else {
+            output += character
+        }
     })
 
     terminal.printLine(output)
+
+    if (args.c) {
+        await terminal.copy(output, {printMessage: true})
+    }
 }, {
     description: "encrypt/decrypt a message using the vigenere cipher",
     args: {
         "message": "the message to encrypt/decrypt",
         "key": "the key to use",
-        "?d": "decrypt the message instead of encrypting it"
+        "?d=decrypt:b": "decrypt the message instead of encrypting it",
+        "?c=copy:b": "copy the result to the clipboard"
     },
 })
 
