@@ -1638,6 +1638,7 @@ class Terminal {
     }
 
     clear() {
+        this.removeCurrInput()
         this.parentNode.innerHTML = ""
     }
 
