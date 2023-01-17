@@ -6,7 +6,7 @@ terminal.addCommand("mkdir", async function(args) {
     let newFolder = new Directory({})
     terminal.currFolder.content[args.directory_name] = newFolder
     await terminal.fileSystem.reload()
-    terminal.printLine(`Created ${terminal.fileSystem.pathStr + args.directory_name}/`)
+    terminal.printLine(`Created ${terminal.fileSystem.pathStr}/${args.directory_name}/`)
 }, {
     description: "create a new directory",
     args: ["directory_name"]
