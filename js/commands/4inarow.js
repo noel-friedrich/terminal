@@ -359,7 +359,7 @@ terminal.addCommand("4inarow", async function(args) {
 }, {
     description: "play a game of Connect Four against the computer",
     args: {
-        "?depth": "The depth of the search tree",
+        "?depth:i:1~100": "The depth of the search tree",
     },
     standardVals: {
         depth: 4

@@ -35,7 +35,7 @@ terminal.addCommand("pascal", async function(args) {
     description: "print a pascal triangle",
     args: {
         "?depth:n:1~100": "the depth of the triangle",
-        "?f": "only show the final row"
+        "?f:b": "only show the final row"
     },
     standardVals: {
         depth: 10
