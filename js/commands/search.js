@@ -4,7 +4,7 @@ terminal.addCommand("search", async function(args) {
     description: "search something via google.com",
     args: {
         "*query": "the search query",
-        "?b": "the base search-engine url"
+        "?b=baseUrl": "the base search-engine url"
     },
     standardVals: {
         b: "https://www.google.com/search?q="
