@@ -1333,9 +1333,9 @@ class Terminal {
             }
             let num = parseFloat(inp)
             if (min > num) {
-                this.printError(`The number must be larger than ${min - 1}`)
+                this.printError(`The number must be larger/equal than ${min}`)
             } else if (max < num) {
-                this.printError(`The number must be smaller than ${max + 1}`)
+                this.printError(`The number must be smaller/equal than ${max}`)
             } else {
                 return num
             }
