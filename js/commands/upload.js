@@ -2,7 +2,7 @@ terminal.addCommand("upload", async function() {
     await terminal.modules.load("upload", terminal)
     try {
         var [fileName, fileContent, isDataURL] = await terminal.modules.upload.file()
-    } catch {
+    } catch (e) {
         throw new Error("File Upload Failed")
     }
     let construct = TextFile

@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 143 commands such as `ls`, `cd` and of course `cowsay`
+* 144 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -158,6 +158,7 @@ The following list can also be viewed using the `whatis *` command
 | `raycasting` | play with raycasting |
 | `reboot` | reboot the website |
 | `reload` | Reloads the terminal |
+| `rename` | rename a file or folder |
 | `reset` | reset the terminal |
 | `reverse` | reverse a message |
 | `rm` | remove a file |

@@ -31,7 +31,12 @@ async function fileFromUpload(fileType=null) {
             }
         }
 
-        terminal.document.body.onfocus = () => {if (!input.value.length) reject()}  
+        terminal.document.body.onfocus = () => {
+            setTimeout(() => {
+                if (!input.value.length)
+                    reject()
+            }, 1000)
+        }  
     })
 }
 

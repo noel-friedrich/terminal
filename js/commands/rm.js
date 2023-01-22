@@ -6,6 +6,5 @@ terminal.addCommand("rm", async function(args) {
     await terminal.fileSystem.reload()
 }, {
     description: "remove a file",
-    args: ["file"]
+    args: ["*file"]
 })
-
