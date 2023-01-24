@@ -51,6 +51,11 @@ body {
     padding-bottom: calc(3 * var(--padding));
 }
 
+::selection {
+    background: var(--foreground);
+    color: var(--background);
+}
+
 .terminal-input-container {
     display: inline-block;
     position: relative;
