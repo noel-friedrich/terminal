@@ -149,6 +149,7 @@ terminal.addCommand("code", async function(args) {
                 inLineComment = false
             }
 
+            // 🥚🐇
             // consider this an easteregg
             // congrats if you found it
 
