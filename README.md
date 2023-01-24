@@ -80,7 +80,7 @@ The following list can also be viewed using the `whatis *` command
 | `compliment` | get info about yourself |
 | `copy` | copy the file content to the clipboard |
 | `cowsay` | let the cow say something |
-| `cowthink` | let the cow think something |
+| `cowthink` | let the cow say something |
 | `cp` | copy a file |
 | `curl` | download a file from the internet |
 | `cw` | get the calendar week of a date |
