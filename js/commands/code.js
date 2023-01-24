@@ -69,7 +69,7 @@ terminal.addCommand("code", async function(args) {
 
     function printJSCode(rawCode) {
         const isLetter = char => /[a-zA-Z]/.test(char)
-        const isApotrophe = char => RegExp("['\"`]").test(char)
+        const isApostrophe = char => RegExp("['\"`]").test(char)
         const isNumber = text => !isNaN(parseInt(text))
         const isClass = text => isLetter(text[0]) && text[0] == text[0].toUpperCase()
 
@@ -103,7 +103,7 @@ terminal.addCommand("code", async function(args) {
         const structureColor = Color.hex("#DBD3AD")
         const classColor = Color.hex("#F6C177")
 
-        let inApotrophe = false
+        let inApostrophe = false
         let inLineComment = false
         let i = 0
         for (let [token, color] of tokenColors) {
@@ -123,18 +123,18 @@ terminal.addCommand("code", async function(args) {
             let prevToken = (tokenColors[i - 1] ?? ["", Color.WHITE])[0]
             let prevTokenIsBlocker = prevToken == "\\"
             
-            if (isApotrophe(token) && !inApotrophe && !prevTokenIsBlocker) {
-                inApotrophe = token
+            if (isApostrophe(token) && !inApostrophe && !prevTokenIsBlocker) {
+                inApostrophe = token
                 color = stringColor
-            } else if (token === inApotrophe && !prevTokenIsBlocker) {
-                inApotrophe = false
+            } else if (token === inApostrophe && !prevTokenIsBlocker) {
+                inApostrophe = false
                 color = stringColor
-            } else if (inApotrophe) {
+            } else if (inApostrophe) {
                 color = stringColor
             }
 
             let nextToken = (tokenColors[i + 1] ?? ["", Color.WHITE])[0]
-            if (token == "/" && nextToken == "/" && !inApotrophe) {
+            if (token == "/" && nextToken == "/" && !inApostrophe) {
                 inLineComment = true
                 color = commentColor
             } else if (token == "\n" && inLineComment) {
@@ -145,7 +145,7 @@ terminal.addCommand("code", async function(args) {
             }
 
             if (token == "\n") {
-                inApotrophe = false
+                inApostrophe = false
                 inLineComment = false
             }
 
