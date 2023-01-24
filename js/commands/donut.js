@@ -1,6 +1,8 @@
 terminal.addCommand("donut", async function() {
     // mostly copied from original donut.c code
 
+    setTimeout(() => terminal.scroll(), 100)
+
                let p=terminal.
            print(),A=1,B=1,f=()=>{
          let b=[];let z=[];A+=0.07;B
