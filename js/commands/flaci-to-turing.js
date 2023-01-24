@@ -80,10 +80,12 @@ terminal.addCommand("flaci-to-turing", async function(args) {
     description: "Converts a flaci.com JSON File of a turing machine to a turing machine file",
     args: {
         "file": "file to convert",
-        "?s=save": "save the converted file"
+        "?s=save:b": "save the converted file"
     },
     helpFunc() {
-        terminal.printItalic("flaci.com lets you create Turing Machines")
+        terminal.addLineBreak()
+        terminal.printLink("flaci.com", "https://flaci.com/", undefined, false)
+        terminal.printItalic(" lets you create Turing Machines")
         terminal.printItalic("graphically. This command converts the")
         terminal.printItalic("JSON file of a Turing Machine to a Turing")
         terminal.printItalic("Machine file that can be used in this")
