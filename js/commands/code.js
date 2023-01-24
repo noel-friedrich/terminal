@@ -64,7 +64,7 @@ const jsSymbols = [
 terminal.addCommand("code", async function(args) {
     if (!terminal.commandExists(args.command))
         throw new Error(`Command "${args.command}" does not exist`)
-    let command = await terminal.loadCommand(args.command)
+    let command = await terminal.getCommand(args.command)
     let code = command.callback.toString()
 
     function printJSCode(rawCode) {
@@ -159,6 +159,10 @@ terminal.addCommand("code", async function(args) {
     }
 
     printJSCode(code)
+
+
+
+    printJSCode(", " + JSON.stringify(command.info, null, 4))
 }, {
     description: "show the source code of a command",
     args: {
