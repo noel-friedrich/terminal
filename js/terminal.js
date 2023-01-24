@@ -638,7 +638,7 @@ class Command {
         return TerminalParser.parseArgs(args, this, this.terminal.inTestMode)
     }
 
-    async run(args, rawArgs, {callFinishFunc=true, terminalObj=undefined}={}) {
+    async run(args, rawArgs, {callFinishFunc=true, terminalObj=undefined, processArgs=true}={}) {
         if (terminalObj)
             this.terminal = terminalObj
         if (callFinishFunc)
@@ -647,9 +647,9 @@ class Command {
         try {
             let argObject = this.processArgs(args, rawArgs)
             if (this.callback.constructor.name === 'AsyncFunction') {
-                await this.callback(argObject)
+                await this.callback(processArgs ? argObject : args)
             } else {
-                this.callback(argObject)
+                this.callback(processArgs ? argObject : args)
             }
             this.terminal.finishCommand()
             return true
@@ -667,6 +667,27 @@ class Command {
 }
 
 const UtilityFunctions = {
+
+    levenshteinDistance(str1, str2) {
+        const track = Array(str2.length + 1).fill(null).map(
+            () => Array(str1.length + 1).fill(null))
+
+        for (let i = 0; i <= str1.length; i += 1) track[0][i] = i
+        for (let j = 0; j <= str2.length; j += 1) track[j][0] = j
+
+        for (let j = 1; j <= str2.length; j += 1) {
+            for (let i = 1; i <= str1.length; i += 1) {
+                const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1
+                track[j][i] = Math.min(
+                    track[j][i - 1] + 1,
+                    track[j - 1][i] + 1,
+                    track[j - 1][i - 1] + indicator,
+                )
+            }
+        }
+
+        return track[str2.length][str1.length]
+    },
 
     stringPad(string, length, char=" ") {
         return string.toString().padStart(length, char)
@@ -1488,13 +1509,17 @@ class Terminal {
         }
 
         let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+        let rawArgs = text.slice(commandText.length)
         if (this.commandExists(commandText)) {
-            let rawArgs = text.slice(commandText.length)
             let command = await this.getCommand(commandText)
             return await command.run(args, rawArgs, {callFinishFunc: !testMode, terminalObj: this})
         } else {
             let cmdnotfound = await this.getCommand("cmdnotfound")
-            await cmdnotfound.run([commandText], commandText, {callFinishFunc: !testMode, terminalObj: this})
+            await cmdnotfound.run([commandText, rawArgs], commandText, {
+                callFinishFunc: !testMode,
+                terminalObj: this,
+                processArgs: false
+            })
             return false
         }
     }
