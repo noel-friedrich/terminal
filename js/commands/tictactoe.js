@@ -71,7 +71,14 @@ terminal.addCommand("tictactoe", async function(args) {
         return true
     }
 
-    function getComputerInput() {
+    function getComputerInputRandom() {
+        let a = Math.floor(Math.random() * 9) + 1
+        while (getField(a) != 0)
+            a = Math.floor(Math.random() * 9) + 1
+        return a
+    }
+
+    function getComputerInputNormal() {
         const possibleWins = [
             [1, 2, 3], [4, 5, 6], [7, 8, 9],
             [1, 4, 7], [2, 5, 8], [3, 6, 9],
@@ -94,10 +101,24 @@ terminal.addCommand("tictactoe", async function(args) {
             } 
         }
 
-        let a = Math.floor(Math.random() * 9) + 1
-        while (getField(a) != 0)
-            a = Math.floor(Math.random() * 9) + 1
-        return a
+        return getComputerInputRandom()
+    }
+
+    const bots = {
+        "normal": getComputerInputNormal,
+        "easy": getComputerInputRandom
+    }
+
+    let getComputerInput = bots[args.d]
+
+    if (getComputerInput == undefined) {
+        terminal.printError(`Unknown difficulty: ${args.d}`)
+        terminal.printLine("Available difficulties:")
+        for (let difficulty of Object.keys(bots)) {
+            terminal.print("- ")
+            terminal.printCommand(difficulty, `tictactoe ${difficulty}`)
+        }
+        return
     }
 
     if (Math.random() < 0.5) {
@@ -110,6 +131,7 @@ terminal.addCommand("tictactoe", async function(args) {
         if (isWon() || isDraw())
             break
         setField(getComputerInput(), O)
+        terminal.addLineBreak()
     }
 
     let winner = isWon()
@@ -124,5 +146,11 @@ terminal.addCommand("tictactoe", async function(args) {
 
 }, {
     description: "play a game of tic tac toe against the computer.",
+    args: {
+        "?d=difficulty": "play against an unbeatable computer."
+    },
+    standardVals: {
+        d: "normal"
+    },
     isGame: true
 })
