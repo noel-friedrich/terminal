@@ -89,10 +89,10 @@ terminal.addCommand("grep", async function(args) {
     args: {
         "pattern": "the pattern to search for",
         "file": "the file to search in",
-        "?r": "search recursively",
-        "?i": "ignore case",
-        "?v": "invert match",
-        "?x": "match whole lines",
+        "?r:b": "search recursively",
+        "?i:b": "ignore case",
+        "?v:b": "invert match",
+        "?x:b": "match whole lines",
     }
 })
 

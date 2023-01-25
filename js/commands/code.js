@@ -159,8 +159,6 @@ terminal.addCommand("code", async function(args) {
 
     printJSCode(code)
 
-
-
     printJSCode(", " + JSON.stringify(command.info, null, 4))
 }, {
     description: "show the source code of a command",
