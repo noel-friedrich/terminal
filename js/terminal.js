@@ -1408,20 +1408,22 @@ class Terminal {
         img.src = src
         img.alt = altText
         img.classList.add("terminal-img")
-        img.onload = this._styleImgElement
+        img.onload = this._styleImgElement.bind(this, img)
         return img
     }
 
-    _styleImgElement(img, invertSetting=false) {
-        img.style.aspectRatio = img.width / img.height
+    _styleImgElement(img, invertSetting=false, {maxWidth=400, maxHeight=400}={}) {
+        img.style.aspectRatio = img.naturalWidth / img.naturalHeight
         let changeCondition = img.clientHeight < img.clientWidth
         if (invertSetting) changeCondition = !changeCondition
         if (changeCondition) {
             img.style.width = "auto"
-            img.style.height = `${img.clientHeight}px`
+            let height = Math.min(img.naturalHeight, maxHeight)
+            img.style.height = `${height}px`
         } else {
             img.style.height = "auto"
-            img.style.width = `${img.clientWidth}px`
+            let width = Math.min(img.naturalWidth, maxWidth)
+            img.style.width = `${width}px`
         }
     }
 
