@@ -156,6 +156,10 @@ terminal.addCommand("edit", async function(args) {
 
     while (tempFileName == "" || tempFileName == "Untitled File") {
         tempFileName = await terminal.prompt("file name: ")
+        while (!terminal.isValidFileName(tempFileName)) {
+            terminal.printError("invalid file name")
+            tempFileName = await terminal.prompt("file name: ")
+        }
     }
 
     if (terminal.fileExists(tempFileName)) {
