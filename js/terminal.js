@@ -1032,9 +1032,24 @@ class Terminal {
             return words.join(" ")
         })
 
+        const addApostrophes = ms => ms.map(m => {
+            if (m.includes(" ")) {
+                let apostrphe = '"'
+                if (m.includes(apostrphe)) {
+                    apostrphe = "'"
+                    if (m.includes(apostrphe)) {
+                        apostrphe = ""
+                        // TODO: add more apostrophe types to prevent this
+                    }
+                } 
+                return `${apostrphe}${m}${apostrphe}`
+            }
+            return m
+        })
+
         let commandMatches = configMatches(Object.keys(terminal.allCommands)
             .concat(Object.keys(terminal.aliases)))
-        let fileMatches = configMatches(allRelativeFiles)
+        let fileMatches = configMatches(addApostrophes(allRelativeFiles))
         let allMatches = configMatches(commandMatches.concat(fileMatches))
 
         let cleanText = this.sanetizeInput(text)
@@ -1206,7 +1221,7 @@ class Terminal {
         this.parentNode.appendChild(inputContainer)
         const inputMinWidth = () => {
             let rect = inputElement.getBoundingClientRect()
-            return window.innerWidth - rect.left - rect.width
+            return this.window.innerWidth - rect.left
         }
         inputContainer.style.width = `${inputMinWidth()}px`
         inputElement.focus({preventScroll: true})

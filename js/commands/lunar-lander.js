@@ -6,7 +6,6 @@ terminal.addCommand("lunar-lander", async function(args) {
     let terminalWindow = terminal.modules.window.make({name: "Lunar Lander"})
     const canvas = terminalWindow.CANVAS
     const context = terminalWindow.CONTEXT
-    const windowMiddle = () => new Vector2d(canvas.width / 2, canvas.height / 2)
     const clearWindow = () => context.clearRect(0, 0, canvas.width, canvas.height)
 
     const KEY = {
