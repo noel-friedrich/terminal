@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 144 commands such as `ls`, `cd` and of course `cowsay`
+* 145 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -167,6 +167,7 @@ The following list can also be viewed using the `whatis *` command
 | `search` | search something via google.com |
 | `set` | set a value on the server |
 | `sha256` | calculate the SHA-256 hash of a message |
+| `shoot` | Play a game of Shoot against another player locally |
 | `shutdown` | shutdown the terminal |
 | `sleep` | sleep for a number of seconds |
 | `slime` | Start a slime simulation |
