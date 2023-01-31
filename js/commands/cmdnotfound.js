@@ -9,7 +9,7 @@ terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
 
     if (distances[bestMatch] <= maxDistance) {
         terminal.print("did you mean: ")
-        terminal.printCommand(`${bestMatch}${argText}`)
+        terminal.printCommand(bestMatch, `${bestMatch}${argText}`)
     }
 }, {
     description: "display that a command was not found",
