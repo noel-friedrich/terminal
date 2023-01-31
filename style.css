@@ -269,6 +269,7 @@ body {
     font-family: var(--font);
     font-weight: bold;
     transition: 300ms;
+    font-size: 0.8em;
 }
 
 .terminal-window-exit:hover {
