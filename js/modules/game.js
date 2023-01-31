@@ -260,7 +260,7 @@ class HighscoreApi {
         if (localStorage.getItem("highscore_password") != null) {
             password = localStorage.getItem("highscore_password")
         } else {
-            password = await terminal.prompt("Password: ", true)
+            password = await terminal.prompt("Password: ", {password: true})
         }
 
         let data = await this.req("admin", {confirm: true, password})
