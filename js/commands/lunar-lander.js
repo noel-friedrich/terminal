@@ -209,6 +209,7 @@ terminal.addCommand("lunar-lander", async function(args) {
             this.velocity = new Vector2d(startXVelocity, 0)
             this.startSize = 15
             this.size = this.startSize
+            this.fuel = 1000
             
             this.rotationSpeed = 0.1
             this.rotation = 0
@@ -317,6 +318,7 @@ terminal.addCommand("lunar-lander", async function(args) {
                     this.velocity.iadd(direction
                         .scale(this.thrustAcceleration)
                         .scale(this.thrust))
+                    this.fuel -= this.thrust * deltaTime
 
                     this.spawnThrustParticles()
                 }
@@ -614,10 +616,12 @@ terminal.addCommand("lunar-lander", async function(args) {
             let heightPointer = 30
             function drawText(msg) {
                 context.fillText(msg, 10, heightPointer)
-                heightPointer += 30
+                heightPointer += 20
             }
             drawText(`use arrow keys or touch`)
             drawText(`score: ${this.player.score}`)
+            drawText(`speed: ${Math.round(this.player.speed * 10) / 10}`)
+            drawText(`fuel: ${Math.round(this.player.fuel * 10) / 10}`)
         }
         
         constructor() {

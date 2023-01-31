@@ -1221,7 +1221,7 @@ class Terminal {
         this.parentNode.appendChild(inputContainer)
         const inputMinWidth = () => {
             let rect = inputElement.getBoundingClientRect()
-            return this.window.innerWidth - rect.left
+            return this.window.innerWidth - rect.left * 2
         }
         inputContainer.style.width = `${inputMinWidth()}px`
         inputElement.focus({preventScroll: true})
