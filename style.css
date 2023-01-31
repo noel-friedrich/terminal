@@ -38,6 +38,7 @@ body {
     color: var(--foreground);
     transition: color 0.5s;
     white-space: pre-wrap;
+    tab-size: 4;
     word-break: break-word;
     position: relative;
 
@@ -82,6 +83,7 @@ body {
 #terminal * {
     font-family: var(--font);
     font-size: var(--font-size);
+    tab-size: 4;
 }
 
 #terminal pre, #terminal a {
@@ -90,6 +92,7 @@ body {
     color: var(--foreground);
     transition: color 0.5s;
     white-space: pre-wrap;
+    tab-size: 4;
     word-break: break-word;
 }
 
