@@ -1184,6 +1184,7 @@ class Terminal {
             input.spellcheck = "false"
             input.name = "terminal-input"
 
+            // for screen readers (bots) only
             let label = document.createElement("label")
             label.className = "terminal-input-label"
             label.textContent = "Input a terminal command"
@@ -1203,9 +1204,11 @@ class Terminal {
 
         let [inputElement, suggestionElement, inputContainer] = createInput()
         this.parentNode.appendChild(inputContainer)
-        let rect = inputElement.getBoundingClientRect()
-        let inputMinWidth = `${window.innerWidth - rect.left - rect.width}`
-        inputContainer.style.width = `${inputMinWidth}px`
+        const inputMinWidth = () => {
+            let rect = inputElement.getBoundingClientRect()
+            return window.innerWidth - rect.left - rect.width
+        }
+        inputContainer.style.width = `${inputMinWidth()}px`
         inputElement.focus({preventScroll: true})
 
         this.scroll()
@@ -1325,7 +1328,12 @@ class Terminal {
                 let textLength = inputElement.value.length
                 // (textLength + 1) to leave room for the next character
                 let inputWidth = (textLength + 1) * this.charWidth
-                inputContainer.style.width = `max(${inputMinWidth}px, ${inputWidth}px)`
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
+            })
+
+            addEventListener("resize", event => {
+                let inputWidth = (inputElement.value.length + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
             })
 
         })
