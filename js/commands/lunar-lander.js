@@ -16,6 +16,12 @@ terminal.addCommand("lunar-lander", async function(args) {
         DOWN: "down",
     }
 
+    let levelFuels = [1000, 800, 600, 400, 200, 100]
+
+    function getLevelFuel(level) {
+        return levelFuels[Math.min(level, levelFuels.length - 1)]
+    }
+
     const startTime = Date.now()
 
     const gravityConstant = 0.00001
@@ -209,12 +215,13 @@ terminal.addCommand("lunar-lander", async function(args) {
             this.velocity = new Vector2d(startXVelocity, 0)
             this.startSize = 15
             this.size = this.startSize
-            this.fuel = 1000
+            this.fuel = getLevelFuel(0)
             
             this.rotationSpeed = 0.1
             this.rotation = 0
 
             this.score = 0
+            this.currLevel = 0
             this.crashed = false
             this.particles = []
 
@@ -315,10 +322,13 @@ terminal.addCommand("lunar-lander", async function(args) {
             if (!this.crashed) {
                 if (this.thrust > 0) {
                     let direction = Vector2d.fromAngle(this.rotation - Math.PI / 2)
-                    this.velocity.iadd(direction
-                        .scale(this.thrustAcceleration)
-                        .scale(this.thrust))
-                    this.fuel -= this.thrust * deltaTime
+                    if (this.fuel > 0)
+                        this.velocity.iadd(direction
+                            .scale(this.thrustAcceleration)
+                            .scale(this.thrust))
+                    else
+                        this.thrust = 0
+                    this.fuel = Math.max(this.fuel - this.thrust * deltaTime, 0)
 
                     this.spawnThrustParticles()
                 }
@@ -334,6 +344,8 @@ terminal.addCommand("lunar-lander", async function(args) {
                     this.velocity.y = -0.003
                     this.hasLanded = true
                     this.score += 10
+                    this.currLevel++
+                    this.fuel += getLevelFuel(this.currLevel)
                     break
                 }
                 if (landscape.checkCollision(point)) {
@@ -397,10 +409,30 @@ terminal.addCommand("lunar-lander", async function(args) {
         constructor(xStart, width) {
             this.xStart = xStart
             this.width = width
+            this.height = 50
         }
 
         get xEnd() {
             return this.xStart + this.width
+        }
+
+        get pos() {
+            return game.landscape.platformPos
+        }
+
+        draw(zoomPos) {
+            let xStart = zoomPos(new Vector2d(this.xStart, 0)).x
+            let xEnd = zoomPos(new Vector2d(this.xEnd, 0)).x
+            let y = zoomPos(this.pos.sub({x: 0, y: this.height}), true).y
+            context.fillStyle = "white"
+
+            let barWidth = (xEnd - xStart) * 0.1
+
+            context.fillRect(xStart, y, xEnd - xStart, barWidth)
+
+            // supports
+            context.fillRect(xStart + 10, y+2, barWidth/2, 10000)
+            context.fillRect(xEnd - 10 - barWidth/2, y+2, barWidth/2, 10000)
         }
 
     }
@@ -513,8 +545,17 @@ terminal.addCommand("lunar-lander", async function(args) {
         checkCollision(point) {
             let x = point.x / canvas.width * this.data.length
             let y = point.y / canvas.height
-            let altitude = this.data[Math.floor(x)]
-            return y > (1 - altitude)
+            let terrainHeight = 1 - this.data[Math.floor(x)]
+
+            let relevantHeight = terrainHeight
+
+            x /= this.data.length
+
+            if (x > this.platform.xStart && x < this.platform.xEnd) {
+                relevantHeight = (this.platform.pos.y - this.platform.height) / canvas.height
+            }
+
+            return y > relevantHeight
         }
 
         getSurfaceNormal(point) {
@@ -527,7 +568,11 @@ terminal.addCommand("lunar-lander", async function(args) {
             let x = point.x / canvas.width
             let y = point.y / canvas.height
             let platform = this.platform
-            return x > platform.xStart && x < platform.xEnd && y > (1 - this.data[Math.floor(platform.xStart * this.data.length)])
+            return (
+                x > platform.xStart &&
+                x < platform.xEnd &&
+                y > (platform.pos.y - platform.height) / canvas.height
+            )
         }
 
         get platformHeight() {
@@ -548,6 +593,8 @@ terminal.addCommand("lunar-lander", async function(args) {
             context.lineTo(canvas.width, canvas.height)
             context.closePath()
             context.fill()
+            if (this.platform)
+                this.platform.draw(zoomPos)
         }
 
     }
@@ -621,7 +668,7 @@ terminal.addCommand("lunar-lander", async function(args) {
             drawText(`use arrow keys or touch`)
             drawText(`score: ${this.player.score}`)
             drawText(`speed: ${Math.round(this.player.speed * 10) / 10}`)
-            drawText(`fuel: ${Math.round(this.player.fuel * 10) / 10}`)
+            drawText(`fuel: ${Math.round(this.player.fuel)}`)
         }
         
         constructor() {
