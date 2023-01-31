@@ -18,82 +18,79 @@ terminal.addCommand("timer", async function(rawArgs) {
         throw new Error("Invalid time!")
     }
 
-    let notes = [[800, 1], [800, 1], [800, 1], [800, 1]]
-    let beep = [[400, 8]]
+    const progressBarWidth = 30
 
-    try {
-        var melodiesFolder = getFolder(["noel", "melodies"])[0].content
-    } catch {
-        throw new Error("Melodys Folder not found!")
-    }
-    let melodyNotes = []
-    let i = 0
-    for (let [fileName, file] of Object.entries(melodiesFolder)) {
-        let melodyName = fileName.split(".", 1)[0]
-        try {
-            melodyNotes.push(JSON.parse(file.content))
-            i++
-            terminal.printLine(`${i}: ${melodyName}`)
-        } catch {}
-    }
+    class Timer {
 
-    if (melodyNotes.length > 0) {
-        let promptMsg = `Which melody do you want to use [1-${melodyNotes.length}]? `
-        let tuneSelection = await terminal.promptNum(promptMsg, {min: 1, max: melodyNotes.length})
-        notes = melodyNotes[tuneSelection - 1]
-    }
-
-    let startTime = Date.now()
-
-    function printStatus(width=50) {
-        terminal.printLine()
-        let status = Math.min((Date.now() - startTime) / ms, 1)
-        let progressbar = stringMul("#", Math.ceil(status * (width - 4)))
-        terminal.printLine("+" + stringMul("-", width - 2) + "+")
-        terminal.printLine(`| ${stringPadBack(progressbar, width - 4)} |`)
-        terminal.printLine("+" + stringMul("-", width - 2) + "+")
-        let secondsDiff = (ms / 1000) - Math.floor((Date.now() - startTime) / 1000)
-        if (secondsDiff < 0) secondsDiff = 0
-        let seconds = Math.ceil(secondsDiff % 60)
-        let minutes = 0
-        while (secondsDiff >= 60) {
-            minutes += 1
-            secondsDiff -= 60
+        firstPrint() {
+            terminal.printLine("+" + "-".repeat(progressBarWidth) + "+")
+            terminal.print("|")
+            this.progressOutput = terminal.print("", undefined, {forceElement: true})
+            terminal.printLine("|")
+            terminal.printLine("+" + "-".repeat(progressBarWidth) + "+")
+            this.timeLeftOutput = terminal.print("", undefined, {forceElement: true})
+            terminal.addLineBreak()
         }
-        let timeStr = (minutes ? `${minutes}m ` : "") + `${seconds}s left`
-        if (status != 1)
-            terminal.printLine(`${Math.round(status * 100)}% - ${timeStr}`)
-        else
-            terminal.printLine("-- timer finished --", Color.LIGHT_GREEN)
-    }
 
-    async function alarm() {
-        await playMelody(notes)
-    }
+        constructor() {
+            this.progressOutput = null
+            this.timeLeftOutput = null
 
-    let prevTextDiv = null
-    while (Date.now() - startTime < ms) {
-        textDiv = document.createElement("div")
-        terminal.parentNode.appendChild(textDiv)
-        terminal.setTextDiv(textDiv)
-        printStatus()
-        terminal.resetTextDiv()
-        if (prevTextDiv) prevTextDiv.remove()
-        prevTextDiv = textDiv
-        terminal.scroll()
-        if (Date.now() - startTime - ms > -3500) {
-            await playMelody(beep)
+            this.startTime = Date.now()
+            this.endTime = this.startTime + ms
+            this.firstPrint()
+            this.running = true
+            this.interval = setInterval(this.update.bind(this), 100)
         }
-        await sleep(1000)
+
+        update() {
+            if (!this.running) return
+
+            let timeLeft = this.endTime - Date.now()
+            if (timeLeft <= 0) {
+                this.stop()
+            } else {
+                let seconds = Math.floor(timeLeft / 1000) % 60
+                let minutes = Math.floor(timeLeft / (60 * 1000)) % 60
+                let hours = Math.floor(timeLeft / (60 * 60 * 1000))
+                this.timeLeftOutput.textContent = `Time left: ${hours}h ${minutes}m ${seconds}s`
+                let progressCount = Math.floor((progressBarWidth * (ms - timeLeft)) / ms)
+                let percent = Math.floor((100 * (ms - timeLeft)) / ms)
+                let progress = stringPadMiddle(`${percent}%`, progressCount, "=")
+                this.progressOutput.textContent = stringPadBack(progress, progressBarWidth, " ")
+            }
+        }
+
+        async alarm() {
+            let frequencies = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77, 1046.5]
+            let duration = 100
+
+            for (let i = 0; i < 2; i++) {
+                for (let freq of frequencies) {
+                    await playFrequency(freq, duration)
+                }
+
+                for (let freq of frequencies.reverse()) {
+                    await playFrequency(freq, duration)
+                }
+            }
+        }
+
+        stop() {
+            if (!this.running) return
+            clearInterval(this.interval)
+            this.running = false
+            this.alarm()
+            this.timeLeftOutput.textContent = "Time's up!"
+            this.progressOutput.textContent = stringPadMiddle("100%", progressBarWidth, "=")
+        }
+
     }
-    if (prevTextDiv) prevTextDiv.remove()
-    printStatus()
-    try {
-        playFrequency(0, 0)
-    } catch {}
-    if (audioContext) {
-        await alarm()
-    }
+
+    let timer = new Timer()
+
+    while (timer.running) await sleep(100)
+
 }, {
     description: "set a timer",
     rawArgMode: true
