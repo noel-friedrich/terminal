@@ -1241,7 +1241,7 @@ class Terminal {
                 if (inputCleaning) {
                     text = this.sanetizeInput(inputElement.value)
                 }
-                if (text !== lastItemOfHistory())
+                if (text !== lastItemOfHistory() && text.length > 0)
                     addToHistory(text)
                 this.removeCurrInput()
                 resolve(text)
@@ -1717,7 +1717,7 @@ class Terminal {
         this.startTime = otherTerminal.startTime 
     }
 
-    clear(addPrompt=false) {
+    async clear(addPrompt=false) {
         let newPromptValue = ""
         if (this.currInputElement)
             newPromptValue = this.currInputElement.value
@@ -1808,6 +1808,13 @@ terminal.init()
 // add shortcuts
 
 terminal.addKeyboardShortcut(new KeyboardShortcut(
-    "L", terminal.clear.bind(terminal, true),
+    "L", async () => {
+        // wait for any pending commands to be interrupted
+        // sleep to allow the interrupt to finish and print
+        terminal.interrupt()
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        terminal.clear(true)
+    },
     {ctrl: true, shift: undefined}
 ))
