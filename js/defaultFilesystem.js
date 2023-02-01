@@ -60,6 +60,20 @@ comes with a lot of different rooms to play.`
 
 const contact_txt = `E-Mail: noel.friedrich@outlook.de`
 
+const welcome_txt = `This is my personal Homepage!
+                  _    __      _          _      _      _     
+                 | |  / _|    (_)        | |    (_)    | |    
+ _ __   ___   ___| | | |_ _ __ _  ___  __| |_ __ _  ___| |__  
+| '_ \\ / _ \\ / _ \\ | |  _| '__| |/ _ \\/ _\` | '__| |/ __| '_ \\ 
+| | | | (_) |  __/ |_| | | |  | |  __/ (_| | |  | | (__| | | |
+|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|
+
+I'm a hobbyist programmer and like to play around with stuff.
+
+This site is built to work like a terminal:
+- use 'help' to see a list of available commands
+- have lots of fun messing around`
+
 let passwords_json = `{
     "google.com": "FAKE_PASSWORD",
     "github.com": "FAKE_PASSWORD",
@@ -94,6 +108,7 @@ MELODIES_FOLDER.content["README.txt"] = new TextFile(melodies_readme_txt)
 
 terminal.fileSystem.root = new Directory({
     "about.txt": new TextFile(about_txt_content),
+    "welcome.txt": new TextFile(welcome_txt),
     "projects": new Directory({
         "README.txt": new TextFile(projects_readme_content),
         "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
