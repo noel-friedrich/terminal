@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 144 commands such as `ls`, `cd` and of course `cowsay`
+* 146 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -87,7 +87,7 @@ The following list can also be viewed using the `whatis *` command
 | `donut` | display a spinning donut |
 | `download` | download a file |
 | `draw` | start simple drawing app |
-| `du` | display disk usage of current directory |
+| `du` | display storage of current directory |
 | `echo` | print a line of text |
 | `edit` | edit a file of the current directory |
 | `enigma` | Simulate an Enigma machine |
@@ -149,6 +149,8 @@ The following list can also be viewed using the `whatis *` command
 | `plot` | plot a mathematical function within bounds |
 | `plotter` | plot mathematical functions |
 | `pong` | play a game of pong against the computer |
+| `pull` | pull a file from the server |
+| `push` | push a file to the server |
 | `pv` | print a message with a typing animation |
 | `pwd` | print the current working directory |
 | `python` | run a script or open a python shell |

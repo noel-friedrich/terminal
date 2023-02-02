@@ -35,7 +35,9 @@ terminal.addCommand("du", function(args) {
         throw new Error("target-directory is empty")
     }
 }, {
-    description: "display disk usage of current directory",
-    args: {"?folder": "folder to display disk usage of"},
+    description: "display storage of current directory",
+    args: {
+        "?folder": "folder to display storage of"
+    },
 })
 

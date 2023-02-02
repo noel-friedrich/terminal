@@ -765,6 +765,7 @@ const UtilityFunctions = {
     },
 
     TerminalParser: TerminalParser,
+    File: File,
     TextFile: TextFile,
     Directory: Directory,
     ExecutableFile: ExecutableFile,
@@ -942,7 +943,7 @@ class Terminal {
     }
 
     isValidFileName(name) {
-        return name.match(/^[a-zA-Z0-9_\-\.]+$/)
+        return name.match(/^[a-zA-Z0-9_\-\.]{1,30}$/)
     }
 
     async copy(text, {printMessage=false}={}) {

@@ -13,6 +13,8 @@ function classFromType(type) {
     }
 }
 
+let uniqueFileIdCount = 0
+
 class File {
 
     constructor(type, content) {
@@ -20,6 +22,11 @@ class File {
         this.content = content
         this.parent = null
         this.name = null
+        this.id = uniqueFileIdCount++
+    }
+
+    computeSize() {
+        return JSON.stringify(this.toJSON()).length
     }
 
     copy() {
@@ -135,6 +142,10 @@ class Directory extends File {
         }
     }
 
+    deleteChild(child) {
+        delete this.content[child.name]
+    }
+
     get isDirectory() {
         return true
     }
@@ -184,7 +195,68 @@ class FileSystem {
         return temp
     }
 
+    dumpTooLargeFiles(file, fileSizeLimit) {
+        if (file.computeSize() < fileSizeLimit) {
+            return 
+        }
+
+        let allFiles = []
+        function getAllFiles(file) {
+            allFiles.push(file)
+            if (file.isDirectory) {
+                for (let [key, value] of Object.entries(file.content)) {
+                    getAllFiles(value)
+                }
+            }
+        }
+
+        getAllFiles(file)
+
+        let introducedDumping = false
+        function introduceDumping() {
+            if (introducedDumping)
+                return
+            introducedDumping = true
+
+            terminal.printError("Storage limit exceeded!")
+            terminal.printLine("I will now delete the largest files to free up space:")
+        }
+
+        function dumpLargestFile() {
+            let largestFile = null
+            let largestSize = 0
+            for (let file of allFiles) {
+                if (file.isDirectory)
+                    continue
+                if (file.computeSize() > largestSize) {
+                    largestFile = file
+                    largestSize = file.computeSize()
+                }
+            }
+            if (largestFile && largestFile.parent) {
+                largestFile.parent.deleteChild(largestFile)
+                introduceDumping()
+                terminal.printLine(`- ${largestFile.path} (${largestFile.computeSize()} bytes)`)
+                allFiles = allFiles.filter(file => file.id !== largestFile.id)
+            } else if (largestFile) {
+                return "not ready yet"
+            }
+        }
+
+        let totalSize = file.computeSize()
+        while (totalSize > fileSizeLimit) {
+            if (dumpLargestFile() === "not ready yet")
+                break
+            totalSize = file.computeSize()
+        }
+
+        if (introducedDumping)
+            terminal.printLine("")
+    }
+
     toJSON() {
+        let fileSizeLimit = terminal.data.storageSize
+        this.dumpTooLargeFiles(this.root, fileSizeLimit)
         return JSON.stringify(this.root.toJSON())
     }
 
@@ -253,6 +325,8 @@ class TerminalData {
         "font": "\"Cascadia Code\", monospace",
         "accentColor1": "#ffff00",
         "accentColor2": "#8bc34a",
+        "history": "[]",
+        "storageSize": 300000
     }
 
     localStoragePrepend = "terminal-"
@@ -326,11 +400,19 @@ class TerminalData {
     }
 
     get history() {
-        return JSON.parse(this.get("history", "[]"))
+        return JSON.parse(this.get("history"))
     }
 
     set history(history) {
         this.set("history", JSON.stringify(history))
+    }
+
+    get storageSize() {
+        return this.get("storageSize")
+    }
+
+    set storageSize(size) {
+        this.set("storageSize", size)
     }
 
     get lastItemOfHistory() {
@@ -365,6 +447,8 @@ class TerminalData {
         this.font = this.font
         this.accentColor1 = this.accentColor1
         this.accentColor2 = this.accentColor2
+        this.history = this.history
+        this.storageSize = this.storageSize
     }
 
 }
