@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 146 commands such as `ls`, `cd` and of course `cowsay`
+* 147 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -91,6 +91,7 @@ The following list can also be viewed using the `whatis *` command
 | `echo` | print a line of text |
 | `edit` | edit a file of the current directory |
 | `enigma` | Simulate an Enigma machine |
+| `error404` | Display a 404 error |
 | `eval` | evaluate javascript code |
 | `exit` | exit the terminal |
 | `f` | calculate friendship score with a friend |

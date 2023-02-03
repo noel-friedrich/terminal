@@ -881,6 +881,10 @@ class Terminal {
         this.containerNode.scrollTo(opts)
     }
 
+    isUrlParamSet(param) {
+        return new URLSearchParams(window.location.search).has(param)
+    }
+
     get inTestMode() {
         return this.outputChannel == OutputChannel.NONE
     }
@@ -1709,6 +1713,11 @@ class Terminal {
         await this.fileSystem.load()
         let helloworld = await this.getCommand("helloworld")
         helloworld.run()
+
+        if (this.isUrlParamSet("404")) {
+            let error404 = await this.getCommand("error404")
+            error404.run()
+        }
     }
 
     async initFrom(otherTerminal) {
