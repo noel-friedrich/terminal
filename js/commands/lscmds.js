@@ -68,7 +68,7 @@ terminal.addCommand("lscmds", async function(args) {
 
         let width = calculateTableWidth(tableData)
 
-        if (width <= 70 || tableWidth == 1) {
+        if (width <= 90 || tableWidth == 1) {
             printTable(tableData)
             break
         }
