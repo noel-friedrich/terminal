@@ -389,7 +389,7 @@ AsciiArtLetters["?"] += "  (_)  \n"
 AsciiArtLetters["?"] += "       \n"
 AsciiArtLetters["?"] += "       \n"
 
-AsciiArtLetters[" "] += "      \n"
+AsciiArtLetters[" "] += "   \n"
 
 terminal.addCommand("letters", function(args) {
     let text = args.text.trim().toLowerCase()
@@ -425,6 +425,7 @@ terminal.addCommand("letters", function(args) {
             return false
         }
 
+        if (l1 != " " && l2 != " ")
         for (let i = 0; i < 2; i++) {
             let compressBoth = true
             for (let i = 0; i < height.a(); i++) {
@@ -440,9 +441,8 @@ terminal.addCommand("letters", function(args) {
 
             for (let i = 0; i < height.a(); i++) {
                 let [x, y] = [lines.a[i].slice(-1), lines.b[i][0]]
-                if (x == " ") {
-                    lines.a[i] = lines.a[i].slice(0, -1) + lines.b[i][0]
-                }
+                if (x == " ")
+                    lines.a[i] = lines.a[i].slice(0, -1) + y
                 lines.b[i] = lines.b[i].slice(1)
             }
         }
