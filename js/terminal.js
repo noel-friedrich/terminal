@@ -1711,12 +1711,19 @@ class Terminal {
     async init() {
         await this._loadScript(this.commandListURL)
         await this.fileSystem.load()
-        let helloworld = await this.getCommand("helloworld")
-        helloworld.run()
 
         if (this.isUrlParamSet("404")) {
             let error404 = await this.getCommand("error404")
             error404.run()
+        } else {
+            let i = 0
+            for (let startupCommand of this.data.startupCommands) {
+                await this.input(startupCommand, true)
+                if (i < this.data.startupCommands.length - 1)
+                    this.addLineBreak()
+            }
+            this.expectingFinishCommand = true
+            this.finishCommand()
         }
     }
 

@@ -326,7 +326,8 @@ class TerminalData {
         "accentColor1": "#ffff00",
         "accentColor2": "#8bc34a",
         "history": "[]",
-        "storageSize": 300000
+        "storageSize": 300000,
+        "startupCommands": "[\"helloworld\"]",
     }
 
     localStoragePrepend = "terminal-"
@@ -419,6 +420,14 @@ class TerminalData {
         return this.history[this.history.length - 1]
     }
 
+    get startupCommands() {
+        return JSON.parse(this.get("startupCommands"))
+    }
+
+    set startupCommands(commands) {
+        this.set("startupCommands", JSON.stringify(commands))
+    }
+
     addToHistory(command) {
         let history = this.history
         history.push(command)
@@ -448,6 +457,7 @@ class TerminalData {
         this.accentColor1 = this.accentColor1
         this.accentColor2 = this.accentColor2
         this.history = this.history
+        this.startupCommands = this.startupCommands
         this.storageSize = this.storageSize
     }
 
