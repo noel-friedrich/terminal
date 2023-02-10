@@ -1,5 +1,5 @@
-terminal.addCommand("color-test", function() {
-    let size = {x: 60, y: 31}
+terminal.addCommand("color-test", function(args) {
+    let size = {x: args.size*2, y: args.size}
     for (let i = 0; i < size.y; i++) {
         for (let j = 0; j < size.x; j++) {
             let x = (j / size.x - 0.5) * 2
@@ -16,5 +16,11 @@ terminal.addCommand("color-test", function() {
         terminal.printLine()
     }
 }, {
-    description: "test the color capabilities of the terminal"
+    description: "test the color capabilities of the terminal",
+    args: {
+        "?size:i:1~999": "the size of the test image"
+    },
+    defaultValues: {
+        size: 60
+    }
 })
