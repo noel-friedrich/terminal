@@ -1,9 +1,9 @@
 terminal.modules.window = {
 
-    make({backgroundColor="black", name="My new Window", iframeUrl=undefined}={}) {
+    make({backgroundColor="black", name="My new Window", iframeUrl=undefined, fullscreen=false}={}) {
         const windowContainer = terminal.document.createElement("div")
         windowContainer.classList.add("terminal-window")
-
+        
         const header = terminal.document.createElement("div")
         header.classList.add("terminal-window-header")
         windowContainer.appendChild(header)
@@ -32,6 +32,13 @@ terminal.modules.window = {
         const content = terminal.document.createElement("div")
         content.classList.add("terminal-window-content")
         windowContainer.appendChild(content)
+        
+        if (fullscreen) {
+			content.style.width = "100%"
+			content.style.height = "100%"
+			content.style.margin = "0"
+			content.style.position = "fixed"
+		}
 
         if (iframeUrl) {
             const iframe = terminal.document.createElement("iframe")

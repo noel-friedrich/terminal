@@ -3,7 +3,7 @@ terminal.addCommand("lunar-lander", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
 
-    let terminalWindow = terminal.modules.window.make({name: "Lunar Lander"})
+    let terminalWindow = terminal.modules.window.make({name: "Lunar Lander", fullscreen: args.f})
     const canvas = terminalWindow.CANVAS
     const context = terminalWindow.CONTEXT
     const clearWindow = () => context.clearRect(0, 0, canvas.width, canvas.height)
@@ -802,6 +802,11 @@ terminal.addCommand("lunar-lander", async function(args) {
     }
     let game = new Game()
     await game.run()
+    
+    while (args.f) { // fullscreen mode
+		game = new Game()
+		await game.run()
+	}
 
     terminalWindow.close()
 
@@ -814,6 +819,7 @@ terminal.addCommand("lunar-lander", async function(args) {
     description: "play a classic game of moon-lander",
     args: {
         "?particles:n:1~1000": "number of particles to generate",
+        "?f=fullscreen:b": "enable fullscreen application"
     },
     standardVals: {
         particles: 10,
