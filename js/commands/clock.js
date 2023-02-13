@@ -1,7 +1,7 @@
 terminal.addCommand("clock", async function(args) {
     let displayMillis = !!args.m
     let gridSize = {
-        x: 20*2.1,
+        x: 20*1.9,
         y: 20
     }
     let grid = Array.from(Array(gridSize.y)).map(() => Array(gridSize.x).fill(" "))

@@ -47,7 +47,7 @@ terminal.addCommand("lscmds", async function(args) {
             for (let i = 0; i < row.length; i++) {
                 let cell = row[i]
                 let width = columnWidths[i]
-                terminal.printCommand(stringPadBack(cell, width + 2), cell, Color.WHITE, false)
+                terminal.printCommand(stringPadBack(cell, width + 2), cell, undefined, false)
             }
             terminal.addLineBreak()
         }
@@ -77,10 +77,10 @@ terminal.addCommand("lscmds", async function(args) {
     terminal.addLineBreak()
     terminal.printLine(`- in total, ${terminal.functions.length} commands have been implemented`)
     terminal.print("- use ")
-    terminal.printCommand("man", "man", Color.WHITE, false)
+    terminal.printCommand("man", "man", undefined, false)
     terminal.printLine(" <cmd> to get more information about a command")
     terminal.print("- use ")
-    terminal.printCommand("whatis *", "whatis *", Color.WHITE, false)
+    terminal.printCommand("whatis *", "whatis *", undefined, false)
     terminal.printLine(" to see all commands including their description")
 
 }, {
