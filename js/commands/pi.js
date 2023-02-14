@@ -14,12 +14,12 @@ terminal.addCommand("pi", function(args) {
     pi += "5332083814206171776691473035982534904287554687311595628638823537875937519"
     pi += "577818577805321712268066130019278766111959092164201989"
 
-    let digits = "3." + pi.slice(0, ~~args.n)
+    let digits = "3." + pi.slice(0, args.n)
     terminal.printLine(digits)
 }, {
     description: "calculate pi to the n-th digit",
     args: {
-        "?n:n:1~1000": "the number of digits"
+        "?n:i:1~1000": "the number of digits"
     },
     standardVals: {
         n: 100
