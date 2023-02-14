@@ -263,9 +263,9 @@ terminal.addCommand("sorting", async function(args) {
     description: "display a sorting algorithm",
     args: {
         "?algorithm": "the algorithm to display",
-        "?n:n:10~1000": "the number of elements to sort",
+        "?n:i:10~1000": "the number of elements to sort",
         "?speed:n:0~100": "the speed of the sorting algorithm",
-        "?s": "silent mode (deactivate sound)"
+        "?s:b": "silent mode (deactivate sound)"
     },
     standardVals: {
         algorithm: null,
