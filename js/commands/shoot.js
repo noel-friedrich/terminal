@@ -1,32 +1,35 @@
-const world1 = `
+terminal.addCommand("shoot", async function(args) {
+	const world1 = `
 +--------------------------------------------------------------------+
+|                             |                                      |
+|                             |                                      |
+|                             |                                      |
+|                             |                                      |
+|                             |                                      |
+|                             |                                      |
+|                  +----------+             +--------------+         |
 |                                                                    |
 |                                                                    |
 |                                                                    |
 |                                                                    |
-|                                                                    |
-|                                                                    |
-|         +-------------+                   +-------------+          |
-|                                                                    |
-|                                                                    |
-|                                                                    |
-|                                                                    |
-|         +-----------------------------------------------+          |
-|                                                                    |
-|                                                                    |
-|                                                                    |
-|                                                                    |
+|         +-------------------+             +            +-----------|
+|                                           |                        |
+|                                           |                        |
+|                                           |                        |
+|                                           |                        |
 +--------------------------------------------------------------------+`
 
-terminal.addCommand("shoot", async function(args) {
     await terminal.modules.import("game", window)
 		
 	let fieldSize = null
 	
 	const N = " "
-	const W = "|"
 	const P1 = "A"
 	const P2 = "Y"
+
+	const isWall = textContent => [
+		"|", "+", "-"
+	].includes(textContent)
 	
 	let field = []
 	
@@ -152,8 +155,10 @@ terminal.addCommand("shoot", async function(args) {
 			let underElement = this.getElement(new Vector2d(0, 1))
 			let isOnGround = underElement.textContent == "-" || underElement.textContent == "+"
 			
-			this.vel.x += gravity.x
-			this.vel.y += gravity.y
+			if (!isOnGround) {
+				this.vel.x += gravity.x
+				this.vel.y += gravity.y
+			}
 			
 			this.pos.x += this.inputVel.x * this.speed
 			this.pos.y += this.inputVel.y * this.speed
@@ -187,8 +192,7 @@ terminal.addCommand("shoot", async function(args) {
 			let newElement = this.getElement(new Vector2d(0, 0))
 			if (!newElement || (newElement.textContent != N && newElement.textContent != this.char)) {
 				this.pos.y = this.prevPos.y
-				if (!isOnGround || this.pos.x < 1 || this.pos.x > fieldSize.x - 2)
-					this.pos.x = this.prevPos.x
+				this.pos.x = this.prevPos.x
 				this.vel.y = 0
 			}
 		}
@@ -241,7 +245,7 @@ terminal.addCommand("shoot", async function(args) {
 			this.pos.x += this.vel.x
 			this.pos.y += this.vel.y
 			let element = this.getCurrElement()
-			if (!element || element.textContent == W) {
+			if (!element || isWall(element.textContent)) {
 				this.deleteReady = true
 				this.pos = this.prevPos
 				return null
