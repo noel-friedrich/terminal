@@ -51,6 +51,7 @@ terminal.addCommand("shoot", async function(args) {
 	terminal.printLine("+------------------------------+      +------------------------------+")
 	terminal.printLine("")
 	
+	let lineBreaks = []
 	function printField(world=world1) {
 		let worldData = world.split("\n").map(row => row.split(""))
 		worldData.shift()
@@ -66,9 +67,21 @@ terminal.addCommand("shoot", async function(args) {
 				let element = terminal.print(fill, undefined, {forceElement: true})
 				row.push(element)
 			}
-			terminal.addLineBreak()
+			lineBreaks.push(terminal.printLine("", undefined, {forceElement: true}))
 			field.push(row)
 		}
+	}
+
+	function removeField() {
+		for (let row of field) {
+			for (let element of row) {
+				element.remove()
+			}
+		}
+		for (let lineBreak of lineBreaks) {
+			lineBreak.remove()
+		}
+		field = []
 	}
 	
 	printField()
@@ -84,6 +97,7 @@ terminal.addCommand("shoot", async function(args) {
 			this.char = char
 			this.vel = new Vector2d(0, 0)
 			this.prevPos = null
+			this.shootCooldown = 0
 			
 			this.inputVel = new Vector2d(0, 0)
 			this.inputJump = false
@@ -94,14 +108,28 @@ terminal.addCommand("shoot", async function(args) {
 			this.jumpsLeft = 0
 			this.speed = 0.5
 
+			this.lives = args.l
+
 			this.dead = false
 		}
 
-		hurt() {
+		hurt(projectile) {
+			if (projectile.deleteReady) return
 			if (this.dead) return
-			this.dead = true
-			gameRunning = false
-			terminal.printLine(`${this.name} was shot!`)
+			if (!gameRunning) return
+
+			this.lives--
+			projectile.deleteReady = true
+
+			if (this.lives == 0) {
+				this.dead = true
+				gameRunning = false
+				terminal.printLine(`GAME OVER! ${this.name} has been shot and no lives left!`)
+			} else if (this.lives == 1) {
+				terminal.printLine(`${this.name} was shot! ${this.name} has ${this.lives} live left!`)
+			} else if (this.lives > 1) {
+				terminal.printLine(`${this.name} was shot! ${this.name} has ${this.lives} lives left!`)
+			}
 		}
 		
 		projectileDirection() {
@@ -111,14 +139,22 @@ terminal.addCommand("shoot", async function(args) {
 		
 		projectileChar() {
 			if (this.char == P1) return "."
-			if (this.char == P2) return "-"
+			if (this.char == P2) return ","
+		}
+
+		get canShoot() {
+			return this.shootCooldown <= 0
 		}
 		
 		shoot() {
+			if (!this.canShoot) return
+
 			let projectile = new Projectile(this.pos.copy(), this.projectileDirection(), this.projectileChar())
 			projectile.update()
 			projectile.update()
 			projectiles.push(projectile)
+
+			this.shootCooldown = args.s
 		}
 		
 		draw() {
@@ -151,6 +187,7 @@ terminal.addCommand("shoot", async function(args) {
 		
 		update() {
 			this.prevPos = this.pos.copy()
+			this.shootCooldown--
 			
 			let underElement = this.getElement(new Vector2d(0, 1))
 			let isOnGround = underElement.textContent == "-" || underElement.textContent == "+"
@@ -339,7 +376,7 @@ terminal.addCommand("shoot", async function(args) {
 			p.draw()
 
 			if (hitPlayer) {
-				hitPlayer.hurt()
+				hitPlayer.hurt(p)
 			}
 		}
 		
@@ -359,15 +396,28 @@ terminal.addCommand("shoot", async function(args) {
 	terminal.onInterrupt(() => {
 		gameRunning = false
 		clearInterval(intervalFunc)
+		removeField()
 	})
 	
 	while (gameRunning) {
 		await sleep(100)
 	}
 
+	removeField()
 	clearInterval(intervalFunc)
+
+	// wait for players to realize the game is over
+	await sleep(2000)
 	
 }, {
 	description: "Play a game of Shoot against another player locally",
-	isGame: true
+	isGame: true,
+	args: {
+		"?l=lives:i:1~100": "The number of lives each player has",
+		"?s=shoot-delay:i:0~1000": "The number of frames between each shot"
+	},
+	defaultValues: {
+		l: 3,
+		s: 20
+	}
 })
