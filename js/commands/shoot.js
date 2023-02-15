@@ -142,9 +142,9 @@ terminal.addCommand("shoot", async function(args) {
 			}
 		}
 		
-		projectileDirection() {
-			if (!this.goingLeft) return new Vector2d(0.5, 0)
-			else return new Vector2d(-0.5, 0)
+		projectileDirection({projectileSpeed=1}={}) {
+			if (!this.goingLeft) return new Vector2d(projectileSpeed, 0)
+			else return new Vector2d(-projectileSpeed, 0)
 		}
 		
 		projectileChar() {
