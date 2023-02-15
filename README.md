@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 149 commands such as `ls`, `cd` and of course `cowsay`
+* 150 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -126,6 +126,7 @@ The following list can also be viewed using the `whatis *` command
 | `letters` | prints the given text in ascii art |
 | `loadall` | preload all possible commands |
 | `logistic-map` | draw the logistic map |
+| `lorem` | generate lorem ipsum text |
 | `ls` | list all files of current directory |
 | `lscmds` | list all available commands |
 | `lscpu` | get some helpful info about your cpu |
