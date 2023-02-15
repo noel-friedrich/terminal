@@ -91,6 +91,17 @@ terminal.addCommand("shoot", async function(args) {
 	
 	class Player {
 
+		printLivesDisplay() {
+			terminal.print(`player#${this.name} lives: `)
+			this.liveOutput = terminal.print(this.lives, undefined, {forceElement: true})
+			terminal.printLine()
+		}
+
+		updateLiveDisplay() {
+			if (this.liveOutput)
+				this.liveOutput.textContent = this.lives
+		}
+
 		constructor(name, pos, char) {
 			this.name = name
 			this.pos = pos
@@ -111,6 +122,8 @@ terminal.addCommand("shoot", async function(args) {
 			this.lives = args.l
 
 			this.dead = false
+
+			this.printLivesDisplay()
 		}
 
 		hurt(projectile) {
@@ -119,16 +132,13 @@ terminal.addCommand("shoot", async function(args) {
 			if (!gameRunning) return
 
 			this.lives--
+			this.updateLiveDisplay()
 			projectile.deleteReady = true
 
 			if (this.lives == 0) {
 				this.dead = true
 				gameRunning = false
 				terminal.printLine(`GAME OVER! ${this.name} has been shot and no lives left!`)
-			} else if (this.lives == 1) {
-				terminal.printLine(`${this.name} was shot! ${this.name} has ${this.lives} live left!`)
-			} else if (this.lives > 1) {
-				terminal.printLine(`${this.name} was shot! ${this.name} has ${this.lives} lives left!`)
 			}
 		}
 		
