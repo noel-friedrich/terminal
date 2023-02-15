@@ -312,8 +312,7 @@ body {
 }
 
 .legal-links > a:hover {
-    color: var(--foreground);
-    font-family: var(--font);
+    text-decoration: underline;
 }
 
 py-splashscreen {
