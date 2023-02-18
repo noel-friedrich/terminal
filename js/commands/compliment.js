@@ -17,7 +17,7 @@ terminal.addCommand("compliment", function() {
         "god", "human", "princess", "prince"
     ], sentences = [
         "you are a<n> <adjective> <noun>. happy to have you here!",
-        "<n> <adjective> <noun>. that's what you are!",
+        "a<n> <adjective> <noun>. that's what you are!",
         "you, <noun>, are <adjective>!",
         "i'm going to call you <noun>, because you are <adjective>"
     ], choice = l => l[Math.floor(Math.random() * l.length)]
