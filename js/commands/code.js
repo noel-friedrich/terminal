@@ -42,7 +42,7 @@ const structureTokens = [
     "break", "continue", "debugger", "delete",
     "in", "instanceof", "new", "typeof", "void",
     "with", "super", "this", "throw", "throws",
-    "else"
+    "else", "of"
 ]
 
 const specialWords = [
