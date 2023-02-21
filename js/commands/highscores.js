@@ -1,4 +1,6 @@
 terminal.addCommand("highscores", async function(args) {
+    if (args["show-all"]) args.l = Infinity
+
     await terminal.modules.import("game", window)
 
     {
@@ -11,10 +13,16 @@ terminal.addCommand("highscores", async function(args) {
     }
 
     let allHighscores = await HighscoreApi.getHighscores(args.game)
-    let highscores = allHighscores.slice(0, args.l).filter(h => h.name == args.n || args.n == null)
+    let highscores = allHighscores
+        .slice(0, args.l)
+        .filter(h => h.name == args.n || args.n == null)
 
-    if (highscores.length == 0)
-        throw new Error("No highscores found")
+    if (highscores.length == 0) {
+        if (args.n != null)
+            throw new Error(`No highscores found for ${args.n}`)
+        else
+            throw new Error("No highscores found")
+    }
 
     let tableData = []
     for (let highscore of highscores) {
@@ -23,12 +31,22 @@ terminal.addCommand("highscores", async function(args) {
     }
     
     terminal.printTable(tableData, ["Rank", "Name", "Score", "Time"])
+    
+    if (highscores.length != allHighscores.length) {
+        terminal.print(`(showing ${highscores.length} of ${allHighscores.length} highscores. `)
+        let cmdText = `highscores ${args.game} --show-all`
+        if (args.n != null) cmdText += ` -n ${args.n}`
+        terminal.printCommand("show all", cmdText, undefined, false)
+        terminal.printLine(")")
+    }
+
 }, {
     description: "Show global highscores for a game",
     args: {
         "game": "the game to show the highscores for",
         "?n": "only show highscores with this name",
-        "?l:n:1~10000": "limit the number of highscores to show",
+        "?l:i:1~10000": "limit the number of highscores to show",
+        "?show-all": "show all highscores, not just the top ones"
     },
     standardVals: {
         "n": null,
