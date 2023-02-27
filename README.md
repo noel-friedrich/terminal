@@ -26,21 +26,16 @@ The page is build to work like a Unix-Terminal, including:
 * solve your favorite equation using `solve x*x=10`
 * feel like a hacker using `cmatrix`
 * let the cow say something using `cowsay`
-* convert a picture into ascii using `img2ascii`
-* set and get key-value pairs on the server using `set` and `get`
-  * these values are saved globally for all users to see
 * most of your favorite unix-commands should do something
 * shutdown the website using `shutdown`
 * see your command history using `history`
   * execute a command from your history using `!<index>`
 * spawn turtlo using `turtlo` and watch it do stuff
-* convert your favorite image file to another format
-  1. upload the file using `upload`
-  2. convert it using `convert <filename>.<old_ending> <filename>.<new_ending>`
-  3. download it using `download <filename>.<new_ending>`
 * play fun terminal-style games
   * list all available games using `games`
   * view highscores using `highscores <game-name>`
+* spawn an interactive python environment using `python`
+* add turtlo to spawn when loading the website using `sc add turtlo`
 * generate fake whatsapp conversations using `fakechat`  
 
 _and so much more_
