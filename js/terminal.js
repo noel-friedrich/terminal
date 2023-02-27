@@ -1717,7 +1717,7 @@ class Terminal {
         }
     }
 
-    log(msg, {type="info", time="auto", date="auto", template="[TYPE] [DATE] [TIME] MSG"}={}) {
+    log(msg, {type="info", time="auto", date="auto", timestamp="auto", template="[TYPE] [TIMESTAMP] MSG"}={}) {
         if (!this.hasInitted) {
             this.addToLogBuffer(msg, type, time, date, template)
             return
@@ -1727,7 +1727,10 @@ class Terminal {
             time = new Date().toLocaleTimeString()
         if (date === "auto")
             date = new Date().toLocaleDateString()
+        if (timestamp === "auto")
+            timestamp = Date.now() + ""
         let logText = template
+            .replace("TIMESTAMP", timestamp)
             .replace("TYPE", type)
             .replace("TIME", time)
             .replace("DATE", date)
@@ -1900,8 +1903,11 @@ class Terminal {
 
         ALL_TERMINALS[terminalName] = this
 
-        if (terminalName === "main")
-            this.log("", {type: "startup"})
+        if (terminalName === "main") {
+            this.log("new terminal initialized", {type: "startup"})
+            this.log(`> hostname: ${this.window.location.href}`, {type: "startup"})
+            this.log(`> timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`, {type: "startup"})
+        }
     }
 
 }
