@@ -776,7 +776,7 @@ const UtilityFunctions = {
     addAlias(alias, command) {
         if (terminal.inTestMode) return
         terminal.aliases[alias] = command
-        console.log(`Added alias "${alias}" for command "${command}"`)
+        terminal.log(`Added alias "${alias}" for command "${command}"`)
     }
 
 }
@@ -904,6 +904,7 @@ class Terminal {
     _interruptSTRGC() {
         if (this.inTestMode)
             return
+        
         terminal.printError("Pressed [^c]", "\nInterrupt")
         terminal.expectingFinishCommand = true
         for (let callback of this._interruptCallbackQueue)
@@ -1499,6 +1500,7 @@ class Terminal {
     printError(text, name="Error") {
         this.print(name, new Color(255, 0, 0))
         this.printLine(": " + text)
+        this.log(text, {type: "error"})
     }
 
     printSuccess(text) {
@@ -1532,6 +1534,9 @@ class Terminal {
     }
 
     async input(text, testMode=false) {
+        if (!testMode)
+            this.log(`Inputted Text: "${text}"`)
+
         let tokens = TerminalParser.tokenize(text)
         if (tokens.length == 0) {
             this.standardInputPrompt()
@@ -1649,7 +1654,7 @@ class Terminal {
 
         await new Promise(resolve => script.onload = resolve)
 
-        console.log(`Loaded Script: ${url}`)
+        this.log(`Loaded Script: ${url}`)
 
         return iframe.contentWindow
     }
@@ -1693,6 +1698,67 @@ class Terminal {
         this.standardInputPrompt()
     }
 
+    getCurrDate() {
+        return new Date().toLocaleDateString().replace(/\//g, "-")
+    }
+
+    getCurrTime() {
+        return new Date().toLocaleTimeString()
+    }
+
+    addToLogBuffer(msg, type, time, date, template) {
+        this.logBuffer.push({msg, type, time, date, template})
+    }
+
+    cleanLogBuffer() {
+        while (this.logBuffer.length > 0) {
+            let logData = this.logBuffer.shift()
+            this.log(logData.msg, logData)
+        }
+    }
+
+    log(msg, {type="info", time="auto", date="auto", template="[TYPE] [DATE] [TIME] MSG"}={}) {
+        if (!this.hasInitted) {
+            this.addToLogBuffer(msg, type, time, date, template)
+            return
+        }
+
+        if (time === "auto")
+            time = new Date().toLocaleTimeString()
+        if (date === "auto")
+            date = new Date().toLocaleDateString()
+        let logText = template
+            .replace("TYPE", type)
+            .replace("TIME", time)
+            .replace("DATE", date)
+            .replace("MSG", msg)
+
+
+        let lines = terminal.logFile.content.split("\n")
+                    .filter(line => line.length > 0)
+        while (lines.length > terminal.logFileMaxLines - 1) {
+            lines.shift()
+        }
+        lines.push(logText)
+        terminal.logFile.content = lines.join("\n")
+    }
+
+    get logFile() {
+        if (this.fileExists(this.logFileName)) {
+            return this.getFile("root/" + this.logFileName)
+        } else {
+            let logFile = new TextFile("")
+                            .setName(this.logFileName)
+            this.rootFolder.addFile(logFile)
+            this.fileSystem.reloadSync()
+            return logFile
+        }
+    }
+
+    get logFileName() {
+        return "latest.log"
+    }
+
     reset() {
         this.data.resetAll()
         localStorage.removeItem("terminal-filesystem")
@@ -1725,6 +1791,9 @@ class Terminal {
             this.expectingFinishCommand = true
             this.finishCommand()
         }
+
+        this.hasInitted = true
+        this.cleanLogBuffer()
     }
 
     async initFrom(otherTerminal) {
@@ -1732,6 +1801,8 @@ class Terminal {
         this.fileSystem.loadJSON(otherTerminal.fileSystem.toJSON()) 
         this.commandCache = otherTerminal.commandCache
         this.startTime = otherTerminal.startTime 
+        this.hasInitted = true
+        this.cleanLogBuffer()
     }
 
     async clear(addPrompt=false) {
@@ -1769,10 +1840,24 @@ class Terminal {
         }
     }
 
+    static makeRandomId(length) {
+        let result = ""
+        let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length))
+        }
+        return result
+    }
+
     constructor(terminalName="none") {
         this.startTime = Date.now()
 
         this.name = terminalName
+
+        this.sessionId = `${this.getCurrDate()}-${this.getCurrTime()}`
+        this.hasInitted = false
+        this.logBuffer = []
+        this.logFileMaxLines = 100
         
         addEventListener("keydown", this._onkeydownShortcut.bind(this))
 
@@ -1814,6 +1899,9 @@ class Terminal {
         this._interruptCallbackQueue = []
 
         ALL_TERMINALS[terminalName] = this
+
+        if (terminalName === "main")
+            this.log("", {type: "startup"})
     }
 
 }

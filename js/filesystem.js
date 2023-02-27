@@ -25,6 +25,11 @@ class File {
         this.id = uniqueFileIdCount++
     }
 
+    setName(name) {
+        this.name = name
+        return this
+    }
+
     computeSize() {
         return JSON.stringify(this.toJSON()).length
     }
@@ -95,12 +100,28 @@ class File {
         return file
     }
 
+    append() {
+        throw new Error("Cannot append to uninitialized file")
+    }
+
+    write() {
+        throw new Error("Cannot write to uninitialized file")
+    }
+
 }
 
 class TextFile extends File {
 
     constructor(content) {
         super("text", content)
+    }
+
+    append(text) {
+        this.content += text
+    }
+
+    write(text) {
+        this.content = text
     }
 
 }
@@ -142,8 +163,21 @@ class Directory extends File {
         }
     }
 
+    addFile(file) {
+        this.content[file.name] = file
+        file.parent = this
+    }
+
     deleteChild(child) {
         delete this.content[child.name]
+    }
+
+    fileExists(name) {
+        return name in this.content
+    }
+
+    getFile(name) {
+        return this.content[name]
     }
 
     get isDirectory() {
@@ -267,7 +301,8 @@ class FileSystem {
 
     reset() {
         localStorage.removeItem("terminal-filesystem")
-        this.root = new Directory("root", {})
+        this.root = new Directory({})
+        this.root.name = "root"
         this.currPath = []
     }
 
@@ -284,6 +319,10 @@ class FileSystem {
             this.save()
             this.loadJSON(this.toJSON())
         }
+    }
+
+    reloadSync() {
+        this.loadJSON(this.toJSON())
     }
 
     async reload() {
