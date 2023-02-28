@@ -180,9 +180,11 @@ function updateTurtlo() {
     moveTurtlo()
 }
 
-function startTurtlo(cssClass=null) {
-    terminal.print("to remove turtlo, use ")
-    terminal.printCommand("kill turtlo", "kill turtlo", Color.COLOR_1)
+function startTurtlo(cssClass=null, silent=false) {
+    if (!silent) {
+        terminal.print("to remove turtlo, use ")
+        terminal.printCommand("kill turtlo", "kill turtlo", Color.COLOR_1)
+    }
     removeExistingTurtlos()
     if (terminal.turtlo.intervalFunc)
         clearInterval(terminal.turtlo.intervalFunc)
@@ -196,16 +198,16 @@ function startTurtlo(cssClass=null) {
 
 terminal.modules.turtlo = {
 
-    spawn({size=1}={}) {
+    spawn({size=1, silent=false}={}) {
         switch(size) {
             case 1:
-                startTurtlo()
+                startTurtlo(null, silent)
                 break
             case 2:
-                startTurtlo("huge")
+                startTurtlo("huge", silent)
                 break
             case 3:
-                startTurtlo("hugehuge")
+                startTurtlo("hugehuge", silent)
                 break
             default:
                 throw new Error("invalid size for turtlo")

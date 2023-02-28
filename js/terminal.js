@@ -866,7 +866,9 @@ class Terminal {
 
     aliases = {
         "tree": "ls -r",
-        "github": "cat /root/github.url"
+        "github": "cat /root/github.url",
+        "hugeturtlo": "turtlo --size 2",
+        "hugehugeturtlo": "turtlo --size 3",
     }
 
     outputChannel = OutputChannel.USER

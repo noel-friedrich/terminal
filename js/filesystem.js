@@ -366,7 +366,7 @@ class TerminalData {
         "accentColor2": "#8bc34a",
         "history": "[]",
         "storageSize": 300000,
-        "startupCommands": "[\"helloworld\"]",
+        "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
     }
 
     localStoragePrepend = "terminal-"
