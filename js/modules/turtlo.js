@@ -102,11 +102,21 @@ function moveTurtlo() {
         terminal.turtlo.x += xDiff * 0.05
         terminal.turtlo.y += yDiff * 0.05
 
-        let rotation = Math.atan2(yDiff, xDiff) + Math.PI / 2
-        terminal.turtlo.rot = rotation * 180 / Math.PI
+        while (terminal.turtlo.rot < 0)
+            terminal.turtlo.rot += 360
+        while (terminal.turtlo.rot > 360)
+            terminal.turtlo.rot -= 360
+
+        let rotation = (Math.atan2(yDiff, xDiff) + Math.PI / 2) * 180 / Math.PI
+        let rotDiff = (terminal.turtlo.rot - rotation)
+        if (rotDiff > 180)
+            rotDiff -= 360
+        if (rotDiff < -180)
+            rotDiff += 360
+        terminal.turtlo.rot -= rotDiff * 0.5
 
         let length = Math.sqrt(xDiff ** 2 + yDiff ** 2)
-        terminal.turtlo.state = (length > 15) ? TURTLO_STATE.WALKING : TURTLO_STATE.IDLE
+        terminal.turtlo.state = (length > 25) ? TURTLO_STATE.WALKING : TURTLO_STATE.IDLE
     }
 
     if (terminal.turtlo.state == TURTLO_STATE.IDLE) {
