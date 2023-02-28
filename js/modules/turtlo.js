@@ -70,7 +70,7 @@ function drawTurtlo() {
         let timeFactor = spinTimeElapsed / (terminal.turtlo.hugeSpinDuration * terminal.turtlo.spinAmountFactor)
         //terminal.turtlo.rot = timeFactor * 360 + terminal.turtlo.prevRot
         let windowRadius = Math.min(terminal.window.innerHeight, terminal.window.innerWidth) / 2 * terminal.turtlo.radiusFactor
-        let [midX, midY] = [window.innerWidth / 2, window.innerHeight / 2]
+        let [midX, midY] = [terminal.window.innerWidth / 2, terminal.window.innerHeight / 2]
         terminal.turtlo.goalX = Math.cos(timeFactor * Math.PI * 2 + terminal.turtlo.radiusStart) * windowRadius + midX
         terminal.turtlo.goalY = Math.sin(timeFactor * Math.PI * 2 + terminal.turtlo.radiusStart) * windowRadius + midY
     } else if (terminal.turtlo.inSpin()) {
