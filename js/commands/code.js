@@ -61,11 +61,33 @@ const jsSymbols = [
     "=>", "...",
 ]
 
+const cat = `                        _
+                       | \\
+                       | |
+                       | |
+  |\\                   | |
+ /, ~\\                / /
+X     \`-.....-------./ /
+ ~-.                   |
+    \\                 /
+    \\  /_     ~~~\\   /
+     | /\\ ~~~~~   \\ |
+     | | \\        || |
+     | |\\ \\       || )
+     (_/ (_/      ((_/`
+
 terminal.addCommand("code", async function(args) {
     if (!terminal.commandExists(args.command))
         throw new Error(`Command "${args.command}" does not exist`)
     let command = await terminal.getCommand(args.command)
     let code = command.callback.toString()
+
+    if (args.command == "code")
+        throw new Error("Recursion")
+
+    // https://github.com/noel-friedrich/terminal/issues/6
+    if (args.command == "cat")
+        return terminal.printLine(cat)
 
     function printJSCode(rawCode) {
         const isLetter = char => /[a-zA-Z]/.test(char)
