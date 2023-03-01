@@ -1,4 +1,4 @@
-terminal.addCommand("reset", async function() {
+terminal.addCommand("reset", async function(args) {
     async function animatedDo(action) {
         return new Promise(async resolve => {
             terminal.print(action)
@@ -11,11 +11,18 @@ terminal.addCommand("reset", async function() {
             resolve()
         })
     }
+    if (!args.now)
+        await terminal.acceptPrompt("this will reset the terminal. are you sure?", false)
     return new Promise(async () => {
-        await animatedDo("resetting")
+        if (!args.now) {
+            await animatedDo("resetting")
+        }
         terminal.reset()
-        setTimeout(() => terminal.reload(), 500)
+        terminal.reload()
     })
 }, {
-    description: "reset the terminal"
+    description: "reset the terminal",
+    args: {
+        "?n=now:b": "reset now"
+    }
 })
