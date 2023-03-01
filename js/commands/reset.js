@@ -12,7 +12,7 @@ terminal.addCommand("reset", async function(args) {
         })
     }
     if (!args.now)
-        await terminal.acceptPrompt("this will reset the terminal. are you sure?", false)
+        await terminal.acceptPrompt("this will fully reset the terminal (including all files). are you sure?", false)
     return new Promise(async () => {
         if (!args.now) {
             await animatedDo("resetting")
