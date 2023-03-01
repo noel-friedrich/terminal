@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 148 commands such as `ls`, `cd` and of course `cowsay`
+* 149 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -62,6 +62,7 @@ The following list can also be viewed using the `whatis *` command
 | `bin` | convert a number to another base |
 | `binomcdf` | calculate the binomial cumulative distribution function |
 | `binompdf` | calculate binomial distribution value |
+| `blocks` | blocky 3d viewer |
 | `brainfuck` | parse given brainfuck code |
 | `cal` | print a calendar |
 | `cardoid` | start a cardoid generator |

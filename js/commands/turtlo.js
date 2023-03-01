@@ -1,7 +1,6 @@
 terminal.addCommand("turtlo", async function(args) {
     await terminal.modules.load("turtlo", terminal)
     terminal.modules.turtlo.spawn({size: args.size, silent: args.silent})
-    console.log("spawned turtlo")
 }, {
     description: "spawn turtlo",
     args: {

@@ -222,12 +222,18 @@ terminal.modules.turtlo = {
             default:
                 throw new Error("invalid size for turtlo")
         }
+        terminal.log("spawned turtlo")
     },
 
     kill() {
         if (terminal.turtlo.intervalFunc)
             clearInterval(terminal.turtlo.intervalFunc)
-        return removeExistingTurtlos() != 0
+        if (removeExistingTurtlos() != 0) {
+            terminal.log("killed turtlo")
+            return true
+        } else {
+            return false
+        }
     }
 
 }
