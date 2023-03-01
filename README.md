@@ -62,7 +62,7 @@ The following list can also be viewed using the `whatis *` command
 | `bin` | convert a number to another base |
 | `binomcdf` | calculate the binomial cumulative distribution function |
 | `binompdf` | calculate binomial distribution value |
-| `blocks` | blocky 3d viewer |
+| `blocks` | 3d raycasting test |
 | `brainfuck` | parse given brainfuck code |
 | `cal` | print a calendar |
 | `cardoid` | start a cardoid generator |
