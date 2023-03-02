@@ -135,10 +135,6 @@ terminal.modules.Vector3d = Vector3d
 
 terminal.addCommand("blocks", async function(args) {
 	await terminal.modules.import("game", window)
-
-    const blockHueMap = {
-        0: 0,
-    }
 	
 	function initField(size, {defaultVal=0}={}) {
 		let field = []
@@ -159,6 +155,13 @@ terminal.addCommand("blocks", async function(args) {
 	const fieldSize = new Vector3d(args.roomX, args.roomY, args.roomZ)
 	const field = initField(fieldSize)
     const maxFieldDistance = fieldSize.length
+
+    function colorFromVals(raycastResult, distance) {
+        let hue = raycastResult * 360
+        let lightness = 80 - distance / cameraViewDistance * 80
+        let saturation = lightness
+        return `hsl(${hue}deg, ${saturation}%, ${lightness}%)`
+    }
 	
 	function isOutOfBounds(pos) {
 		if (
@@ -198,7 +201,9 @@ terminal.addCommand("blocks", async function(args) {
         }
     }
 
-    buildRandomWalls({val: pos => Math.random()})
+    buildRandomWalls({val: pos => {
+        return Math.random()
+    }})
 
 	const resolution = new Vector2d(args.resolution, Math.floor(args.resolution / 3))
 	
@@ -208,6 +213,8 @@ terminal.addCommand("blocks", async function(args) {
 
     let cameraDir = new Vector3d(0.95, 0.28, 0.09).normalized
     let cameraSpeed = 0.1
+
+    const cameraViewDistance = args.viewDistance
 	
 	function initDisplay(size, {defaultVal=" "}={}) {
 		let display = []
@@ -225,22 +232,34 @@ terminal.addCommand("blocks", async function(args) {
 	}
 	let display = initDisplay(resolution)
 	
-    function raycast(pos, dir, {stepScalar=0.2, maxDist=maxFieldDistance, f=field}={}) {
+    function raycast(pos, dir, {stepScalar=0.1, maxDist=maxFieldDistance, f=field}={}) {
         const originalPos = pos.copy()
-        dir = dir.normalized.mul(stepScalar)
+        let normalisedDir = dir.normalized
+        let usingNormalisedDir = true
         let floored = pos.floor()
+        let coveredDistance = 0
         while (!isOutOfBounds(floored)) {
             floored = pos.floor()
             let block = f[floored.x][floored.y][floored.z]
             if (block != 0) {
-                let distance = pos.distanceTo(originalPos)
-                return [block, distance]
+                if (usingNormalisedDir) {
+                    pos = pos.sub(normalisedDir)
+                    coveredDistance -= 1
+                    usingNormalisedDir = false
+                } else {
+                    let distance = pos.distanceTo(originalPos)
+                    return [block, distance]
+                }
             }
-            if (maxDist != maxFieldDistance) {
-                if (pos.distanceTo(originalPos) > maxDist)
-                    return [0, maxDist]
+            if (coveredDistance > maxDist)
+                return [0, maxDist]
+            if (usingNormalisedDir) {
+                pos = pos.add(normalisedDir)
+                coveredDistance += 1
+            } else {
+                pos = pos.add(normalisedDir.mul(stepScalar))
+                coveredDistance += stepScalar
             }
-            pos = pos.add(dir)
         }
         return [0, Infinity]
     }
@@ -264,11 +283,9 @@ terminal.addCommand("blocks", async function(args) {
                 let rayDir = cameraDir
                     .rotateZ(xAngleOffset)
                     .rotateUp(yAngleOffset)
-                let [raycastResult, distance] = raycast(cameraPos, rayDir, {maxDist: 12})
+                let [raycastResult, distance] = raycast(cameraPos, rayDir, {maxDist: cameraViewDistance})
                 displayVals[y][x] = raycastResult
-                let distanceFactor = distance * 6
-                let hue = raycastResult * 360
-                let color = `hsl(${hue}deg, 100%, ${80 - distanceFactor}%)`
+                let color = colorFromVals(raycastResult, distance)
                 displayColors[y][x] = color
             }
         }
@@ -358,13 +375,15 @@ terminal.addCommand("blocks", async function(args) {
         "?res=resolution:i:1~1000": "Resolution (width) in Pixels",
         "?x=roomX:i:5~100": "Room size in x direction",
         "?y=roomY:i:5~100": "Room size in y direction",
-        "?z=roomZ:i:5~100": "Room size in z direction"
+        "?z=roomZ:i:5~100": "Room size in z direction",
+        "?v=viewDistance:i:1~9999": "View distance in blocks"
     },
     defaultValues: {
         fov: 90,
         resolution: 90,
         roomX: 30,
         roomY: 10,
-        roomZ: 10
+        roomZ: 10,
+        viewDistance: 13
     }
 })
