@@ -37,14 +37,6 @@ class Vector3d {
 			this.z * scalar
 		)
 	}
-
-    floor() {
-        return new Vector3d(
-            Math.floor(this.x),
-            Math.floor(this.y),
-            Math.floor(this.z)
-        )
-    }
 	
 	sub(other) {
 		return this.add(other.mul(-1))
@@ -127,6 +119,22 @@ class Vector3d {
     rotateUp(angle) {
         let temp = this.angleZ
         return this.setAngleZ(0).rotateY(angle).setAngleZ(temp)
+    }
+
+    apply(func) {
+        return new Vector3d(
+            func(this.x),
+            func(this.y),
+            func(this.z)
+        )
+    }
+
+    round() {
+        return this.apply(Math.round)
+    }
+
+    floor() {
+        return this.apply(Math.floor)
     }
 
 }
@@ -230,6 +238,7 @@ terminal.addCommand("blocks", async function(args) {
 		}
 		return display
 	}
+
 	let display = initDisplay(resolution)
 	
     function raycast(pos, dir, {stepScalar=0.1, maxDist=maxFieldDistance, f=field}={}) {
