@@ -168,7 +168,7 @@ terminal.addCommand("blocks", async function(args) {
         let hue = raycastResult * 360
         let lightness = 80 - distance / cameraViewDistance * 80
         let saturation = lightness
-        return `hsl(${hue}deg, ${saturation}%, ${lightness}%)`
+        return Color.fromHSL(hue / 360, saturation / 100, lightness / 100)
     }
 	
 	function isOutOfBounds(pos) {
@@ -213,11 +213,11 @@ terminal.addCommand("blocks", async function(args) {
         return Math.random()
     }})
 
-	const resolution = new Vector2d(args.resolution, Math.floor(args.resolution / 3))
+	const resolution = new Vector2d(args.resolution, Math.floor(args.resolution * (9 / 16)))
 	
 	let cameraPos = new Vector3d(4.14, 3.73, 4.12)
 	let fovXDeg = args.fov / 180 * Math.PI;
-	let fovYDeg = fovXDeg * (resolution.y * 2 / resolution.x);
+	let fovYDeg = fovXDeg * (resolution.y / resolution.x);
 
     let cameraDir = new Vector3d(0.95, 0.28, 0.09).normalized
     let cameraSpeed = 0.1
@@ -225,21 +225,22 @@ terminal.addCommand("blocks", async function(args) {
     const cameraViewDistance = args.viewDistance
 	
 	function initDisplay(size, {defaultVal=" "}={}) {
-		let display = []
-		for (let y = 0; y < size.y; y++) {
-			let displayRow = []
-			for (let x = 0; x < size.x; x++) {
-				let element = terminal.print(defaultVal, undefined, {forceElement: true})
-                element.style.transition = "none"
-                displayRow.push(element)
-			}
-			display.push(displayRow)
-			terminal.addLineBreak()
-		}
-		return display
+        let canvas = document.createElement("canvas")
+        let context = canvas.getContext("2d")
+        canvas.style.width = terminal.charWidth * 80 + "px"
+        let heightPx = Math.floor(terminal.charWidth * 80 * (size.y / size.x))
+        canvas.style.height = heightPx + "px"
+        terminal.parentNode.appendChild(canvas)
+        canvas.width = size.x
+        canvas.height = size.y
+        canvas.style.imageRendering = "pixelated"
+        context.fillStyle = "white"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        terminal.addLineBreak()
+        return [context.getImageData(0, 0, size.x, size.y), context, canvas]
 	}
 
-	let display = initDisplay(resolution)
+	const [canvasPixelData, context2d, canvas] = initDisplay(resolution)
 	
     function raycast(pos, dir, {stepScalar=0.1, maxDist=maxFieldDistance, f=field}={}) {
         const originalPos = pos.copy()
@@ -273,17 +274,32 @@ terminal.addCommand("blocks", async function(args) {
         return [0, Infinity]
     }
 
+    function init2dArray(size, {defaultVal=0}={}) {
+        let arr = []
+        for (let y = 0; y < size.y; y++) {
+            let row = []
+            for (let x = 0; x < size.x; x++) {
+                row.push(defaultVal)
+            }
+            arr.push(row)
+        }
+        return arr
+    }
+
     function render() {
-        let displayVals = display.map(row => row.map(() => 0))
-        let displayColors = display.map(row => row.map(() => Color.fromHex("#000000")))
-        function updateTextContents() {
+        let displayColors = init2dArray(resolution, {defaultVal: Color.BLACK})
+        function renderData() {
             for (let y = 0; y < resolution.y; y++) {
                 for (let x = 0; x < resolution.x; x++) {
-                    let value = displayVals[y][x] ? "#" : " "
-                    display[y][x].textContent = value
-                    display[y][x].style.color = displayColors[y][x]
+                    let color = displayColors[y][x]
+                    let index = (y * resolution.x + x) * 4
+                    canvasPixelData.data[index] = color.r
+                    canvasPixelData.data[index + 1] = color.g
+                    canvasPixelData.data[index + 2] = color.b
+                    canvasPixelData.data[index + 3] = 255
                 }
             }
+            context2d.putImageData(canvasPixelData, 0, 0)
         }
         for (let y = 0; y < resolution.y; y++) {
             for (let x = 0; x < resolution.x; x++) {
@@ -293,12 +309,11 @@ terminal.addCommand("blocks", async function(args) {
                     .rotateZ(xAngleOffset)
                     .rotateUp(yAngleOffset)
                 let [raycastResult, distance] = raycast(cameraPos, rayDir, {maxDist: cameraViewDistance})
-                displayVals[y][x] = raycastResult
                 let color = colorFromVals(raycastResult, distance)
                 displayColors[y][x] = color
             }
         }
-        updateTextContents()
+        renderData()
     }
 
     function checkBlockCollison({f=field}={}) {
@@ -309,69 +324,121 @@ terminal.addCommand("blocks", async function(args) {
 
     let gameRunning = true
 
-    terminal.onInterrupt(() => {
+    function endGame() {
         gameRunning = false
-    })
+        canvas.remove()
+    }
 
-    let rotateSpeed = Math.PI / 32
+    terminal.onInterrupt(endGame)
 
-    let downListener = addEventListener("keydown", function(event) {
+    let rotateSpeed = Math.PI / 128
+
+    const movement = {
+        forward: () => cameraPos = cameraPos.add(cameraDir.mul(cameraSpeed)),
+        backward: () => cameraPos = cameraPos.sub(cameraDir.mul(cameraSpeed)),
+        left: () => cameraPos = cameraPos.add(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
+        right: () => cameraPos = cameraPos.sub(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
+        up: () => cameraPos = cameraPos.sub(new Vector3d(0, 0, 1).mul(cameraSpeed)),
+        down: () => cameraPos = cameraPos.add(new Vector3d(0, 0, 1).mul(cameraSpeed)),
+        turnup: () => cameraDir = cameraDir.rotateUp(-rotateSpeed),
+        turndown: () => cameraDir = cameraDir.rotateUp(rotateSpeed),
+        turnleft: () => cameraDir = cameraDir.rotateZ(-rotateSpeed),
+        turnright: () => cameraDir = cameraDir.rotateZ(rotateSpeed),
+    }
+
+    const antiKeyMappings = {
+        FORWARD: "BACKWARD",
+        BACKWARD: "FORWARD",
+        LEFT: "RIGHT",
+        RIGHT: "LEFT",
+        UP: "DOWN",
+        DOWN: "UP",
+        TURN_LEFT: "TURN_RIGHT",
+        TURN_RIGHT: "TURN_LEFT",
+        TURN_UP: "TURN_DOWN",
+        TURN_DOWN: "TURN_UP"
+    }
+
+    let keyDown = {
+        FORWARD: false,
+        BACKWARD: false,
+        LEFT: false,
+        RIGHT: false,
+        UP: false,
+        DOWN: false,
+        TURN_LEFT: false,
+        TURN_RIGHT: false,
+        TURN_UP: false,
+        TURN_DOWN: false
+    }
+
+    const keyMappings = {
+        w: "FORWARD",
+        s: "BACKWARD",
+        a: "LEFT",
+        d: "RIGHT",
+        ArrowUp: "TURN_UP",
+        ArrowDown: "TURN_DOWN",
+        ArrowLeft: "TURN_LEFT",
+        ArrowRight: "TURN_RIGHT",
+        " ": "UP",
+        Shift: "DOWN"
+    }
+
+    let upListener = addEventListener("keyup", function(event) {
         if (!gameRunning) return
 
-        let key = event.key.toLocaleLowerCase()
+        let keyCode = event.key
+        if (keyCode in keyMappings) {
+            keyDown[keyMappings[keyCode]] = false
+            event.preventDefault()
+        }
+    })
 
+    let downListener = addEventListener("keydown", function(event) {
+        if (!gameRunning || event.repeat) return
+
+        let keyCode = event.key
+        if (keyCode in keyMappings) {
+            keyDown[keyMappings[keyCode]] = true
+            if (keyCode in antiKeyMappings) {
+                keyDown[antiKeyMappings[keyCode]] = false
+            }
+            event.preventDefault()
+        }
+    })
+
+    function processInput() {
         let prevPos = cameraPos.copy()
 
-        let keyEvents = {
-            w: () => {
-                cameraPos = cameraPos.add(cameraDir.mul(cameraSpeed))
-            },
-            s: () => {
-                cameraPos = cameraPos.sub(cameraDir.mul(cameraSpeed))
-            },
-            a: () => {
-                cameraPos = cameraPos.add(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed))
-            },
-            d: () => {
-                cameraPos = cameraPos.sub(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed))
-            },
-            arrowright: () => {
-                cameraDir = cameraDir.rotateZ(rotateSpeed)
-            },
-            arrowleft: () => {
-                cameraDir = cameraDir.rotateZ(-rotateSpeed)
-            },
-            arrowdown: () => {
-                cameraDir = cameraDir.rotateUp(rotateSpeed)
-            },
-            arrowup: () => {
-                cameraDir = cameraDir.rotateUp(-rotateSpeed)
-            },
-            shift: () => {
-                cameraPos = cameraPos.add(new Vector3d(0, 0, 1).mul(cameraSpeed))
-            },
-            " ": () => {
-                cameraPos = cameraPos.sub(new Vector3d(0, 0, 1).mul(cameraSpeed))
-            }
-        }
+        if (keyDown.FORWARD) movement.forward()
+        if (keyDown.BACKWARD) movement.backward()
+        if (keyDown.LEFT) movement.left()
+        if (keyDown.RIGHT) movement.right()
+        if (keyDown.UP) movement.up()
+        if (keyDown.DOWN) movement.down()
+        if (keyDown.TURN_LEFT) movement.turnleft()
+        if (keyDown.TURN_RIGHT) movement.turnright()
+        if (keyDown.TURN_UP) movement.turnup()
+        if (keyDown.TURN_DOWN) movement.turndown()
 
-        if (key in keyEvents) {
-            keyEvents[key]()
-            if (checkBlockCollison())
-                cameraPos = prevPos
-            event.preventDefault()
-            render()
+        if (checkBlockCollison()) {
+            cameraPos = prevPos
         }
-
-        terminal.window.cameraDir = cameraDir
-        terminal.window.cameraPos = cameraPos
-    })
+    }
 
     terminal.printLine("Use WASD to move, arrow keys to rotate, shift and space to move up and down")
 
-    render()
-
     terminal.scroll()
+
+    function loop() {
+        processInput()
+        render()
+
+        terminal.window.requestAnimationFrame(loop)
+    }
+
+    loop()
 
     while (gameRunning) {
         await sleep(100)
