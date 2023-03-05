@@ -334,16 +334,16 @@ terminal.addCommand("blocks", async function(args) {
     let rotateSpeed = Math.PI / 128
 
     const movement = {
-        forward: () => cameraPos = cameraPos.add(cameraDir.mul(cameraSpeed)),
-        backward: () => cameraPos = cameraPos.sub(cameraDir.mul(cameraSpeed)),
-        left: () => cameraPos = cameraPos.add(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
-        right: () => cameraPos = cameraPos.sub(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
-        up: () => cameraPos = cameraPos.sub(new Vector3d(0, 0, 1).mul(cameraSpeed)),
-        down: () => cameraPos = cameraPos.add(new Vector3d(0, 0, 1).mul(cameraSpeed)),
-        turnup: () => cameraDir = cameraDir.rotateUp(-rotateSpeed),
-        turndown: () => cameraDir = cameraDir.rotateUp(rotateSpeed),
-        turnleft: () => cameraDir = cameraDir.rotateZ(-rotateSpeed),
-        turnright: () => cameraDir = cameraDir.rotateZ(rotateSpeed),
+        FORWARD: () => cameraPos = cameraPos.add(cameraDir.mul(cameraSpeed)),
+        BACKWARD: () => cameraPos = cameraPos.sub(cameraDir.mul(cameraSpeed)),
+        LEFT: () => cameraPos = cameraPos.add(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
+        RIGHT: () => cameraPos = cameraPos.sub(cameraDir.cross(new Vector3d(0, 0, 1)).mul(cameraSpeed)),
+        UP: () => cameraPos = cameraPos.sub(new Vector3d(0, 0, 1).mul(cameraSpeed)),
+        DOWN: () => cameraPos = cameraPos.add(new Vector3d(0, 0, 1).mul(cameraSpeed)),
+        TURN_UP: () => cameraDir = cameraDir.rotateUp(-rotateSpeed),
+        TURN_DOWN: () => cameraDir = cameraDir.rotateUp(rotateSpeed),
+        TURN_LEFT: () => cameraDir = cameraDir.rotateZ(-rotateSpeed),
+        TURN_RIGHT: () => cameraDir = cameraDir.rotateZ(rotateSpeed),
     }
 
     const antiKeyMappings = {
@@ -400,9 +400,10 @@ terminal.addCommand("blocks", async function(args) {
 
         let keyCode = event.key
         if (keyCode in keyMappings) {
-            keyDown[keyMappings[keyCode]] = true
-            if (keyCode in antiKeyMappings) {
-                keyDown[antiKeyMappings[keyCode]] = false
+            let keyMapping = keyMappings[keyCode]
+            keyDown[keyMapping] = true
+            if (keyMapping in antiKeyMappings) {
+                keyDown[antiKeyMappings[keyMapping]] = false
             }
             event.preventDefault()
         }
@@ -411,16 +412,11 @@ terminal.addCommand("blocks", async function(args) {
     function processInput() {
         let prevPos = cameraPos.copy()
 
-        if (keyDown.FORWARD) movement.forward()
-        if (keyDown.BACKWARD) movement.backward()
-        if (keyDown.LEFT) movement.left()
-        if (keyDown.RIGHT) movement.right()
-        if (keyDown.UP) movement.up()
-        if (keyDown.DOWN) movement.down()
-        if (keyDown.TURN_LEFT) movement.turnleft()
-        if (keyDown.TURN_RIGHT) movement.turnright()
-        if (keyDown.TURN_UP) movement.turnup()
-        if (keyDown.TURN_DOWN) movement.turndown()
+        for (let key in keyDown) {
+            if (keyDown[key]) {
+                movement[key]()
+            }
+        }
 
         if (checkBlockCollison()) {
             cameraPos = prevPos
