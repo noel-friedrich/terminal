@@ -1919,7 +1919,6 @@ terminal.clear()
 terminal.init()
 
 // add shortcuts
-
 terminal.addKeyboardShortcut(new KeyboardShortcut(
     "L", async () => {
         // wait for any pending commands to be interrupted
