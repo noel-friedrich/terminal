@@ -4,6 +4,7 @@ class TermlSettings {
     static LINE_DELIMIETER = "\n"
     static INDENT_CHAR = "\t" // must be a single character
     static DEF_KEYWORD = "DEF"
+	static COMMENT_CHAR = "#" // must be a single character
 
 	static TAB_WIDTH = 4
 
@@ -54,7 +55,7 @@ class TermlRuntimeError extends TermlError {
 
 }
 
-class TermlRuntimeNumArgumentsError extends TermlRuntimeError {
+class TermlRuntimeNumArgumentsError extends TermlError {
 
 	constructor(message) {
 		super(message)
@@ -63,7 +64,7 @@ class TermlRuntimeNumArgumentsError extends TermlRuntimeError {
 
 }
 
-class TermlRuntimeTypeError extends TermlRuntimeError {
+class TermlRuntimeTypeError extends TermlError {
 
 	constructor(message) {
 		super(message)
@@ -72,7 +73,7 @@ class TermlRuntimeTypeError extends TermlRuntimeError {
 
 }
 
-class TermlRuntimeMaxRepeatError extends TermlRuntimeError {
+class TermlRuntimeMaxRepeatError extends TermlError {
 
 	constructor(message) {
 		super(message)
@@ -87,8 +88,12 @@ class TermlLiteral extends TermlValueObject {
 
 	constructor(value) {
 		super()
-		this.value = value
+		this._value = value
 		this.isLiteral = true
+	}
+
+	get value() {
+		return this._value	
 	}
 
 	static fromToken(token) {
@@ -104,11 +109,33 @@ class TermlLiteral extends TermlValueObject {
 class TermlStringLiteral extends TermlLiteral {
 
 	constructor(value) {
-		super(value)
+		super(value.toString())
+	}
+
+	static fromArray(arr) {
+		let str = ""
+		for (let charCode of arr) {
+			let char = String.fromCharCode(charCode)
+			str += char
+		}
+		return new TermlStringLiteral(str)
+	}
+
+	get stringValue() {
+		return this._value
 	}
 
 	toString() {
 		return `"${this.value}"`
+	}
+
+	get value() {
+		let listData = []
+		for (let char of this._value) {
+			let charCode = char.charCodeAt(0)
+			listData.push(charCode)
+		}
+		return listData
 	}
 
 }
@@ -132,7 +159,7 @@ class TermlToken {
 
 		if (numRegex.test(this.content)) {
 			this.isNumberLiteral = true
-			this.content = parseInt(this.content)
+			this.content = parseFloat(this.content)
 			let error = TermlVariable.getValueError(this.content)
 			if (error) throw error
 			return true
@@ -163,6 +190,13 @@ class TermlToken {
         return this.content
     }
 
+}
+
+function TermlIsVar(obj) {
+	return (
+		obj instanceof TermlVariable ||
+		obj instanceof TermlList
+	)
 }
 
 class TermlVariable extends TermlValueObject {
@@ -221,10 +255,17 @@ class TermlVariable extends TermlValueObject {
 
 }
 
-class TermlList extends TermlVariable {
+class TermlList extends TermlValueObject {
 
 	constructor(name, value, parentContainer) {
-		super(name, value, parentContainer)
+		super()
+        if (!name) throw new TermlError("No name provided")
+        this.name = name
+        this.setValue(value)
+
+        if (!(parentContainer instanceof TermlVariableContainer))
+            throw new TermlError("Container is not a TermlVariableContainer")
+        this.parentContainer = parentContainer
 		this.isList = true
 	}
 
@@ -232,13 +273,33 @@ class TermlList extends TermlVariable {
 		return `LIST{${this.name}}`
 	}
 
-	getValueError(value) {
-		if (!value || !value.length)
-			return new TermlError("No value provided")
+	set value(value) {
+		this.setValue(value)
+	}
+
+	copyValue() {
+		return this._value.slice()
+	}
+
+	get reference() {
+		return this._value
+	}
+
+	get value() {
+		return this.copyValue()
+	}
+
+	setValue(value=[]) {
+        const error = TermlList.getValueError(value)
+        if (error) throw error
+        this._value = value
+	}
+
+	static getValueError(value) {
 		if (!Array.isArray(value))
 			return new TermlError("Value is not an array")
 		for (let i = 0; i < value.length; i++) {
-			const error = super.getValueError(value[i])
+			const error = TermlVariable.getValueError(value[i])
 			if (error) return error
 		}
 	}
@@ -334,13 +395,29 @@ class TermlVariableContainer {
 		return this.variables[name] !== undefined
 	}
 
+	setVariableRef(name, variable) {
+		if (!name)
+			throw new TermlError("No name provided")
+		if (!TermlIsVar(variable))
+			throw new TermlError("Variable is not a TermlVariable")
+		this.variables[name] = variable
+	}
+
     setVariable(name, value) {
         if (!name)
             throw new TermlError("No name provided")
         if (this.variables[name]) {
             this.variables[name].value = value
         } else {
-            this.variables[name] = new TermlVariable(name, value, this)
+			try {
+				this.variables[name] = new TermlVariable(name, value, this)
+			} catch (error) {
+				try {
+					this.variables[name] = new TermlList(name, value, this)
+				} catch (error) {
+					throw new TermlError("Variable is not a TermlVariable or TermlList")
+				}
+			}
         }
     }
 
@@ -548,16 +625,103 @@ const TermlStandardModule = new TermlModule("standard", [
 	new TermlFunction("NEW", ["name", "?value"], [], (args, statement, runtime) => {
 		let container = statement.parent.container
 		if (!Terml.getTypeError(args, [TermlStringLiteral])) {
-			container.setVariable(args[0].value, undefined)
+			container.setVariable(args[0].stringValue, undefined)
 			return
 		} 
 
 		Terml.checkType(args, [TermlStringLiteral, TermlValueObject])
 		let [varName, varValue] = args
-		container.setVariable(varName.value, varValue.value)
+		container.setVariable(varName.stringValue, varValue.value)
+	}),
+
+	new TermlFunction("NEW_LST", ["name", "?value"], [], (args, statement, runtime) => {
+		let container = statement.parent.container
+		if (!Terml.getTypeError(args, [TermlStringLiteral])) {
+			container.setVariable(args[0].stringValue, [])
+			return
+		} 
+
+		window.container = container
+
+		Terml.checkType(args, [TermlStringLiteral, TermlStringLiteral])
+		let [varName, varValue] = args
+		container.setVariable(varName.stringValue, varValue.value)
+	}),
+
+	new TermlFunction("PUSH", ["name", "value"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject])
+		let [variable, valueToken] = args
+		variable.reference.push(valueToken.value)
+	}),
+
+	new TermlFunction("INSERT_AT", ["name", "value", "index"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject, TermlNumberLiteral])
+		let [variable, valueToken, indexToken] = args
+		variable.reference.splice(indexToken.value, 0, valueToken.value)
+	}),
+
+	new TermlFunction("POP", ["name", "?var"], [], (args, statement, runtime) => {
+		if (!Terml.getTypeError(args, [TermlList])) {
+			let [variable] = args
+			variable.reference.pop()
+			return
+		}
+		Terml.checkType(args, [TermlList, TermlVariable])
+		let [variable, valueToken] = args
+		if (variable.value.length === 0)
+			return
+		valueToken.value = variable.reference.pop()
+	}),
+
+	new TermlFunction("CONCAT", ["list1", "list2"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlList])
+		let [list1, list2] = args
+		list1.value = list1.value.concat(list2.value)
+	}),
+
+	new TermlFunction("UNSHIFT", ["name", "value"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject])
+		let [variable, valueToken] = args
+		variable.reference.unshift(valueToken.value)
+	}),
+
+	new TermlFunction("DELETE_AT", ["name", "index"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject])
+		let [variable, indexToken] = args
+		if (indexToken.value >= variable.value.length)
+			return
+		variable.reference.splice(indexToken.value, 1)
+	}),
+
+	new TermlFunction("SHIFT", ["name", "?var"], [], (args, statement, runtime) => {
+		if (!Terml.getTypeError(args, [TermlList])) {
+			let [variable] = args
+			variable.reference.shift()
+			return
+		}
+		Terml.checkType(args, [TermlList, TermlVariable])
+		let [variable, valueToken] = args
+		valueToken.value = variable.reference.shift()
+	}),
+
+	new TermlFunction("GET_AT", ["name", "index", "var"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject, TermlVariable])
+		let [variable, indexToken, valueToken] = args
+		valueToken.value = variable.reference[indexToken.value]
+	}),
+
+	new TermlFunction("SET_AT", ["name", "index", "value"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList, TermlValueObject, TermlValueObject])
+		let [variable, indexToken, valueToken] = args
+		variable.reference[indexToken.value] = valueToken.value
 	}),
 
 	new TermlFunction("SET", ["name", "value"], [], (args, statement, runtime) => {
+		if (!Terml.getTypeError(args, [TermlList, TermlList])) {
+			let [list1, list2] = args
+			list1.value = list2.value
+			return
+		}
 		Terml.checkType(args, [TermlVariable, TermlValueObject])
 		let [variable, valueToken] = args
 		variable.value = valueToken.value
@@ -566,8 +730,27 @@ const TermlStandardModule = new TermlModule("standard", [
 	new TermlFunction("OUT", ["value"], [], (args, statement, runtime) => {
 		if (!Terml.getTypeError(args, [TermlValueObject])) {
 			let [valueToken] = args
-			TermlSettings.OUT_FUNC(("" + valueToken.value).replace(/\\n/g, "\n"))
+			let value = valueToken.value
+			if (Array.isArray(value)) 
+				value = TermlStringLiteral.fromArray(value).stringValue
+			TermlSettings.OUT_FUNC(("" + value).replace(/\\n/g, "\n"))
 		}
+	}),
+
+	new TermlFunction("OUT_LST", ["value"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlValueObject])
+		let error = Terml.getTypeError(args, [TermlList])
+		if (error) error = Terml.getTypeError(args, [TermlStringLiteral])
+		if (error) throw error
+		let stringVal = JSON.stringify(args[0].value)
+		TermlSettings.OUT_FUNC(stringVal)
+	}),
+
+	new TermlFunction("IN", ["name"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlList])
+		let [variable] = args
+		let input = TermlSettings.IN_FUNC()
+		variable.value = new TermlStringLiteral(input).value
 	}),
 
 	new TermlFunction("ADD", ["var1", "var2"], [], (args, statement, runtime) => {
@@ -594,16 +777,28 @@ const TermlStandardModule = new TermlModule("standard", [
 		var1.value /= var2.value
 	}),
 
-	new TermlFunction("MOD", ["var"], [], (args, statement, runtime) => {
-		Terml.checkType(args, [TermlVariable])
-		let [var1] = args
+	new TermlFunction("MOD", ["var1", "var2"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlVariable, TermlValueObject])
+		let [var1, var2] = args
 		var1.value %= var2.value
+	}),
+
+	new TermlFunction("POW", ["var1", "var2"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlVariable, TermlValueObject])
+		let [var1, var2] = args
+		var1.value = Math.pow(var1.value, var2.value)
 	}),
 
 	new TermlFunction("ROUND", ["var"], [], (args, statement, runtime) => {
 		Terml.checkType(args, [TermlVariable])
 		let [var1] = args
 		var1.value = Math.round(var1.value)
+	}),
+
+	new TermlFunction("SQRT", ["var"], [], (args, statement, runtime) => {
+		Terml.checkType(args, [TermlVariable])
+		let [var1] = args
+		var1.value = Math.sqrt(var1.value)
 	}),
 
 	new TermlFunction("FLOOR", ["var"], [], (args, statement, runtime) => {
@@ -620,16 +815,36 @@ const TermlStandardModule = new TermlModule("standard", [
 
 	new TermlFunction("DEF", [], [], (args, defStatement, runtime) => {
 		Terml.checkType(args[0], TermlStringLiteral)
-		let funcName = args[0].value
+		let funcName = args[0].stringValue
 		let funcArgs = args.slice(1)
 		Terml.checkType(funcArgs, funcArgs.map(() => TermlStringLiteral))
+
+		function parseVarName(name) {
+			let info = {
+				isReference: false,
+			}
+
+			if (name.startsWith("&")) {
+				info.isReference = true
+				name = name.slice(1)
+			}
+
+			info.name = name
+			return info
+		}
 
 		function jsFunc(args) {
 			if (args.length !== funcArgs.length)
 				throw new TermlRuntimeNumArgumentsError()
 			Terml.checkType(args, args.map(() => TermlValueObject))
-			for (let i = 0; i < funcArgs.length; i++)
-				defStatement.container.setVariable(funcArgs[i].value, args[i].value)
+			for (let i = 0; i < funcArgs.length; i++) {
+				let varInfo = parseVarName(funcArgs[i].stringValue)
+				if (varInfo.isReference && TermlIsVar(args[i])) {
+					defStatement.container.setVariableRef(varInfo.name, args[i])
+				} else {
+					defStatement.container.setVariable(funcArgs[i].stringValue, args[i].value)
+				}
+			}
 			for (let substatement of defStatement.substatements) {
 				runtime.executeStatement(substatement)
 			}
@@ -669,6 +884,12 @@ const TermlStandardModule = new TermlModule("standard", [
 		let a = val1.value ? 1 : 0
 		let b = val2.value ? 1 : 0
 		outputVar.value = (a ^ b) ? 1 : 0
+	}),
+
+	new TermlFunction("NOT", ["val1", "var"], [], (args) => {
+		Terml.checkType(args, [TermlValueObject, TermlVariable])
+		let [val1, outputVar] = args
+		outputVar.value = (val1.value) ? 0 : 1
 	}),
 
 	new TermlFunction("AND", ["val1", "val2", "var"], [], (args) => {
@@ -727,15 +948,26 @@ const TermlStandardModule = new TermlModule("standard", [
 		}
 	}),
 
-	new TermlFunction("REPEAT", ["value"], [], (args, statements, runtime) => {
-		Terml.checkType(args, [TermlValueObject])
-		let [value] = args
-		if (value.value < 0)
+	new TermlFunction("REPEAT", ["value"], [], (args, statement, runtime) => {
+		let variable = null
+		if (!Terml.getTypeError(args, [TermlValueObject, TermlStringLiteral])) {
+			let container = statement.container
+			container.setVariable(args[1].stringValue, undefined)
+			variable = container.getVariable(args[1].stringValue)
+		} else {
+			Terml.checkType(args, [TermlValueObject])
+		}
+		
+		let val = args[0].value
+
+		if (val < 0)
 			throw new TermlRuntimeError("REPEAT value must be positive")
-		if (value.value > TermlSettings.maxRepeat)
+		if (val > TermlSettings.maxRepeat)
 			throw new TermlRuntimeMaxRepeatError(`REPEAT value must be less than ${TermlSettings.maxRepeat}`)
-		for (let count = 0; count < value.value; count++) {
-			for (let substatement of statements.substatements) {
+		for (let count = 0; count < val; count++) {
+			if (variable)
+				variable.value = count
+			for (let substatement of statement.substatements) {
 				runtime.executeStatement(substatement)
 			}
 		}
@@ -859,10 +1091,22 @@ class Terml {
 		return lines.join("\n")
 	}
 
-	static run(code, {log=false}={}) {
+	static furbishCode(code) {
+		const commentRegex = new RegExp(`^[\\s\\t]*${TermlSettings.COMMENT_CHAR}.*$`)
+		let lines = code.split(TermlSettings.LINE_DELIMIETER)
+			.filter(l => l.length > 0)
+			.filter(l => !commentRegex.test(l))
+		
+		code = lines.join(TermlSettings.LINE_DELIMIETER)
 		code = Terml.removeStaticWhitespace(code)
 			.replaceAll(" ".repeat(TermlSettings.TAB_WIDTH), TermlSettings.INDENT_CHAR)
 
+		let docParser = new DOMParser().parseFromString(code, "text/html")
+		return docParser.documentElement.textContent
+	}
+
+	static run(code, {log=false}={}) {
+		code = Terml.furbishCode(code)
 		Terml.output = ""
 		const parser = new TermlParser()
 		const globalStatement = parser.parse(code)
@@ -891,7 +1135,7 @@ class Terml {
 				newTextContent = Terml.run(code)
 			} catch (e) {
 				if (e instanceof TermlError) {
-					newTextContent = e.message
+					newTextContent = e.toString()
 				} else {
 					throw e
 				}
