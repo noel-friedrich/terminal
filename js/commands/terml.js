@@ -1159,7 +1159,8 @@ terminal.addCommand("terml", async function(args) {
 	try {
 		Terml.run(code)
 	} catch (e) {
-		TermlSettings.OUT_FUNC(e)
+		terminal.addLineBreak()
+		throw e
 	}
 }, {
 	description: "run a .terml file",
