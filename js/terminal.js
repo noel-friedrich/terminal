@@ -1931,3 +1931,6 @@ terminal.addKeyboardShortcut(new KeyboardShortcut(
     },
     {ctrl: true, shift: undefined}
 ))
+
+// count page visits
+window.addEventListener("load", () => fetch("api/count_visit.php"))

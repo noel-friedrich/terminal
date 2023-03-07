@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 150 commands such as `ls`, `cd` and of course `cowsay`
+* 151 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -194,6 +194,7 @@ The following list can also be viewed using the `whatis *` command
 | `uname` | print the operating system name |
 | `upload` | upload a file from your computer |
 | `vigenere` | encrypt/decrypt a message using the vigenere cipher |
+| `visits` | Shows the number of page visits |
 | `w` | print the current time elapsed |
 | `wave` | play with a wave |
 | `wc` | display word and line count of file |
