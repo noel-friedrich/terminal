@@ -155,7 +155,7 @@ function moveTurtlo() {
                 let prevX = terminal.turtlo.x
                 let prevY = terminal.turtlo.y
                 terminal.turtlo.goalX += (Math.random() - 0.5) * 2 * 300
-                terminal.turtlo.goalX = -300
+                terminal.turtlo.goalX = -terminal.turtlo.imageElement.clientWidth * 2 - 100
                 setTimeout(function() {
                     if (terminal.turtlo.x > 0) return
                     terminal.turtlo.x = terminal.window.innerWidth + 100
@@ -167,9 +167,9 @@ function moveTurtlo() {
         let activityChances = [
             [activities.goIntoShell,      1],
             [activities.stickToungeOut,   3],
-            [activities.spinAround,       3],
+            [activities.spinAround,       2],
             [activities.spinWalkAround,   2],
-            [activities.moveToRandomSpot, 1],
+            [activities.moveToRandomSpot, 2],
             [activities.walkout,          1],
         ]
         let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
