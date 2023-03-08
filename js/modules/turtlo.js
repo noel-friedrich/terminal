@@ -42,8 +42,10 @@ function resetTurtlo() {
         prevRot: 120,
         hugeSpinDuration: 0,
         lastHugeSpinTime: Date.now(),
+        radiusFactor: 0.9,
         inHugeSpin: () => ((terminal.turtlo.lastHugeSpinTime + terminal.turtlo.hugeSpinDuration) > Date.now()),
-        radiusFactor: 0.9
+        starTurtlos: [],
+        hasStars: () => (terminal.turtlo.starTurtlos.length > 0),
     }
 }
 
@@ -88,6 +90,33 @@ function drawTurtlo() {
         terminal.turtlo.imageElement.src = "res/img/turtlo/" + currImage + ".png"
     } else if (terminal.turtlo.state == TURTLO_STATE.IDLE) {
         terminal.turtlo.imageElement.src = "res/img/turtlo/walking-0.png"
+    }
+
+    if (terminal.turtlo.hasStars()) {
+        for (let star of terminal.turtlo.starTurtlos) {
+            star.x += star.directionX
+            star.y += star.directionY
+            star.element.style.top = star.y + "px"
+            star.element.style.left = star.x + "px"
+            let starAge = Date.now() - star.startOfLife
+            let rotation = starAge / star.rotationTime * 360
+            star.element.style.transform = `rotate(${rotation}deg)`
+            star.element.style.opacity = Math.max(1, starAge / 1000)
+        }
+
+        function removeStar(star) {
+            star.element.remove()
+        }
+
+        terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.filter(star => {
+            let starSize = star.element.clientWidth * 2
+            if (star.x + starSize < 0 || star.x - starSize > terminal.window.innerWidth
+                || star.y + starSize < 0 || star.y - starSize > terminal.window.innerHeight) {
+                removeStar(star)
+                return false
+            }
+            return true
+        })
     }
 
     terminal.turtlo.imageElement.style.top = y + "px"
@@ -162,15 +191,44 @@ function moveTurtlo() {
                     terminal.turtlo.goalX = prevX
                     terminal.turtlo.goalY = prevY
                 }, Math.random() * 1000 + 2000)
+            },
+            starCopy() {
+                let starTurtlos = []
+                const numCopies = Math.floor(Math.random() * 10) + 10
+                let speed = Math.random() * 5 + 5
+                for (let i = 0; i < numCopies; i++) {
+                    let element = document.createElement("img")
+                    element.src = terminal.turtlo.imageElement.src
+                    let directionAngle = (i / numCopies) * Math.PI * 2
+                    element.style.transform = `rotate(${directionAngle * 180 / Math.PI}deg)`
+                    element.style.opacity = 0
+                    let speedFactor = Math.random() + 0.5
+                    let directionX = Math.cos(directionAngle) * speed * speedFactor
+                    let directionY = Math.sin(directionAngle) * speed * speedFactor
+                    starTurtlos.push({
+                        element,
+                        x: terminal.turtlo.x,
+                        y: terminal.turtlo.y,
+                        directionX,
+                        directionY,
+                        speed,
+                        rotationTime: Math.random() * 1000 + 500,
+                        startOfLife: Date.now(),
+                    })
+                    element.classList.add("turtlo")
+                    TURTLO_CONTAINER.appendChild(element)
+                }
+                terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.concat(starTurtlos)
             }
         }
         let activityChances = [
-            [activities.goIntoShell,      1],
-            [activities.stickToungeOut,   3],
-            [activities.spinAround,       2],
-            [activities.spinWalkAround,   2],
-            [activities.moveToRandomSpot, 2],
-            [activities.walkout,          1],
+            [activities.goIntoShell,      2],
+            [activities.stickToungeOut,   6],
+            [activities.spinAround,       4],
+            [activities.spinWalkAround,   4],
+            [activities.moveToRandomSpot, 4],
+            [activities.walkout,          2],
+            [activities.starCopy,         1],
         ]
         let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
         let randomValue = Math.random() * totalChance
