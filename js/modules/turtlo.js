@@ -221,6 +221,7 @@ function moveTurtlo() {
                 terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.concat(starTurtlos)
             }
         }
+        
         let activityChances = [
             [activities.goIntoShell,      2],
             [activities.stickToungeOut,   6],
@@ -230,6 +231,7 @@ function moveTurtlo() {
             [activities.walkout,          2],
             [activities.starCopy,         1],
         ]
+
         let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
         let randomValue = Math.random() * totalChance
         let cumulativeChance = 0
