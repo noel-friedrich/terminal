@@ -357,6 +357,7 @@ terminal.addCommand("shoot", async function(args) {
 	}
 	
 	addEventListener("keydown", event => {
+		if (gameRunning && event.repeat) event.preventDefault()
 		if (event.repeat || !gameRunning) return
 		let key = event.key.toLowerCase()
 		let code = keyToCode(key)
@@ -367,6 +368,7 @@ terminal.addCommand("shoot", async function(args) {
 	})
 	
 	addEventListener("keyup", event => {
+		if (gameRunning && event.repeat) event.preventDefault()
 		if (event.repeat || !gameRunning) return
 		let key = event.key.toLowerCase()
 		let code = keyToCode(key)
