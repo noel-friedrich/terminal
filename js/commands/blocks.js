@@ -26,6 +26,10 @@ class Vector3d {
 		)
 	}
 
+    lerp(other, t) {
+        return this.add(other.sub(this).mul(t))
+    }
+
     distanceTo(other) {
         return this.sub(other).length
     }
@@ -119,6 +123,21 @@ class Vector3d {
     rotateUp(angle) {
         let temp = this.angleZ
         return this.setAngleZ(0).rotateY(angle).setAngleZ(temp)
+    }
+
+    setAngleUp(angle) {
+        let temp = this.angleZ
+        return this.setAngleZ(0).setAngleY(angle).setAngleZ(temp)
+    }
+
+    get angleUp() {
+        return this.setAngleZ(0).angleY
+    }
+
+    rotateRight(angle) {
+        return this.rotateZ(angle)
+        let temp = this.angleUp
+        return this.setAngleUp(0).rotateZ(angle).setAngleUp(temp)
     }
 
     apply(func) {
@@ -216,8 +235,13 @@ terminal.addCommand("blocks", async function(args) {
 	const resolution = new Vector2d(args.resolution, Math.floor(args.resolution * (9 / 16)))
 	
 	let cameraPos = new Vector3d(4.14, 3.73, 4.12)
-	let fovXDeg = args.fov / 180 * Math.PI;
-	let fovYDeg = fovXDeg * (resolution.y / resolution.x);
+	let fovXDeg = args.fov / 180 * Math.PI
+	let fovYDeg = fovXDeg * (resolution.y / resolution.x)
+    
+    let leftMostAngle = -fovXDeg / 2
+    let rightMostAngle = fovXDeg / 2
+    let topMostAngle = -fovYDeg / 2
+    let bottomMostAngle = fovYDeg / 2
 
     let cameraDir = new Vector3d(0.95, 0.28, 0.09).normalized
     let cameraSpeed = 0.1
@@ -244,7 +268,7 @@ terminal.addCommand("blocks", async function(args) {
 	
     function raycast(pos, dir, {stepScalar=0.1, maxDist=maxFieldDistance, f=field}={}) {
         const originalPos = pos.copy()
-        let normalisedDir = dir.normalized
+        let normalisedDir = dir
         let usingNormalisedDir = true
         let floored = pos.floor()
         let coveredDistance = 0
@@ -301,18 +325,36 @@ terminal.addCommand("blocks", async function(args) {
             }
             context2d.putImageData(canvasPixelData, 0, 0)
         }
+
+        let projectionPlaneTopLeft = cameraPos.add(cameraDir.rotateRight(leftMostAngle).rotateUp(topMostAngle))
+
+        let leftRef = cameraDir.add(cameraDir.rotateRight(leftMostAngle))
+        let rightRef = cameraDir.add(cameraDir.rotateRight(rightMostAngle))
+
+        let topRef = cameraDir.add(cameraDir.rotateUp(topMostAngle))
+        let bottomRef = cameraDir.add(cameraDir.rotateUp(bottomMostAngle))
+
+        let xDiff = rightRef.sub(leftRef)
+        let yDiff = bottomRef.sub(topRef)
+
+        terminal.window.xDiff = xDiff.length
+        terminal.window.yDiff = yDiff.length
+        
         for (let y = 0; y < resolution.y; y++) {
             for (let x = 0; x < resolution.x; x++) {
-                let xAngleOffset = (x / resolution.x - 0.5) * fovXDeg
-                let yAngleOffset = (y / resolution.y - 0.5) * fovYDeg
-                let rayDir = cameraDir
-                    .rotateZ(xAngleOffset)
-                    .rotateUp(yAngleOffset)
+                let xRatio = x / resolution.x
+                let yRatio = y / resolution.y
+
+                let projectionPlaneDestination = projectionPlaneTopLeft.add(
+                    xDiff.mul(xRatio)).add(yDiff.mul(yRatio))
+                let rayDir = projectionPlaneDestination.sub(cameraPos).normalized
+
                 let [raycastResult, distance] = raycast(cameraPos, rayDir, {maxDist: cameraViewDistance})
                 let color = colorFromVals(raycastResult, distance)
                 displayColors[y][x] = color
             }
         }
+
         renderData()
     }
 
@@ -396,6 +438,7 @@ terminal.addCommand("blocks", async function(args) {
     })
 
     let downListener = addEventListener("keydown", function(event) {
+        if (gameRunning && event.repeat) event.preventDefault()
         if (!gameRunning || event.repeat) return
 
         let keyCode = event.key
