@@ -82,6 +82,15 @@ class TermlRuntimeMaxRepeatError extends TermlError {
 
 }
 
+class TermlRuntimeSubstatementIndexError extends TermlError {
+
+	constructor(message) {
+		super(message)
+		this.name = TermlRuntimeError.makeName("SubstatementIndex")
+	}
+
+}
+
 class TermlValueObject {}
 
 class TermlLiteral extends TermlValueObject {
@@ -833,7 +842,7 @@ const TermlStandardModule = new TermlModule("standard", [
 			return info
 		}
 
-		function jsFunc(args) {
+		function jsFunc(args, statement) {
 			if (args.length !== funcArgs.length)
 				throw new TermlRuntimeNumArgumentsError()
 			Terml.checkType(args, args.map(() => TermlValueObject))
@@ -845,6 +854,23 @@ const TermlStandardModule = new TermlModule("standard", [
 					defStatement.container.setVariable(funcArgs[i].stringValue, args[i].value)
 				}
 			}
+
+			defStatement.container.setFunction("EXEC_SUB", new TermlFunction("EXEC_SUB", [], [], (execArgs) => {
+				Terml.checkType(execArgs, [TermlValueObject])
+				let subIndex = execArgs[0].value
+				if (subIndex < 0 || subIndex >= defStatement.substatements.length)
+					throw new TermlRuntimeSubstatementIndexError()
+				let substatement = statement.substatements[subIndex]
+				if (substatement === undefined)
+					throw new TermlRuntimeSubstatementIndexError("undefined")
+				runtime.executeStatement(substatement)
+			}))
+
+			defStatement.container.setFunction("LEN_SUB", new TermlFunction("LEN_SUB", [], [], (lenArgs) => {
+				Terml.checkType(lenArgs, [TermlVariable])
+				lenArgs[0].value = statement.substatements.length
+			}))
+
 			for (let substatement of defStatement.substatements) {
 				runtime.executeStatement(substatement)
 			}
