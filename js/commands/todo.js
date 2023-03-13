@@ -26,20 +26,20 @@ class TodoApi {
         })
     }
 
-    static async editItem(id, text_content) {
+    static async editItem(uid, text_content) {
         return await fetchWithParam(TodoApi.EDIT_ITEM_API, {
-            id: id,
+            uid: uid,
             text_content: text_content
         })
     }
 
-    static async deleteItem(id) {
-        return await fetchWithParam(TodoApi.DELETE_ITEM_API, {id: id})
+    static async deleteItem(uid) {
+        return await fetchWithParam(TodoApi.DELETE_ITEM_API, {uid: uid})
     }
 
-    static async checkItem(item_id, checked) {
+    static async checkItem(item_uid, checked) {
         return await fetchWithParam(TodoApi.CHECK_ITEM_API, {
-            item_id: item_id,
+            item_uid: item_uid,
             check_val: checked ? 1 : 0
         })
     }
@@ -57,9 +57,9 @@ terminal.addCommand("todo", async function(rawArgs) {
                 let check = (rawItem.done == 1) ? "[x]" : "[ ]"
                 let due = rawItem.due_time == "-" ? "" : ` (${rawItem.due_time})`
                 let item = `${rawItem.text_content}${due}`
-                let id = `#${rawItem.id}`
+                let uid = `#${rawItem.uid}`
                 formattedData.push({
-                    check: check, item: item, id: id
+                    check: check, item: item, uid: uid
                 })
             }
             if (formattedData.length == 0) {
@@ -69,33 +69,33 @@ terminal.addCommand("todo", async function(rawArgs) {
             for (let item of formattedData) {
                 terminal.print(item.check, Color.COLOR_1)
                 terminal.print(stringPadBack(item.item, maxItemLength + 1), Color.WHITE)
-                terminal.printLine(item.id, Color.WHITE)
+                terminal.printLine(item.uid, Color.WHITE)
             }
         },
-        "check": async function(id) {
-            await TodoApi.checkItem(id, true)
+        "check": async function(uid) {
+            await TodoApi.checkItem(uid, true)
         },
-        "uncheck": async function(id) {
-            await TodoApi.checkItem(id, false)
+        "uncheck": async function(uid) {
+            await TodoApi.checkItem(uid, false)
         },
         "add": async function(name, text, due_date="-") {
             await TodoApi.addItem(name, text, due_date)
         },
-        "edit": async function(id, text) {
-            await TodoApi.editItem(id, text)
+        "edit": async function(uid, text) {
+            await TodoApi.editItem(uid, text)
         },
-        "delete": async function(id) {
-            await TodoApi.deleteItem(id)
+        "delete": async function(uid) {
+            await TodoApi.deleteItem(uid)
         }
     }
 
     const command_args = {
         "list": ["name"],
-        "check": ["id"],
-        "uncheck": ["id"],
+        "check": ["uid"],
+        "uncheck": ["uid"],
         "add": ["name", "text", "due_date"],
-        "edit": ["id", "text"],
-        "delete": ["id"]
+        "edit": ["uid", "text"],
+        "delete": ["uid"]
     }
 
     function showAvailableCommand(command) {
