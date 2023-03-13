@@ -124,6 +124,22 @@ terminal.addCommand("stacker", async function(args) {
         }
     })
 
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout([
+            ["DROP"],
+            ["STRG+C"]
+        ])
+
+        terminal.mobileKeyboard.onkeydown = (e, keycode) => {
+            if (gameRunning == false)
+                return
+
+            if (keycode == "DROP") {
+                dropPiece()
+            }
+        }
+    }
+
     terminal.scroll()
     while (gameRunning) {
         update()
@@ -134,7 +150,6 @@ terminal.addCommand("stacker", async function(args) {
 
     await HighscoreApi.registerProcess("stacker")
     await HighscoreApi.uploadScore(score)
-
 }, {
     description: "play a stacker game",
     isGame: true

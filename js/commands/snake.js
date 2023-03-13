@@ -147,23 +147,40 @@ terminal.addCommand("snake", async function(args) {
     terminal.printLine("Use the arrow keys to move the snake.")
     terminal.scroll()
 
+    function onkeydown(keycode) {
+        if (keycode == "ArrowUp") {
+            moves.push([0, -1])
+            return true
+        } else if (keycode == "ArrowDown") {
+            moves.push([0, 1])
+            return true
+        } else if (keycode == "ArrowLeft") {
+            moves.push([-1, 0])
+            return true
+        } else if (keycode == "ArrowRight") {
+            moves.push([1, 0])
+            return true
+        }
+    }
+
     let listener = addEventListener("keydown", function(event) {
         if (event.repeat) return
         if (snakeAlive == false) return
-        if (event.key == "ArrowUp") {
-            moves.push([0, -1])
-            event.preventDefault()
-        } else if (event.key == "ArrowDown") {
-            moves.push([0, 1])
-            event.preventDefault()
-        } else if (event.key == "ArrowLeft") {
-            moves.push([-1, 0])
-            event.preventDefault()
-        } else if (event.key == "ArrowRight") {
-            moves.push([1, 0])
+        if (onkeydown(event.key)) {
             event.preventDefault()
         }
     })
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout(
+            terminal.mobileKeyboard.Layout.ARROWS
+        )
+
+        terminal.mobileKeyboard.onkeydown = function(e, keycode) {
+            if (snakeAlive == false) return
+            onkeydown(keycode)
+        }
+    }
 
     while (snakeAlive) {
         updateCells()

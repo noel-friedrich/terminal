@@ -348,11 +348,13 @@ terminal.addCommand("shoot", async function(args) {
 			case "s": return "p1-down"
 			case "d": return "p1-right"
 			case " ": return "p1-shoot"
+			case "shoot1": return "p1-shoot"
 			case "arrowup": return "p2-up"
 			case "arrowleft": return "p2-left"
 			case "arrowdown": return "p2-down"
 			case "arrowright": return "p2-right"
 			case "enter": return "p2-shoot"
+			case "shoot2": return "p2-shoot"
 		}
 	}
 	
@@ -377,6 +379,29 @@ terminal.addCommand("shoot", async function(args) {
 			event.preventDefault()
 		}
 	})
+
+	if (terminal.mobileKeyboard) {
+		terminal.mobileKeyboard.updateLayout([
+			[null, "W", null, null, "↑", null],
+			["A", "S", "D", "←", "↓", "→"],
+			["shoot1", "shoot2"],
+			["STRG+C"]
+		])
+
+		terminal.mobileKeyboard.onkeydown = (e, keyCode) => {
+			let code = keyToCode(keyCode.toLowerCase())
+			if (code) {
+				keysDown[code] = true
+			}
+		}
+
+		terminal.mobileKeyboard.onkeyup = (e, keyCode) => {
+			let code = keyToCode(keyCode.toLowerCase())
+			if (code) {
+				keysDown[code] = false
+			}
+		}
+	}
 	
 	const gameUpdate = () => {
 		if (!gameRunning) return

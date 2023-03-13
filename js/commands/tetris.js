@@ -315,6 +315,31 @@ terminal.addCommand("tetris", async function(args) {
 
     let game = new TetrisGame()
 
+    function onkeydown(keycode, e) {
+        if (keycode == "ArrowLeft") {
+            game.currFallingPiece.moveSide(-1)
+            game.draw()
+        } else if (keycode == "ArrowRight") {
+            game.currFallingPiece.moveSide(1)
+            game.draw()
+        } else if (keycode == "ArrowDown") {
+            game.update()
+            game.draw()
+            if (e)
+                e.preventDefault()
+        } else if (keycode == "ArrowUp") {
+            game.currFallingPiece.rotate()
+            game.draw()
+            if (e)
+                e.preventDefault()
+        } else if (keycode == "h" || keycode == "HOLD") {
+            game.hold()
+            game.draw()
+            if (e)
+                e.preventDefault()
+        }
+    }
+
     let keyListener = addEventListener("keydown", (e) => {
         if (game.running == false)
             return
@@ -326,26 +351,22 @@ terminal.addCommand("tetris", async function(args) {
 
         if (game.anyPieceFalling() == false)
             return
-        if (e.key == "ArrowLeft") {
-            game.currFallingPiece.moveSide(-1)
-            game.draw()
-        } else if (e.key == "ArrowRight") {
-            game.currFallingPiece.moveSide(1)
-            game.draw()
-        } else if (e.key == "ArrowDown") {
-            game.update()
-            game.draw()
-            e.preventDefault()
-        } else if (e.key == "ArrowUp") {
-            game.currFallingPiece.rotate()
-            game.draw()
-            e.preventDefault()
-        } else if (e.key == "h") {
-            game.hold()
-            game.draw()
-            e.preventDefault()
-        }
+
+        onkeydown(e.key, e)
     })
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout([
+            [null, "↑", null],
+            ["←", "↓", "→"],
+            ["HOLD"],
+            ["STRG+C"]
+        ])
+
+        terminal.mobileKeyboard.onkeydown = (e, keycode) => {
+            onkeydown(keycode)
+        }
+    }
 
     terminal.scroll()
     while (game.running) {

@@ -190,22 +190,26 @@ terminal.addCommand("labyrinth", async function(args) {
         "RIGHT": false
     }
 
+    function parseKeyCode(keycode, up) {
+        if (keycode == "ArrowUp" || keycode == "w") {
+            keyDown.UP = !up
+            return true
+        } else if (keycode == "ArrowDown" || keycode == "s") {
+            keyDown.DOWN = !up
+            return true
+        } else if (keycode == "ArrowLeft" || keycode == "a") {
+            keyDown.LEFT = !up
+            return true
+        } else if (keycode == "ArrowRight" || keycode == "d") {
+            keyDown.RIGHT = !up
+            return true
+        }
+    }
+
     let upListener = addEventListener("keyup", function(event) {
         if (!gameRunning) return
 
-        if (event.key == "ArrowUp" || event.key == "w") {
-            keyDown.UP = false
-            event.preventDefault()
-        } else if (event.key == "ArrowDown" || event.key == "s") {
-            keyDown.DOWN = false
-            event.preventDefault()
-        } else if (event.key == "ArrowLeft" || event.key == "a") {
-            keyDown.LEFT = false
-            event.preventDefault()
-        } else if (event.key == "ArrowRight" || event.key == "d") {
-            keyDown.RIGHT = false
-            event.preventDefault()
-        }
+        if (parseKeyCode(event.key, true)) event.preventDefault()
     })
 
     let downListener = addEventListener("keydown", function(event) {
@@ -218,20 +222,22 @@ terminal.addCommand("labyrinth", async function(args) {
             removeEventListener("keyup", upListener)
         }
 
-        if (event.key == "ArrowUp" || event.key == "w") {
-            keyDown.UP = true
-            event.preventDefault()
-        } else if (event.key == "ArrowDown" || event.key == "s") {
-            keyDown.DOWN = true
-            event.preventDefault()
-        } else if (event.key == "ArrowLeft" || event.key == "a") {
-            keyDown.LEFT = true
-            event.preventDefault()
-        } else if (event.key == "ArrowRight" || event.key == "d") {
-            keyDown.RIGHT = true
-            event.preventDefault()
-        }
+        if (parseKeyCode(event.key, false)) event.preventDefault()
     })
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout(
+            terminal.mobileKeyboard.Layout.ARROWS
+        )
+
+        terminal.mobileKeyboard.onkeydown = function(event, keyCode) {
+            parseKeyCode(keyCode, false)
+        }
+
+        terminal.mobileKeyboard.onkeyup = function(event, keyCode) {
+            parseKeyCode(keyCode, true)
+        }
+    }
 
     function processInput() {
         if (keyDown.UP) moveForward()

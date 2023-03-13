@@ -20,8 +20,8 @@ class KeyboardLayout {
     static get ARROWS() {
         return [
             [null, "↑", null],
-            ["←", null, "→"],
-            [null, "↓", null]
+            ["←", "↓", "→"],
+            ["STRG+C"]
         ]
     }
 
@@ -122,6 +122,7 @@ class MobileKeyboard {
 
     clearLayout() {
         this.container.innerHTML = ""
+        this.buttons = []
     }
 
     makeButton(text) {
@@ -138,6 +139,11 @@ class MobileKeyboard {
         button.style.userSelect = "none"
         button.style.height = "2.5rem"
         button.style.outline = "1px solid black"
+        button.dataset.keyCode = this.getKeyCode(text)
+
+        if (text === null) {
+            button.style.visibility = "hidden"
+        }
 
         if (text === "STRG+C") {
             button.onclick = () => {
@@ -146,13 +152,19 @@ class MobileKeyboard {
             }
         }
 
+        button.addEventListener("contextmenu", e => {
+            e.preventDefault()
+        })
+
         button.textContent = text
         this.buttons.push(button)
         return button
     }
 
     addEventListeners(event, callback) {
-        this.buttons.map(button => button.addEventListener(event, callback))
+        this.buttons.map(button => button.addEventListener(event, e => {
+            callback(e, button.dataset.keyCode)
+        }))
     }
 
     get oninput() {
@@ -172,21 +184,43 @@ class MobileKeyboard {
          || key == "ArrowUp" || key == "ArrowDown" || key == "ArrowLeft" || key == "ArrowRight"
     }
 
+    getKeyCode(key) {
+        if (key == "↑") key = "ArrowUp"
+        if (key == "↓") key = "ArrowDown"
+        if (key == "←") key = "ArrowLeft"
+        if (key == "→") key = "ArrowRight"
+        if (key == "<") key = "Backspace"
+        if (key == "Delete") key = "Backspace"
+        return key
+    }
+
     set oninput(callback) {
         this._oninput = callback
         this.addEventListeners("click", event => {
             let key = event.target.textContent
-            if (key == "↑") key = "ArrowUp"
-            if (key == "↓") key = "ArrowDown"
-            if (key == "←") key = "ArrowLeft"
-            if (key == "→") key = "ArrowRight"
-            if (key == "<") key = "Backspace"
-            if (key == "Delete") key = "Backspace"
-            event.key = key
+            event.key = this.getKeyCode(key)
             event.keyValue = this.getKeyValue(key)
             event.isFunctionKey = this.isFunctionKey(key)
             callback(event)
         })
+    }
+
+    get onkeyup() {
+        return this._onkeyup
+    }
+
+    set onkeyup(callback) {
+        this._onkeyup = callback
+        this.addEventListeners("touchend", callback)
+    }
+
+    get onkeydown() {
+        return this._onkeydown
+    }
+
+    set onkeydown(callback) {
+        this._onkeydown = callback
+        this.addEventListeners("touchstart", callback)
     }
 
     parseLayout(layout) {
@@ -236,3 +270,14 @@ class MobileKeyboard {
 }
 
 terminal.mobileKeyboard = new MobileKeyboard()
+
+terminal.window.addEventListener("keydown", event => {
+    let key = event.key
+    if (key == " ") key = "Space"
+    for (let button of terminal.mobileKeyboard.buttons) {
+        if (button.dataset.keyCode === key) {
+            button.click()
+            event.preventDefault()
+        }
+    }
+})

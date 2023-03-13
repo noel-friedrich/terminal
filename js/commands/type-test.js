@@ -176,6 +176,25 @@ terminal.addCommand("type-test", async function(args) {
             advanceCharIndex(success)
         }
     })
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout([
+            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+            ["Z", "X", "C", "V", "B", "N", "M"],
+            ["Space"],
+            ["STRG+C"]
+        ])
+
+        terminal.mobileKeyboard.onkeydown = (e, key) => {
+            let upperKey = key.toUpperCase()
+            if (upperKey == "SPACE") upperKey = " "
+            if (chars.includes(upperKey)) {
+                let success = upperKey == text[typeIndex]
+                advanceCharIndex(success)
+            }
+        }
+    }
     
     let seconds = 0
     let cpm = 0

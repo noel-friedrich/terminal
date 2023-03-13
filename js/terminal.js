@@ -1195,6 +1195,7 @@ class Terminal {
         addToHistory = this._createDefaultAddToHistoryFunc(),
         inputCleaning=!this.commandIsExecuting,
         inputSuggestions=!this.commandIsExecuting,
+        mobileLayout=undefined
     }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
@@ -1384,7 +1385,11 @@ class Terminal {
             })
 
             if (this.mobileKeyboard) {
-                this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.DEFAULT)
+                if (mobileLayout === undefined)
+                    this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.DEFAULT)
+                else
+                    this.mobileKeyboard.updateLayout(mobileLayout)
+
                 this.mobileKeyboard.show()
                 this.mobileKeyboard.oninput = event => {
                     if (event.key == "Backspace")
@@ -1410,7 +1415,7 @@ class Terminal {
     async acceptPrompt(msg, standardYes=true) {
         const nope = () => {throw new IntendedError("Nope")}
         let extraText = ` [${standardYes ? "Y/n" : "y/N"}] `
-        let text = await this.prompt(msg + extraText)
+        let text = await this.prompt(msg + extraText, {mobileLayout: [["y", "n"], ["<", "Enter"]]})
 
         if (text == "" && standardYes) return true
         if (text.toLowerCase().startsWith("y")) return true

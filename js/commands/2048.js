@@ -85,112 +85,122 @@ terminal.addCommand("2048", async function(args) {
            copy.push(line)
        }
        return copy
-   }
+    }
 
-   let score = 0
+    let score = 0
 
-   function shift(d, tempCells) {
-       let movedCount = 0
-       let countScore = tempCells == undefined
-       tempCells ??= cells
-       for (let i = 0; i < 4; i++) {
-           for (let x = 0; x < 4; x++) {
-               for (let y = 0; y < 4; y++) {
-                   let newX = x + d[0]
-                   let newY = y + d[1]
-                   if (Math.max(newX, newY) > 3 || Math.min(newX, newY) < 0)
-                       continue
-                   if (tempCells[newY][newX] == 0) {
-                       tempCells[newY][newX] = tempCells[y][x]
-                       tempCells[y][x] = 0
-                       movedCount++
-                   }
-                   if (tempCells[newY][newX] == tempCells[y][x]) {
-                       tempCells[newY][newX] *= 2
-                       tempCells[y][x] = 0
-                       movedCount++
-                       if (countScore)
-                           score += tempCells[newY][newX]
-                   }
-               }
-           }
-       }
-       return movedCount
-   }
+    function shift(d, tempCells) {
+        let movedCount = 0
+        let countScore = tempCells == undefined
+        tempCells ??= cells
+        for (let i = 0; i < 4; i++) {
+            for (let x = 0; x < 4; x++) {
+                for (let y = 0; y < 4; y++) {
+                    let newX = x + d[0]
+                    let newY = y + d[1]
+                    if (Math.max(newX, newY) > 3 || Math.min(newX, newY) < 0)
+                        continue
+                    if (tempCells[newY][newX] == 0) {
+                        tempCells[newY][newX] = tempCells[y][x]
+                        tempCells[y][x] = 0
+                        movedCount++
+                    }
+                    if (tempCells[newY][newX] == tempCells[y][x]) {
+                        tempCells[newY][newX] *= 2
+                        tempCells[y][x] = 0
+                        movedCount++
+                        if (countScore)
+                            score += tempCells[newY][newX]
+                    }
+                }
+            }
+        }
+        return movedCount
+    }
 
-   function checkPossible() {
-       let movedCount = 0
-       movedCount += shift([1, 0], cellsCopy())
-       movedCount += shift([-1, 0], cellsCopy())
-       movedCount += shift([0, 1], cellsCopy())
-       movedCount += shift([0, -1], cellsCopy())
-       return movedCount > 0
-   }
+    function checkPossible() {
+        let movedCount = 0
+        movedCount += shift([1, 0], cellsCopy())
+        movedCount += shift([-1, 0], cellsCopy())
+        movedCount += shift([0, 1], cellsCopy())
+        movedCount += shift([0, -1], cellsCopy())
+        return movedCount > 0
+    }
 
-   function checkWin() {
-       for (let y = 0; y < 4; y++) {
-           for (let x = 0; x < 4; x++) {
-               if (cells[y][x] == 2048) {
-                   return true
-               }
-           }
-       }
-       return false
-   }
+    function checkWin() {
+        for (let y = 0; y < 4; y++) {
+            for (let x = 0; x < 4; x++) {
+                if (cells[y][x] == 2048) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
-   let gameRunning = true
+    let gameRunning = true
 
-   let listener = addEventListener("keydown", function(event) {
-       if (event.repeat) return
-       if (gameRunning == false) return
-       let combinedCount = 0
-       if (event.key == "ArrowUp") {
-           combinedCount += shift([0, -1])
-           event.preventDefault()
-       } else if (event.key == "ArrowDown") {
-           combinedCount += shift([0, 1])
-           event.preventDefault()
-       } else if (event.key == "ArrowLeft") {
-           combinedCount += shift([-1, 0])
-           event.preventDefault()
-       } else if (event.key == "ArrowRight") {
-           combinedCount += shift([1, 0])
-           event.preventDefault()
-       } else if (event.key == "c" && event.ctrlKey) {
-           gameRunning = false
-           removeEventListener("keydown", listener)
-           return
-       }
-       if (combinedCount > 0) {
-           addRandomCell()
-       }
-       draw()
-       if (checkWin())
-           gameRunning = false
-   })
+    function keydown(event) {
 
-   terminal.scroll()
-   terminal.printLine("  Use the arrow keys to move the tiles.")
-   terminal.print("  Your Score: ")
-   let scoreElement = terminal.print("0", Color.COLOR_2)
-   terminal.addLineBreak()
+        if (event.repeat) return
+        if (gameRunning == false) return
+        let combinedCount = 0
+        if (event.key == "ArrowUp") {
+            combinedCount += shift([0, -1])
+            event.preventDefault()
+        } else if (event.key == "ArrowDown") {
+            combinedCount += shift([0, 1])
+            event.preventDefault()
+        } else if (event.key == "ArrowLeft") {
+            combinedCount += shift([-1, 0])
+            event.preventDefault()
+        } else if (event.key == "ArrowRight") {
+            combinedCount += shift([1, 0])
+            event.preventDefault()
+        } else if (event.key == "c" && event.ctrlKey) {
+            gameRunning = false
+            removeEventListener("keydown", listener)
+            return
+        }
+        if (combinedCount > 0) {
+            addRandomCell()
+        }
+        draw()
+        if (checkWin())
+            gameRunning = false
+    }
 
-   while (gameRunning) {
-       await sleep(100)
-       if (!checkPossible()) {
-           gameRunning = false
-       }
-   }
+    let listener = addEventListener("keydown", keydown)
 
-   removeEventListener("keydown", listener)
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout(
+            terminal.mobileKeyboard.Layout.ARROWS
+        )
+        terminal.mobileKeyboard.oninput = keydown
+    }
 
-   if (checkWin() == false)
-       terminal.printLine(`  You lost!`, Color.COLOR_1)
-   else
-       terminal.printLine(`  You won!`, Color.COLOR_1)
+    terminal.scroll()
+    terminal.printLine("  Use the arrow keys to move the tiles.")
+    terminal.print("  Your Score: ")
+    let scoreElement = terminal.print("0", Color.COLOR_2)
+    terminal.addLineBreak()
 
-   await HighscoreApi.registerProcess("2048")
-   await HighscoreApi.uploadScore(score)
+    while (gameRunning) {
+        await sleep(100)
+        if (!checkPossible()) {
+            gameRunning = false
+        }
+    }
+
+    removeEventListener("keydown", listener)
+
+    if (checkWin() == false)
+        terminal.printLine(`  You lost!`, Color.COLOR_1)
+    else
+        terminal.printLine(`  You won!`, Color.COLOR_1)
+
+    await HighscoreApi.registerProcess("2048")
+    await HighscoreApi.uploadScore(score)
 }, {
    description: "play a game of 2048",
    isGame: true

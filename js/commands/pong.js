@@ -17,6 +17,7 @@ terminal.addCommand("pong", async function(args) {
         terminal.addLineBreak()
         elements.push(elementRow)
     }
+
     terminal.printLine("+" + "-".repeat(fieldSize.x * 2 + 1) + "+")
     terminal.print("| Player-score: ")
     let playerScoreOutput = terminal.print("0")
@@ -92,6 +93,44 @@ terminal.addCommand("pong", async function(args) {
         }
         drawPaddles()
     })
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout([
+            ["↑"],
+            ["↓"],
+            ["STRG+C"]
+        ])
+
+        let goingUp = false
+        let goingDown = false
+
+        terminal.mobileKeyboard.onkeydown = (e, keyCode) => {
+            if (keyCode == "ArrowUp") {
+                goingUp = true
+            } else if (keyCode == "ArrowDown") {
+                goingDown = true
+            }
+        }
+
+        terminal.mobileKeyboard.onkeyup = (e, keyCode) => {
+            if (keyCode == "ArrowUp") {
+                goingUp = false
+            } else if (keyCode == "ArrowDown") {
+                goingDown = false
+            }
+        }
+
+        function loop() {
+            if (goingUp) {
+                playerPaddlePos = Math.max(0, playerPaddlePos - 1)
+            } else if (goingDown) {
+                playerPaddlePos = Math.min(playerPaddlePos + 1, fieldSize.y - paddleWidth - 1)
+            }
+            drawPaddles()
+        }
+
+        setInterval(loop, 1000 / 30)
+    }
     
     let playerScore = 0
     let enemyScore = 0
