@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 151 commands such as `ls`, `cd` and of course `cowsay`
+* 152 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -99,6 +99,7 @@ The following list can also be viewed using the `whatis *` command
 | `f` | calculate friendship score with a friend |
 | `factor` | print the prime factors of a number |
 | `fakechat` | fake a whatsapp chat conversation |
+| `fibo` | Prints the Fibonacci sequence |
 | `fizzbuzz` | print the fizzbuzz sequence |
 | `flaci-to-turing` | Converts a flaci.com JSON File of a turing machine to a turing machine file |
 | `font` | change the font of the terminal |
