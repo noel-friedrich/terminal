@@ -843,8 +843,10 @@ class Terminal {
     parentNode = document.getElementById("terminal")
     containerNode = document.querySelector(".terminal-container")
     commandListURL = "js/load-commands.js"
+    mobileKeyboardURL = "js/keyboard.js"
     defaultFileystemURL = "js/defaultFilesystem.js"
 
+    mobileKeyboard = null
     currInputElement = null
     currSuggestionElement = null
     currInputContainer = null
@@ -1176,6 +1178,18 @@ class Terminal {
         }
     }
 
+    focusInput({element=null, options={}}={}) {
+        if (this.mobileKeyboard) {
+            this.mobileKeyboard.show()
+            return
+        }
+
+        let input = element ?? this.currInputElement
+        if (input) {
+            input.focus(options)
+        }
+    }
+
     async prompt(msg, {password=false, affectCorrectness=false,
         getHistory = this._createDefaultGetHistoryFunc(),
         addToHistory = this._createDefaultAddToHistoryFunc(),
@@ -1207,6 +1221,14 @@ class Terminal {
             input.spellcheck = "false"
             input.name = "terminal-input"
 
+            if (this.mobileKeyboard) {
+                input.addEventListener("focus", () => {
+                    this.mobileKeyboard.show()
+                })
+                input.readOnly = true
+                input.inputMode = "none"
+            }
+
             // for screen readers (bots) only
             let label = document.createElement("label")
             label.className = "terminal-input-label"
@@ -1232,12 +1254,12 @@ class Terminal {
             return this.window.innerWidth - rect.left * 2
         }
         inputContainer.style.width = `${inputMinWidth()}px`
-        inputElement.focus({preventScroll: true})
 
         this.scroll()
         this.currInputElement = inputElement
         this.currSuggestionElement = suggestionElement
         this.currInputContainer = inputContainer
+        this.focusInput({options: {preventScroll: true}})
 
         return new Promise(resolve => {
             let inputValue = ""
@@ -1328,13 +1350,15 @@ class Terminal {
                 }
             }
 
-            inputElement.addEventListener("keydown", async event => {
-                if (event.key.length == 1) // a, b, c, " "
-                    inputValue = inputElement.value + event.key
-                else if (event.key == "Backspace")
-                    inputValue = inputElement.value.slice(0, -1)
-                else // Tab, Enter, etc.
-                    inputValue = inputElement.value
+            inputElement.onkeydown = async (event, addToVal=true) => {
+                if (addToVal) {
+                    if (event.key.length == 1) // a, b, c, " "
+                        inputValue = inputElement.value + event.key
+                    else if (event.key == "Backspace")
+                        inputValue = inputElement.value.slice(0, -1)
+                    else // Tab, Enter, etc.
+                        inputValue = inputElement.value
+                }
 
                 if (keyListeners[event.key])
                     keyListeners[event.key](event)
@@ -1352,12 +1376,32 @@ class Terminal {
                 // (textLength + 1) to leave room for the next character
                 let inputWidth = (textLength + 1) * this.charWidth
                 inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
-            })
+            }
 
             addEventListener("resize", event => {
                 let inputWidth = (inputElement.value.length + 1) * this.charWidth
                 inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
             })
+
+            if (this.mobileKeyboard) {
+                this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.DEFAULT)
+                this.mobileKeyboard.show()
+                this.mobileKeyboard.oninput = event => {
+                    if (event.key == "Backspace")
+                        inputElement.value = inputElement.value.slice(0, -1)
+
+                    if (!event.isFunctionKey) {
+                        inputElement.value += event.keyValue
+                    }
+
+                    inputValue = inputElement.value
+
+                    inputElement.onkeydown(event, false)
+                    inputElement.oninput(event)
+
+                    this.scroll()
+                }
+            }
 
         })
 
@@ -1538,6 +1582,10 @@ class Terminal {
     async input(text, testMode=false) {
         if (!testMode)
             this.log(`Inputted Text: "${text}"`)
+
+        if (this.mobileKeyboard) {
+            this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.CMD_RUNNING)
+        }
 
         let tokens = TerminalParser.tokenize(text)
         if (tokens.length == 0) {
@@ -1783,6 +1831,10 @@ class Terminal {
         await this._loadScript(this.commandListURL)
         await this.fileSystem.load()
 
+        if (this.isMobile) {
+            await this._loadScript(this.mobileKeyboardURL)
+        }
+
         if (this.isUrlParamSet("404")) {
             let error404 = await this.getCommand("error404")
             error404.run()
@@ -1793,6 +1845,15 @@ class Terminal {
                 if (i < this.data.startupCommands.length - 1)
                     this.addLineBreak()
             }
+
+            if (this.isMobile) {
+                this.print("Mobile keyboard active. ")
+                this.printCommand("click to disable", "mobile off")
+            } else if (this.autoIsMobile) {
+                this.print("Mobile keyboard inactive. ")
+                this.printCommand("click to enable", "mobile on")
+            }
+
             this.expectingFinishCommand = true
             this.finishCommand()
         }
@@ -1808,6 +1869,18 @@ class Terminal {
         this.startTime = otherTerminal.startTime 
         this.hasInitted = true
         this.cleanLogBuffer()
+    }
+
+    get autoIsMobile() {
+        return /Mobi/i.test(window.navigator.userAgent)
+    }
+
+    get isMobile() {
+        if (terminal.data.mobile === true)
+            return true
+        if (terminal.data.mobile === false)
+            return false
+        return this.autoIsMobile
     }
 
     async clear(addPrompt=false) {
@@ -1880,7 +1953,7 @@ class Terminal {
 
             // if the user has selected text, don't focus the input element
             if (this.currInputElement && !getSelectedText())
-                this.currInputElement.focus()
+                this.focusInput()
         })
 
         // save the keys pressed by the user

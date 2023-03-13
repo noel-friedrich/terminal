@@ -1,0 +1,238 @@
+class KeyboardLayout {
+
+    static get DEFAULT() {
+        return [
+            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+            ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+            ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+            ["z", "x", "c", "v", "b", "n", "m", "<"],
+            ["Tab", "Space", "Enter"]
+        ]
+    }
+
+    static get NUMBERS() {
+        return [
+            ["1", "2", "3", "4", "5"],
+            ["6", "7", "8", "9", "0"]
+        ]
+    }
+
+    static get ARROWS() {
+        return [
+            [null, "↑", null],
+            ["←", null, "→"],
+            [null, "↓", null]
+        ]
+    }
+
+    static get GAME() {
+        return [
+            [null, "↑", null, null, "W", null],
+            ["←", "↓", "→", "A", "S", "D"],
+        ]
+    }
+
+    static get CMD_RUNNING() {
+        return [
+            ["STRG+C"]
+        ]
+    }
+
+}
+
+class MobileKeyboard {
+
+    Layout = KeyboardLayout
+
+    createContainer() {
+        let container = document.createElement("div")
+        container.id = "custom-keyboard"
+        container.style.position = "fixed"
+        container.style.bottom = "0"
+        container.style.left = "0"
+        container.style.width = "100%"
+        container.style.height = "auto"
+        container.style.display = "none"
+        container.style.zIndex = "1000"
+        container.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
+        container.style.color = "white"
+        container.style.padding = "1rem"
+        container.style.boxSizing = "border-box"
+        container.style.display = "none"
+        return container
+    }
+
+    createToggleButton() {
+        let button = document.createElement("button")
+        button.style.position = "absolute"
+        button.style.top = "0"
+        button.style.right = "0"
+        button.style.width = "2.5rem"
+        button.style.height = "2.5rem"
+        button.style.border = "none"
+        button.style.backgroundColor = "transparent"
+        button.style.color = "white"
+        button.style.fontSize = "1.5rem"
+        button.style.fontFamily = "monospace"
+        button.style.outline = "none"
+        button.style.cursor = "pointer"
+        button.style.userSelect = "none"
+        button.style.zIndex = "1001"
+
+        button.textContent = "⌨"
+
+        terminal.document.body.appendChild(button)
+
+        button.addEventListener("click", () => {
+            if (this.isHidden) {
+                this.show()
+            } else {
+                this.hide()
+            }
+        })
+
+        return button
+    }
+
+    get isHidden() {
+        return this.container.style.display == "none"
+    }
+
+    get clientHeight() {
+        return this.container.clientHeight
+    }
+
+    get clientWidth() {
+        return this.container.clientWidth
+    }
+
+    constructor(layout) {
+        this.container = this.createContainer()
+        this.toggleButton = this.createToggleButton()
+        this.layout = layout || KeyboardLayout.DEFAULT
+        this.buttons = []
+        this.parseLayout(this.layout)
+        terminal.document.body.appendChild(this.container)
+    }
+
+    updateLayout(layout) {
+        this.layout = layout
+        this.parseLayout(layout)
+    }
+
+    clearLayout() {
+        this.container.innerHTML = ""
+    }
+
+    makeButton(text) {
+        let button = document.createElement("button")
+        button.style.width = "100%"
+        button.style.height = "100%"
+        button.style.border = "none"
+        button.style.backgroundColor = "#333"
+        button.style.color = "white"
+        button.style.fontSize = "1.5rem"
+        button.style.fontFamily = "monospace"
+        button.style.outline = "none"
+        button.style.cursor = "pointer"
+        button.style.userSelect = "none"
+        button.style.height = "2.5rem"
+        button.style.outline = "1px solid black"
+
+        if (text === "STRG+C") {
+            button.onclick = () => {
+                console.log("STRG+C")
+                terminal.interrupt()
+            }
+        }
+
+        button.textContent = text
+        this.buttons.push(button)
+        return button
+    }
+
+    addEventListeners(event, callback) {
+        this.buttons.map(button => button.addEventListener(event, callback))
+    }
+
+    get oninput() {
+        return this._oninput
+    }
+
+    getKeyValue(key) {
+        if (key == "Enter") return "\n"
+        if (key == "Space") return " "
+        if (key == "Delete") return "\b"
+        if (key == "Tab") return "\t"
+        return key
+    }
+
+    isFunctionKey(key) {
+        return key == "Enter" || key == "Delete" || key == "Tab" || key == "Backspace" || key == "<"
+         || key == "ArrowUp" || key == "ArrowDown" || key == "ArrowLeft" || key == "ArrowRight"
+    }
+
+    set oninput(callback) {
+        this._oninput = callback
+        this.addEventListeners("click", event => {
+            let key = event.target.textContent
+            if (key == "↑") key = "ArrowUp"
+            if (key == "↓") key = "ArrowDown"
+            if (key == "←") key = "ArrowLeft"
+            if (key == "→") key = "ArrowRight"
+            if (key == "<") key = "Backspace"
+            if (key == "Delete") key = "Backspace"
+            event.key = key
+            event.keyValue = this.getKeyValue(key)
+            event.isFunctionKey = this.isFunctionKey(key)
+            callback(event)
+        })
+    }
+
+    parseLayout(layout) {
+        this.clearLayout()
+        this.container.style.gridTemplateRows = `repeat(${layout.length}, 1fr)`
+        layout.map(row => {
+            let rowElement = document.createElement("div")
+            rowElement.style.display = "grid"
+            rowElement.style.gridTemplateColumns = `repeat(${row.length}, 1fr)`
+            rowElement.style.borderRadius = "0.5em"
+            rowElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
+            rowElement.style.color = "white"
+            rowElement.style.fontFamily = "monospace"
+            rowElement.style.outline = "none"
+            rowElement.style.cursor = "pointer"
+            rowElement.style.userSelect = "none"
+            rowElement.style.paddingTop = "0"
+            rowElement.style.paddingBottom = "0"
+            rowElement.style.webkitTapHighlightColor = "transparent"
+
+            rowElement.buttons = row.map(text => {
+                let button = this.makeButton(text)
+                return button
+            })
+            
+            return rowElement
+        }).forEach(row => {
+            row.buttons.forEach(button => {
+                row.appendChild(button)
+            })
+            this.container.appendChild(row)
+        })
+    }
+
+    show() {
+        this.container.style.display = "block"
+        terminal.parentNode.style.paddingBottom = this.clientHeight + 30 + "px"  
+        terminal.scroll()
+        return this
+    }
+
+    hide() {
+        this.container.style.display = "none"
+        return this
+    }
+
+}
+
+terminal.mobileKeyboard = new MobileKeyboard()

@@ -367,6 +367,7 @@ class TerminalData {
         "history": "[]",
         "storageSize": 300000,
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
+        "mobile": "0",
     }
 
     localStoragePrepend = "terminal-"
@@ -446,6 +447,21 @@ class TerminalData {
     set history(history) {
         this.set("history", JSON.stringify(history))
     }
+    
+    get mobile() {
+        let value = this.get("mobile")
+        if (value === "0") return undefined
+        if (value === "1") return true
+        if (value === "2") return false
+        return null
+    }
+
+    set mobile(mobile) {
+        if (mobile === undefined) mobile = "0"
+        if (mobile === true) mobile = "1"
+        if (mobile === false) mobile = "2"
+        this.set("mobile", mobile)
+    }
 
     get storageSize() {
         return this.get("storageSize")
@@ -479,6 +495,7 @@ class TerminalData {
         this.font = this.font
         this.accentColor1 = this.accentColor1
         this.accentColor2 = this.accentColor2
+        this.mobile = this.mobile
     }
 
     resetProperty(key) {
@@ -498,6 +515,7 @@ class TerminalData {
         this.history = this.history
         this.startupCommands = this.startupCommands
         this.storageSize = this.storageSize
+        this.mobile = this.mobile
     }
 
 }
