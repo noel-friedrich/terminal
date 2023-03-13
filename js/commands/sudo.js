@@ -11,10 +11,20 @@ terminal.addCommand("sudo", async function() {
         throw new Error("Password must not contain lowercase letters")
     if (password.match(/[0-9]/))
         throw new Error("Password must not contain numbers")
-    if (password.match(/[^a-zA-Z0-9]/))
-        throw new Error("Password must not contain special characters")
 
-    throw new Error("Password must not be a password")
+    function containsRepeatedCharacters(str) {
+        for (let char of str) {
+            if (str.replace(char, "").includes(char))
+                return true
+        }
+        return false
+    }
+
+    if (containsRepeatedCharacters(password))
+        throw new Error("Password must not contain repeated characters")
+
+    terminal.printSuccess("Password accepted")
+    terminal.printLine("You are now officially a hacker!!")
 }, {
     description: "try to use sudo",
     args: ["**"]
