@@ -46,6 +46,8 @@ function resetTurtlo() {
         inHugeSpin: () => ((terminal.turtlo.lastHugeSpinTime + terminal.turtlo.hugeSpinDuration) > Date.now()),
         starTurtlos: [],
         hasStars: () => (terminal.turtlo.starTurtlos.length > 0),
+        mouseStartX: 0,
+        mouseStartY: 0,
     }
 }
 
@@ -124,6 +126,97 @@ function drawTurtlo() {
     terminal.turtlo.imageElement.style.transform = `rotate(${terminal.turtlo.rot}deg)`
 }
 
+function randomTurtloActivity() {
+    let activities = {
+        goIntoShell() {
+            terminal.turtlo.lastShellTime = Date.now()
+            terminal.turtlo.shellDuration = 5000 + 8000 * Math.random()
+        },
+        stickToungeOut() {
+            terminal.turtlo.lastToungeTime = Date.now()
+            terminal.turtlo.toungeDuration = 1000 + 1000 * Math.random()
+        },
+        moveToRandomSpot() {
+            terminal.turtlo.goalX = Math.random() * terminal.window.innerWidth
+            terminal.turtlo.goalY = Math.random() * terminal.window.innerHeight
+        },
+        spinAround() {
+            terminal.turtlo.lastSpinTime = Date.now()
+            terminal.turtlo.spinDuration = 300 + Math.random() * 2000
+            terminal.turtlo.prevRot = terminal.turtlo.rot
+        },
+        spinWalkAround() {
+            terminal.turtlo.lastHugeSpinTime = Date.now()
+            terminal.turtlo.hugeSpinDuration = 5000 + Math.random() * 5000
+            terminal.turtlo.spinAmountFactor = Math.random()
+            terminal.turtlo.prevRot = terminal.turtlo.rot
+            terminal.turtlo.radiusFactor = (0.4 + Math.random() * 0.5)
+            terminal.turtlo.radiusStart = Math.random() * Math.PI * 2
+        },
+        walkout() {
+            let prevX = terminal.turtlo.x
+            let prevY = terminal.turtlo.y
+            terminal.turtlo.goalX += (Math.random() - 0.5) * 2 * 300
+            terminal.turtlo.goalX = -terminal.turtlo.imageElement.clientWidth * 2 - 100
+            setTimeout(function() {
+                if (terminal.turtlo.x > 0) return
+                terminal.turtlo.x = terminal.window.innerWidth + 100
+                terminal.turtlo.goalX = prevX
+                terminal.turtlo.goalY = prevY
+            }, Math.random() * 1000 + 2000)
+        },
+        starCopy() {
+            let starTurtlos = []
+            const numCopies = Math.floor(Math.random() * 10) + 10
+            let speed = Math.random() * 5 + 5
+            for (let i = 0; i < numCopies; i++) {
+                let element = document.createElement("img")
+                element.src = terminal.turtlo.imageElement.src
+                let directionAngle = (i / numCopies) * Math.PI * 2
+                element.style.transform = `rotate(${directionAngle * 180 / Math.PI}deg)`
+                element.style.opacity = 0
+                let speedFactor = Math.random() + 0.5
+                let directionX = Math.cos(directionAngle) * speed * speedFactor
+                let directionY = Math.sin(directionAngle) * speed * speedFactor
+                starTurtlos.push({
+                    element,
+                    x: terminal.turtlo.x,
+                    y: terminal.turtlo.y,
+                    directionX,
+                    directionY,
+                    speed,
+                    rotationTime: Math.random() * 1000 + 500,
+                    startOfLife: Date.now(),
+                })
+                element.classList.add("turtlo")
+                TURTLO_CONTAINER.appendChild(element)
+            }
+            terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.concat(starTurtlos)
+        }
+    }
+    
+    let activityChances = [
+        [activities.goIntoShell,      2],
+        [activities.stickToungeOut,   6],
+        [activities.spinAround,       4],
+        [activities.spinWalkAround,   4],
+        [activities.moveToRandomSpot, 4],
+        [activities.walkout,          2],
+        [activities.starCopy,         1],
+    ]
+
+    let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
+    let randomValue = Math.random() * totalChance
+    let cumulativeChance = 0
+    for (let [activity, chance] of activityChances) {
+        cumulativeChance += chance
+        if (cumulativeChance > randomValue) {
+            activity()
+            break
+        }
+    }
+}
+
 function moveTurtlo() {
     if (!terminal.turtlo.inShell()) {
         let xDiff = terminal.turtlo.goalX - terminal.turtlo.x
@@ -154,94 +247,7 @@ function moveTurtlo() {
             return
         if (terminal.turtlo.hasToungeOut() || terminal.turtlo.inShell() || terminal.turtlo.inSpin() || terminal.turtlo.inHugeSpin())
             return
-        let activities = {
-            goIntoShell() {
-                terminal.turtlo.lastShellTime = Date.now()
-                terminal.turtlo.shellDuration = 5000 + 8000 * Math.random()
-            },
-            stickToungeOut() {
-                terminal.turtlo.lastToungeTime = Date.now()
-                terminal.turtlo.toungeDuration = 1000 + 1000 * Math.random()
-            },
-            moveToRandomSpot() {
-                terminal.turtlo.goalX = Math.random() * terminal.window.innerWidth
-                terminal.turtlo.goalY = Math.random() * terminal.window.innerHeight
-            },
-            spinAround() {
-                terminal.turtlo.lastSpinTime = Date.now()
-                terminal.turtlo.spinDuration = 300 + Math.random() * 2000
-                terminal.turtlo.prevRot = terminal.turtlo.rot
-            },
-            spinWalkAround() {
-                terminal.turtlo.lastHugeSpinTime = Date.now()
-                terminal.turtlo.hugeSpinDuration = 5000 + Math.random() * 5000
-                terminal.turtlo.spinAmountFactor = Math.random()
-                terminal.turtlo.prevRot = terminal.turtlo.rot
-                terminal.turtlo.radiusFactor = (0.4 + Math.random() * 0.5)
-                terminal.turtlo.radiusStart = Math.random() * Math.PI * 2
-            },
-            walkout() {
-                let prevX = terminal.turtlo.x
-                let prevY = terminal.turtlo.y
-                terminal.turtlo.goalX += (Math.random() - 0.5) * 2 * 300
-                terminal.turtlo.goalX = -terminal.turtlo.imageElement.clientWidth * 2 - 100
-                setTimeout(function() {
-                    if (terminal.turtlo.x > 0) return
-                    terminal.turtlo.x = terminal.window.innerWidth + 100
-                    terminal.turtlo.goalX = prevX
-                    terminal.turtlo.goalY = prevY
-                }, Math.random() * 1000 + 2000)
-            },
-            starCopy() {
-                let starTurtlos = []
-                const numCopies = Math.floor(Math.random() * 10) + 10
-                let speed = Math.random() * 5 + 5
-                for (let i = 0; i < numCopies; i++) {
-                    let element = document.createElement("img")
-                    element.src = terminal.turtlo.imageElement.src
-                    let directionAngle = (i / numCopies) * Math.PI * 2
-                    element.style.transform = `rotate(${directionAngle * 180 / Math.PI}deg)`
-                    element.style.opacity = 0
-                    let speedFactor = Math.random() + 0.5
-                    let directionX = Math.cos(directionAngle) * speed * speedFactor
-                    let directionY = Math.sin(directionAngle) * speed * speedFactor
-                    starTurtlos.push({
-                        element,
-                        x: terminal.turtlo.x,
-                        y: terminal.turtlo.y,
-                        directionX,
-                        directionY,
-                        speed,
-                        rotationTime: Math.random() * 1000 + 500,
-                        startOfLife: Date.now(),
-                    })
-                    element.classList.add("turtlo")
-                    TURTLO_CONTAINER.appendChild(element)
-                }
-                terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.concat(starTurtlos)
-            }
-        }
-        
-        let activityChances = [
-            [activities.goIntoShell,      2],
-            [activities.stickToungeOut,   6],
-            [activities.spinAround,       4],
-            [activities.spinWalkAround,   4],
-            [activities.moveToRandomSpot, 4],
-            [activities.walkout,          2],
-            [activities.starCopy,         1],
-        ]
-
-        let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
-        let randomValue = Math.random() * totalChance
-        let cumulativeChance = 0
-        for (let [activity, chance] of activityChances) {
-            cumulativeChance += chance
-            if (cumulativeChance > randomValue) {
-                activity()
-                break
-            }
-        }
+        randomTurtloActivity()
     }
 }
 
