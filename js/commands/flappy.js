@@ -208,8 +208,14 @@ terminal.addCommand("flappy", async function(args) {
     }, 1000 / fps)
 
     addEventListener("keydown", e => {
+        if (!gameRunning) return
         if (e.key == " ")
             turtlo.jump()
+    })
+
+    addEventListener("touchstart", e => {
+        if (!gameRunning) return
+        turtlo.jump()
     })
 
     terminal.onInterrupt(() => {
