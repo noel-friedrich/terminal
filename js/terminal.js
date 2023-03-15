@@ -2013,4 +2013,4 @@ terminal.addKeyboardShortcut(new KeyboardShortcut(
 // count page visits
 // add a delay to allow the page to load before the request is sent
 // (and to only count the page visit when the page is actually loaded, not when it's just opened shortly)
-window.addEventListener("load", () => setTimeout(() => fetch("api/count_visit.php"), 5000))
+window.addEventListener("load", () => setTimeout(() => fetch("api/count_visit.php"), 2000))
