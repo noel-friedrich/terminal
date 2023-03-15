@@ -147,7 +147,6 @@ class MobileKeyboard {
 
         if (text === "STRG+C") {
             button.onclick = () => {
-                console.log("STRG+C")
                 terminal.interrupt()
             }
         }
@@ -258,7 +257,7 @@ class MobileKeyboard {
     show() {
         this.container.style.display = "block"
         terminal.parentNode.style.paddingBottom = this.clientHeight + 30 + "px"  
-        terminal.scroll()
+        terminal.scroll("smooth", false)
         return this
     }
 

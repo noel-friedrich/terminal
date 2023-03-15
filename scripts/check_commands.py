@@ -12,7 +12,7 @@ found_baddie = False
 for file in sorted(files):
     if not file.endswith(".js"):
         continue
-    with open("./js/commands/" + file, "r") as command_file:
+    with open("./js/commands/" + file, "r", encoding="utf-8") as command_file:
         content = command_file.read()
         new_content = None
         if any([word in content for word in forbidden_words]):

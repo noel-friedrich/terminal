@@ -8,8 +8,13 @@ for file in files:
     command_description = "undefined"
     command_name = file[:-3]
     command_data = None
-    with open("./js/commands/" + file, "r") as command_file:
-        command_code = command_file.read()
+    with open("./js/commands/" + file, "r", encoding="utf-8") as command_file:
+        try:
+            command_code = command_file.read()
+        except Exception as e:
+            print(f"Problem at {command_name} command: failed to read command file")
+            print(e)
+            exit()
         for line in reversed(command_code.split("\n")):
             match = re.match(r".*description\"?:\s\"(.+)\".*", line)
             if match:

@@ -875,12 +875,13 @@ class Terminal {
 
     outputChannel = OutputChannel.USER
 
-    scroll(behavior="smooth") {
-        const opts = {
+    scroll(behavior="smooth", toLeft=true) {
+        let opts = {
             top: 10 ** 10, // sufficiently large number
-            left: 0,
             behavior
         }
+        if (toLeft)
+            opts.left = 0
         this.parentNode.scrollTo(opts)
         this.containerNode.scrollTo(opts)
     }
