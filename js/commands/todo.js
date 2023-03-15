@@ -72,18 +72,23 @@ terminal.addCommand("todo", async function(rawArgs) {
                 terminal.printLine(item.uid, Color.WHITE)
             }
         },
+        
         "check": async function(uid) {
             await TodoApi.checkItem(uid, true)
         },
+
         "uncheck": async function(uid) {
             await TodoApi.checkItem(uid, false)
         },
+
         "add": async function(name, text, due_date="-") {
             await TodoApi.addItem(name, text, due_date)
         },
+
         "edit": async function(uid, text) {
             await TodoApi.editItem(uid, text)
         },
+
         "delete": async function(uid) {
             await TodoApi.deleteItem(uid)
         }
