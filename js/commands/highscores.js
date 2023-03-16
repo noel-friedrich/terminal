@@ -14,8 +14,8 @@ terminal.addCommand("highscores", async function(args) {
 
     let allHighscores = await HighscoreApi.getHighscores(args.game)
     let highscores = allHighscores
-        .slice(0, args.l)
         .filter(h => h.name == args.n || args.n == null)
+        .slice(0, args.l)
 
     if (highscores.length == 0) {
         if (args.n != null)
