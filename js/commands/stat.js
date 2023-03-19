@@ -1,6 +1,22 @@
 terminal.addCommand("stat", async function(args) {
     await terminal.modules.import("statistics", window)
 
+    if (args.color !== null && args["axis-color"] === null) {
+        args["axis-color"] = args.color
+    }
+
+    if (args.color === null) {
+        args.color = terminal.data.foreground.toString()
+    }
+
+    if (args["axis-color"] === null) {
+        args["axis-color"] = terminal.data.foreground.toString()
+    }
+
+    if (args.background === null) {
+        args.background = terminal.data.background.toString()
+    }
+
     let dataset = null
 
     const options = {
@@ -73,7 +89,8 @@ terminal.addCommand("stat", async function(args) {
             arrowSize: 5,
             xAxisNameColor: args["axis-color"],
             yAxisNameColor: args["axis-color"],
-            color: args["axis-color"]
+            color: args["axis-color"],
+            backgroundColor: args.background
         }, {
             color: args.color
         })
@@ -107,7 +124,8 @@ terminal.addCommand("stat", async function(args) {
         "?p=padding:n:0~9999": "the padding of the canvas",
         "?c=color:s": "the color of plot",
         "?axis-color:s": "the color of the axis",
-        "?a=animateMs": "animate the plot"
+        "?a=animateMs": "animate the plot",
+        "?background": "the background color of the canvas",
     },
     defaultValues: {
         nums: null,
@@ -116,8 +134,9 @@ terminal.addCommand("stat", async function(args) {
         x: null,
         y: null,
         padding: 20,
-        "axis-color": "black",
-        color: "red",
-        animateMs: 1000
+        "axis-color": null,
+        color: null,
+        animateMs: 1000,
+        background: null
     }
 })
