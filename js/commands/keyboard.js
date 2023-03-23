@@ -9,11 +9,11 @@ terminal.addCommand("keyboard", function(args) {
             status = "off"
         }
 
-        terminal.printLine(`mobilemode=\"${status}\"`)
+        terminal.printLine(`keyboard_mode=\"${status}\"`)
         terminal.addLineBreak()
-        terminal.printCommand("Set to \"on\"", "mobile on")
-        terminal.printCommand("Set to \"off\"", "mobile off")
-        terminal.printCommand("Set to \"auto\"", "mobile auto")
+        terminal.printCommand("Set to \"on\"", "keyboard on")
+        terminal.printCommand("Set to \"off\"", "keyboard off")
+        terminal.printCommand("Set to \"auto\"", "keyboard auto")
     }
 
     if (mode == "on") {
