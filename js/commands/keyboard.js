@@ -1,4 +1,4 @@
-terminal.addCommand("mobile", function(args) {
+terminal.addCommand("keyboard", function(args) {
     let mode = args.m || "toggle"
 
     if (mode == "status") {
