@@ -122,6 +122,7 @@ The following list can also be viewed using the `whatis *` command
 | `img2ascii` | Convert an image to ASCII art |
 | `joke` | tell a joke |
 | `kaprekar` | display the kaprekar steps of a number |
+| `keyboard` | Toggle mobile mode |
 | `kill` | kill a process |
 | `labyrinth` | play a game of labyrinth |
 | `letters` | prints the given text in ascii art |
@@ -137,7 +138,6 @@ The following list can also be viewed using the `whatis *` command
 | `mandelbrot` | draws the mandelbrot set |
 | `mill2player` | play a game of mill with a friend locally |
 | `mkdir` | create a new directory |
-| `mobile` | Toggle mobile mode |
 | `morse` | translate latin to morse or morse to latin |
 | `mv` | move a file |
 | `name` | set a default name for the highscore system to use |

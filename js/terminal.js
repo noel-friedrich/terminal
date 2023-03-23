@@ -1854,10 +1854,10 @@ class Terminal {
 
             if (this.isMobile) {
                 this.print("Mobile keyboard active. ")
-                this.printCommand("click to disable", "mobile off")
+                this.printCommand("click to disable", "keyboard off")
             } else if (this.autoIsMobile) {
                 this.print("Mobile keyboard inactive. ")
-                this.printCommand("click to enable", "mobile on")
+                this.printCommand("click to enable", "keyboard on")
             }
 
             this.expectingFinishCommand = true
