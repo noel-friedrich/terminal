@@ -80,16 +80,26 @@ function drawAxis(context, {
     let yAxisStartX = paddingPx
     let xAxisStartY = canvas.height - paddingPx
     let xAxisEndX = canvas.width - paddingPx
+    let xAxisMiddleY = (xAxisStartY + paddingPx) / 2
+    let yAxisMiddleX = (yAxisStartX + canvas.width - paddingPx) / 2
 
     if (xAxisName != null) {
         context.fillStyle = xAxisNameColor
-        context.fillText(xAxisName, canvas.width / 2, xAxisStartY)
+        while (context.measureText(xAxisName).width > canvas.width - paddingPx * 2) {
+            xAxisNameSize--
+            context.font = `${xAxisNameSize}px ${font}`
+        }
+        context.fillText(xAxisName, yAxisMiddleX, xAxisStartY)
         xAxisStartY -= xAxisNameSize
     }
 
     if (yAxisName != null) {
         context.fillStyle = yAxisNameColor
-        drawTurnedText(context, yAxisName, yAxisStartX, canvas.height / 2, {
+        while (context.measureText(yAxisName).width > canvas.height - paddingPx * 2) {
+            yAxisNameSize--
+            context.font = `${yAxisNameSize}px ${font}`
+        }
+        drawTurnedText(context, yAxisName, yAxisStartX, xAxisMiddleY, {
             angle: -Math.PI / 2
         })
         yAxisStartX += yAxisNameSize
@@ -266,21 +276,33 @@ class Dataset {
 
     lineplot(context, axisOptions={}, {
         color="red",
+        lineWidth=1,
+        displayPoints=true,
     }={}) {
         const drawArea = drawAxis(context, axisOptions)
 
         context.strokeStyle = color
         context.fillStyle = color
         let xStep = drawArea.width / (this.numbers.length - 1)
-        let yStep = drawArea.height / this.max
         let prevX = null
         let prevY = null
+        let minValue = Math.min(...this.numbers)
+        let maxValue = Math.max(...this.numbers)
+        let yRange = maxValue - minValue
+        let yStep = drawArea.height / yRange
+        if (yRange == 0) {
+            yStep = 0
+            minValue = 0
+            yRange = 1
+        }
         for (let i = 0; i < this.numbers.length; i++) {
             let x = drawArea.x + i * xStep
-            let y = drawArea.y - this.numbers[i] * yStep
-            drawCircle(context, x, y, Math.min(xStep, 5))
+            let y = drawArea.y - (this.numbers[i] - minValue) * yStep
+            let circleSize = Math.min(xStep * 0.4, 5)
+            if (circleSize > 1.5 && displayPoints)
+                drawCircle(context, x, y, circleSize)
             if (prevX != null && prevY != null)
-                drawLine(context, prevX, prevY, x, y, {color})
+                drawLine(context, prevX, prevY, x, y, {color, lineWidth})
             prevX = x
             prevY = y
         }
