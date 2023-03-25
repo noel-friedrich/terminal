@@ -8,5 +8,5 @@ terminal.addCommand("ant-opt", async function() {
         terminalWindow.close()
     })
 }, {
-    description: "an interactive solution to the travelling salesman problem using ant colony optimization"
+    description: "interactive solution to the travelling salesman problem using ant colony optimization"
 })

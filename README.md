@@ -55,7 +55,7 @@ The following list can also be viewed using the `whatis *` command
 | `2048` | play a game of 2048 |
 | `4inarow` | play a game of Connect Four against the computer |
 | `alias` | create a new alias for a given function |
-| `ant-opt` | an interactive solution to the travelling salesman problem using ant colony optimization |
+| `ant-opt` | interactive solution to the travelling salesman problem using ant colony optimization |
 | `background` | change the background color of the terminal |
 | `base64` | encode/decode a message using base64 |
 | `bc` | start a bc (basic calculator) session |
