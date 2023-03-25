@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 156 commands such as `ls`, `cd` and of course `cowsay`
+* 159 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -55,6 +55,7 @@ The following list can also be viewed using the `whatis *` command
 | `2048` | play a game of 2048 |
 | `4inarow` | play a game of Connect Four against the computer |
 | `alias` | create a new alias for a given function |
+| `ant-opt` | an interactive solution to the travelling salesman problem using ant colony optimization |
 | `background` | change the background color of the terminal |
 | `base64` | encode/decode a message using base64 |
 | `bc` | start a bc (basic calculator) session |
@@ -127,6 +128,8 @@ The following list can also be viewed using the `whatis *` command
 | `kill` | kill a process |
 | `labyrinth` | play a game of labyrinth |
 | `letters` | prints the given text in ascii art |
+| `live-quiz` | a simple quiz game that uses your camera as input for your answer |
+| `live-rocket` | a simple avoid game that you steer using camera input |
 | `loadall` | preload all possible commands |
 | `logistic-map` | draw the logistic map |
 | `lorem` | generate lorem ipsum text |
