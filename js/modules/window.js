@@ -1,6 +1,12 @@
 terminal.modules.window = {
 
-    make({backgroundColor="black", name="My new Window", iframeUrl=undefined, fullscreen=false}={}) {
+    make({
+        backgroundColor="black",
+        name="My new Window",
+        iframeUrl=undefined,
+        fullscreen=false,
+        addResizeListener=true
+    }={}) {
         const windowContainer = terminal.document.createElement("div")
         windowContainer.classList.add("terminal-window")
         
@@ -64,6 +70,7 @@ terminal.modules.window = {
         
             CONTEXT.font = "15px Courier New"
         
+            if (addResizeListener)
             terminal.window.addEventListener("resize", function() {
                 CANVAS.width = CANVAS.clientWidth
                 CANVAS.height = CANVAS.clientHeight
