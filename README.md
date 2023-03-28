@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 160 commands such as `ls`, `cd` and of course `cowsay`
+* 162 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -148,6 +148,7 @@ The following list can also be viewed using the `whatis *` command
 | `name-gen` | start a name generator |
 | `ncr` | calculate binomial distribution value |
 | `neural-car` | start a neural car simulation |
+| `neural-rocket` | trains neural networks to fly rockets |
 | `number-guess` | guess a random number |
 | `particle` | start a particle simulation |
 | `pascal` | print a pascal triangle |
@@ -184,6 +185,7 @@ The following list can also be viewed using the `whatis *` command
 | `sleep` | sleep for a number of seconds |
 | `slime` | Start a slime simulation |
 | `snake` | play a game of snake |
+| `sodoku` | Solve or generate a sodoku puzzle |
 | `solve` | solve a mathematical equation for x |
 | `sorting` | display a sorting algorithm |
 | `stacker` | play a stacker game |

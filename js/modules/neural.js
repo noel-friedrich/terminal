@@ -2,10 +2,12 @@ const sigmoid = t => 1 / (1 + Math.pow(Math.E, -t))
 
 class Node {
     
-    constructor(layer, previousRow) {
+    constructor(layer, previousRow, {biasEnabled=false}={}) {
         this.output = 0.0
         this.weights = []
         this.layer = layer
+        this.biasEnabled = biasEnabled
+        this.bias = (Math.random() - 0.5)
 
         for (let i = 0; i < previousRow.length; i++) {
             this.weights.push(Math.random())
@@ -20,6 +22,9 @@ class Node {
             cumulativeWeight += combined
         }
         let average = cumulativeWeight / previousRow.length
+        if (this.biasEnabled) {
+            average += this.bias
+        }
         this.output = sigmoid(average)
     }
 
@@ -34,14 +39,14 @@ class Node {
 
 class Net {
 
-    constructor(nodes) {
+    constructor(nodes, {biasEnabled=false}={}) {
         this.nodes = []
 
         let previousRow = []
         for (let i = 0; i < nodes.length; i++) {
             let newRow = []
             for (let j = 0; j < nodes[i]; j++) {
-                let newNode = new Node(i, previousRow)
+                let newNode = new Node(i, previousRow, {biasEnabled})
                 newRow.push(newNode)
             }
             previousRow = newRow
@@ -146,9 +151,31 @@ class Net {
                     if (Math.random() < rate) {
                         this.nodes[i][j].weights[k] = Math.random()
                     }
+
+                    if (Math.random() < rate) {
+                        this.nodes[i][j].bias += (Math.random() - 0.5)
+                    }
                 }
             }
         }
+    }
+
+    static crossover(net1, net2) {
+        let newNet = net1.copy()
+        for (let i = 0; i < newNet.nodes.length; i++) {
+            for (let j = 0; j < newNet.nodes[i].length; j++) {
+                for (let k = 0; k < newNet.nodes[i][j].weights.length; k++) {
+                    if (Math.random() < 0.5) {
+                        newNet.nodes[i][j].weights[k] = net2.nodes[i][j].weights[k]
+                    }
+
+                    if (Math.random() < 0.5) {
+                        newNet.nodes[i][j].bias = net2.nodes[i][j].bias
+                    }
+                }
+            }
+        }
+        return newNet
     }
 }
 
