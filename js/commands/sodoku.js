@@ -356,7 +356,8 @@ terminal.addCommand("sodoku", async function(args) {
                     break
 
                 this.loadFEN(originalFEN)
-                await sleep(0)
+                if (i % 100 == 0)
+                    await sleep(0)
             }
         }
 
