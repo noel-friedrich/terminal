@@ -144,15 +144,14 @@ terminal.addCommand("sodoku", async function(args) {
 
             let currIndex = 0
 
-            let listener = terminal.window.addEventListener("keydown", async event => {
+            const onkeydown = (key, event) => {
                 if (currIndex >= this.maxIndex) {
-                    terminal.window.removeEventListener("keydown", listener)
                     return
                 }
                 
                 let [x, y] = this.xyFromIndex(currIndex)
 
-                if (event.key == "Backspace") {
+                if (key == "Backspace") {
                     if (currIndex > 0)
                         currIndex--
                     [x, y] = this.xyFromIndex(currIndex)
@@ -160,10 +159,10 @@ terminal.addCommand("sodoku", async function(args) {
                     this.highlightedIndex = currIndex
                     event.preventDefault()
                     return
-                } else if (/^[0-9]$/.test(event.key)) {
-                    this.setNumber(x, y, parseInt(event.key))
+                } else if (/^[0-9]$/.test(key)) {
+                    this.setNumber(x, y, parseInt(key))
                     event.preventDefault()
-                } else if (event.key == "Enter" || event.key == " ") {
+                } else if (key == "Enter" || key == " ") {
                     currIndex++
                     this.highlightedIndex = currIndex
                     event.preventDefault()
@@ -174,7 +173,27 @@ terminal.addCommand("sodoku", async function(args) {
 
                 currIndex++
                 this.highlightedIndex = currIndex
+            }
+
+            let listener = terminal.window.addEventListener("keydown", async event => {
+                if (currIndex >= this.maxIndex) {
+                    terminal.window.removeEventListener("keydown", listener)
+                }
+                
+                onkeydown(event.key, event)
             })
+
+            if (terminal.mobileKeyboard) {
+                terminal.mobileKeyboard.updateLayout([
+                    ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+                    ["Enter", "Backspace"],
+                    ["STRG+C"]
+                ])
+        
+                terminal.mobileKeyboard.onkeydown = function(e, keycode) {
+                    onkeydown(keycode, e)
+                }
+            }
 
             let element = this.printToElement()
 
