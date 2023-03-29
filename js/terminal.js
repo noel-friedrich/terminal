@@ -1424,7 +1424,7 @@ class Terminal {
         nope()
     }
 
-    async promptNum(msg=null, {min=null, max=null}={}) {
+    async promptNum(msg=null, {min=null, max=null, integer=false}={}) {
         min = min ?? -Infinity
         max = max ?? Infinity
         while (true) {
@@ -1438,6 +1438,8 @@ class Terminal {
                 this.printError(`The number must be larger/equal than ${min}`)
             } else if (max < num) {
                 this.printError(`The number must be smaller/equal than ${max}`)
+            } else if (integer && !Number.isInteger(num)) {
+                this.printError(`The number must be an integer`)
             } else {
                 return num
             }
