@@ -644,7 +644,7 @@ terminal.addCommand("sodoku", async function(args) {
             }
 
             const amountLeftDifficulties = {
-                "easy": [25, 40],
+                "easy": [40, 50],
                 "medium": [20, 30],
                 "hard": [17, 20]
             }
