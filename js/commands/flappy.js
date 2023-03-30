@@ -48,6 +48,7 @@ terminal.addCommand("flappy", async function(args) {
         jump() {
             if (this.dead) return
             this.velY = jump
+            playFrequency(600, 100)
         }
 
         get x() {
@@ -91,6 +92,7 @@ terminal.addCommand("flappy", async function(args) {
 
         die() {
             this.dead = true
+            playFrequency(300, 1000)
         }
 
     }
