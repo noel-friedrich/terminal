@@ -6,9 +6,7 @@ terminal.addCommand("upload", async function() {
         throw new Error("File Upload Failed")
     }
     let construct = TextFile
-    if (fileName.endsWith(".melody")) {
-        construct = MelodyFile
-    } else if (isDataURL) {
+    if (isDataURL) {
         construct = DataURLFile
     }
     if (terminal.fileExists(fileName))
