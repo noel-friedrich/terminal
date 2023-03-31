@@ -9,8 +9,9 @@ terminal.addCommand("python", async function(args) {
         terminal.modules.pyscript.history = []
     }
 
-    function getResult(code) {
-
+    function escapeJsCodeToPythonCode(code) {
+        return code
+            .replaceAll("\"", "\\\"")
     }
 
     const runInterpreter = async () => {
@@ -43,15 +44,30 @@ terminal.addCommand("python", async function(args) {
                         inputCleaning: false,
                         inputSuggestions: false
                     })
-                    pythonPrompt += "\n"
                 }
 
-                result = pyodide.runPython(pythonPrompt)
+                if (pythonPrompt.includes('"""')) {
+                    terminal.printLine("SyntaxError: \"\"\" cannot be used in the interpreter. Try ''' instead.")
+                    continue
+                }
+
                 if (pythonPrompt === "exit()" || pythonPrompt === "quit()" || pythonPrompt === "exit" || pythonPrompt === "quit")
                     break
-                if (result) {
-                    terminal.printLine(result)
-                }
+
+                let injectedCode = escapeJsCodeToPythonCode(pythonPrompt)                
+
+                let code = `
+                try:
+                    _ = eval("""${injectedCode}""")
+                    if _ is not None:
+                        print(repr(_))
+                except Exception as e:
+                    exec("""${injectedCode}""")
+                    _ = None`
+
+                console.log(code)
+
+                pyodide.runPython(code)
             } catch (pythonError) {
                 terminal.printLine(pythonError)
             }
@@ -70,8 +86,11 @@ terminal.addCommand("python", async function(args) {
 
     
     if (args.code) {
-        result = terminal.modules.pyscript.pyodide.runPython(args.code)
-        terminal.printLine(result)
+        terminal.modules.pyscript.pyodide.runPython(`
+        _ = eval("""${escapeJsCodeToPythonCode(args.code)}""")
+        if _ is not None:
+            print(repr(_))
+        `)
         return
     }
 
