@@ -12,6 +12,7 @@ terminal.addCommand("get", async function(args) {
     description: "get a value from the server",
     args: {
         key: "the key to get the value of"
-    }
+    },
+    disableEqualsArgNotation: true
 })
 

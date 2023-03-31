@@ -9,6 +9,10 @@ terminal.addCommand("python", async function(args) {
         terminal.modules.pyscript.history = []
     }
 
+    function getResult(code) {
+
+    }
+
     const runInterpreter = async () => {
         const pyodide = terminal.modules.pyscript.pyodide
         let version = pyodide.runPython("import sys; sys.version").split("[")
@@ -61,13 +65,23 @@ terminal.addCommand("python", async function(args) {
         }
         let code = file.content
         terminal.modules.pyscript.pyodide.runPython(code)
-    } else {
-        await runInterpreter()
+        return
     }
+
+    
+    if (args.code) {
+        result = terminal.modules.pyscript.pyodide.runPython(args.code)
+        terminal.printLine(result)
+        return
+    }
+
+    await runInterpreter()
 
 }, {
     description: "run a script or open a python shell",
     args: {
-        "?file": "the script to run"
-    }
+        "?f=file:s": "the script to run",
+        "?c=code:s": "the code to run"
+    },
+    disableEqualsArgNotation: true
 })

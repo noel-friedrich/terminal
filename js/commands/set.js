@@ -16,6 +16,7 @@ terminal.addCommand("set", async function(args) {
     args: {
         key: "the key to set the value of",
         value: "the value to set"
-    }
+    },
+    disableEqualsArgNotation: true
 })
 
