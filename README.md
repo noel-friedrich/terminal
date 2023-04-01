@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 162 commands such as `ls`, `cd` and of course `cowsay`
+* 163 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -81,6 +81,7 @@ The following list can also be viewed using the `whatis *` command
 | `color-test` | test the color capabilities of the terminal |
 | `compliment` | get info about yourself |
 | `copy` | copy the file content to the clipboard |
+| `coville` | interactive virus simulation (in german) |
 | `cowsay` | let the cow say something |
 | `cowthink` | let the cow say something |
 | `cp` | copy a file |
