@@ -1196,7 +1196,8 @@ class Terminal {
         addToHistory = this._createDefaultAddToHistoryFunc(),
         inputCleaning=!this.commandIsExecuting,
         inputSuggestions=!this.commandIsExecuting,
-        mobileLayout=undefined
+        mobileLayout=undefined,
+        printInputAfter=true
     }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
@@ -1269,7 +1270,8 @@ class Terminal {
 
             keyListeners["Enter"] = event => {
                 let text = inputElement.value
-                this.printLine(password ? "•".repeat(text.length) : text)
+                if (printInputAfter)
+                    this.printLine(password ? "•".repeat(text.length) : text)
                 if (inputCleaning) {
                     text = this.sanetizeInput(inputElement.value)
                 }
@@ -1561,8 +1563,9 @@ class Terminal {
         this.printLine(text, new Color(0, 255, 0))
     }
 
-    addLineBreak() {
-        this.printLine()
+    addLineBreak(n=1) {
+        for (let i = 0; i < n; i++)
+            this.printLine()
     }
 
     printCommand(commandText, command, color, endLine=true) {

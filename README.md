@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 163 commands such as `ls`, `cd` and of course `cowsay`
+* 164 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -111,6 +111,7 @@ The following list can also be viewed using the `whatis *` command
 | `get` | get a value from the server |
 | `greed` | play a game of greed |
 | `grep` | search for a pattern in a file |
+| `hangman` | play a game of hangman |
 | `head` | display the first lines of a file |
 | `helloworld` | display the hello-world text |
 | `help` | shows this help menu |
