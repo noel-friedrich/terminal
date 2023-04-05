@@ -1573,7 +1573,35 @@ class Terminal {
         element.onclick = this.makeInputFunc(command ?? commandText)
         element.classList.add("clickable")
         if (color) element.style.color = color.string.hex
-        if (endLine) this.printLine()
+        if (endLine) this.addLineBreak()
+    }
+
+    printEasterEgg(eggName, {endLine=true}={}) {
+        if (!terminal.currInputElement)
+            terminal.printEasterEggRaw(eggName, endLine)
+        else {
+            terminal.removeCurrInput()
+            terminal.printEasterEggRaw(eggName, endLine)
+            terminal.standardInputPrompt()
+        }
+    }
+
+    printEasterEggRaw(eggName, endLine=true) {
+        let displayName = ` ${eggName} `
+        let element = this.print(displayName, undefined, {forceElement: true})
+        element.onclick = () => {
+            if (this.data.easterEggs.has(eggName)) {
+                alert("You have already found this one. Enter 'easter-eggs' to see all found ones.")
+            } else {
+                this.data.addEasterEgg(eggName)
+                alert("You found an easter egg! It's added to your basket. Enter 'easter-eggs' to see all found ones.")
+            }
+        }
+
+        // style egg
+        element.classList.add("easter-egg")
+
+        if (endLine) this.addLineBreak()
     }
 
     printLink(msg, url, color, endLine=true) {
@@ -2013,6 +2041,14 @@ terminal.addKeyboardShortcut(new KeyboardShortcut(
         terminal.clear(true)
     },
     {ctrl: true, shift: undefined}
+))
+
+terminal.addKeyboardShortcut(new KeyboardShortcut(
+    "E", async () => {
+        const eggName = "Shortcut Egg"
+        terminal.printEasterEgg(eggName)
+    },
+    {ctrl: true, shift: true, alt: true}
 ))
 
 // count page visits

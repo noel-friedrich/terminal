@@ -82,12 +82,11 @@ terminal.addCommand("code", async function(args) {
     let command = await terminal.getCommand(args.command)
     let code = command.callback.toString()
 
-    if (args.command == "code")
-        throw new Error("Recursion")
-
     // https://github.com/noel-friedrich/terminal/issues/6
-    if (args.command == "cat")
+    if (args.command == "cat") {
+        terminal.printEasterEgg("Cat-Egg")
         return terminal.printLine(cat)
+    }
 
     function printJSCode(rawCode) {
         const isLetter = char => /[a-zA-Z]/.test(char)
@@ -182,6 +181,11 @@ terminal.addCommand("code", async function(args) {
     printJSCode(code)
 
     printJSCode(", " + JSON.stringify(command.info, null, 4))
+    terminal.addLineBreak()
+
+    if (args.command == "code") {
+        terminal.printEasterEgg("Codeception-Egg")
+    }
 }, {
     description: "show the source code of a command",
     args: {

@@ -42,6 +42,7 @@ terminal.addCommand("sodoku", async function(args) {
                 this.blockRows.push(row)
             }
             this.highlightedIndex = null
+            this.hasCheated = false
         }
 
         getBlock(x, y) {
@@ -215,6 +216,7 @@ terminal.addCommand("sodoku", async function(args) {
                     event.preventDefault()
                     return
                 } else if (key == "s") {
+                    this.hasCheated = true
                     this.solveLive(element).then(() => {
                         gameRunning = false
                     })
@@ -719,6 +721,12 @@ terminal.addCommand("sodoku", async function(args) {
             }
 
             await board.playFromInput()
+
+            if (difficulty == "hard") {
+                terminal.printSuccess("You beat the hardest Sudoku puzzle!")
+                terminal.printLine("For this achievement, you get an easter egg:")
+                terminal.printEasterEgg("Sodoku-Egg")
+            }
 
         }
 

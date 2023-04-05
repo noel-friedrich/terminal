@@ -368,6 +368,7 @@ class TerminalData {
         "storageSize": 300000,
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "0",
+        "easterEggs": "[]"
     }
 
     localStoragePrepend = "terminal-"
@@ -446,6 +447,22 @@ class TerminalData {
 
     set history(history) {
         this.set("history", JSON.stringify(history))
+    }
+
+    get easterEggs() {
+        let arr = JSON.parse(this.get("easterEggs"))
+        return new Set(arr)
+    }
+
+    set easterEggs(newEasterEggs) {
+        let arr = Array.from(newEasterEggs)
+        this.set("easterEggs", JSON.stringify(arr))
+    }
+
+    addEasterEgg(easterEggID) {
+        let foundEggs = this.easterEggs
+        foundEggs.add(easterEggID)
+        this.easterEggs = foundEggs
     }
     
     get mobile() {

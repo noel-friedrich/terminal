@@ -57,6 +57,10 @@ terminal.addCommand("cowsay", function(args) {
         output += " ".repeat(amountSpaces) + line + "\n"
     }
     terminal.printLine(output.slice(0, -3))
+
+    if (/[mM][uU]+[hH]|[mM][oO]+/.test(args.message)) {
+        terminal.printEasterEgg("Moo-Egg")
+    }
 }, {
     description: "let the cow say something",
     args: ["*message"]

@@ -1,7 +1,14 @@
 terminal.addCommand("donut", async function() {
-    // mostly copied from original donut.c code
-
     setTimeout(() => terminal.scroll(), 100)
+    let commandIsActive = true
+    terminal.onInterrupt(() => commandIsActive = false)
+    setTimeout(() => {
+        if (commandIsActive) {
+            terminal.printEasterEgg("Donut-Egg")
+        }
+    }, 3 * 60 * 1000)
+
+    // mostly copied from original donut.c code
 
                let p=terminal.
            print(),A=1,B=1,f=()=>{

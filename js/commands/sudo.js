@@ -25,6 +25,7 @@ terminal.addCommand("sudo", async function() {
 
     terminal.printSuccess("Password accepted")
     terminal.printLine("You are now officially a hacker!!")
+    terminal.printEasterEgg("Hacker-Egg")
 }, {
     description: "try to use sudo",
     args: ["**"]

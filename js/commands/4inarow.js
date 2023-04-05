@@ -341,9 +341,9 @@ terminal.addCommand("4inarow", async function(args) {
             DEPTH += 4
         else if (totalEvaluations < 10000)
             DEPTH++
-        console.log(totalEvaluations)
         if (computerMove == null) {
             terminal.printLine("The computer resigns. You win!")
+            terminal.printEasterEgg("4inarow-Master-Egg")
             return
         }
         putIntoField(computerMove, O)
@@ -353,6 +353,8 @@ terminal.addCommand("4inarow", async function(args) {
     printField()
     if (winner) {
         terminal.printLine(`The winner is ${winner}`)
+        if (winner == X)
+            terminal.printEasterEgg("4inarow-Master-Egg")
     } else {
         terminal.printLine("It's a draw!")
     }

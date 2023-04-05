@@ -15,6 +15,8 @@ terminal.addCommand("zip", async function() {
     await sleep(3000)
     await terminal.animatePrint("Zipping is hard!!")
 
+    terminal.printEasterEgg("Zipper-Egg")
+
 }, {
     description: "zip a file"
 })
