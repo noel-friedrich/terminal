@@ -48,8 +48,10 @@ terminal.addCommand("flappy", async function(args) {
         jump() {
             if (this.dead) return
             this.velY = jump
-            playFrequency(400, 100, 0.5)
-            setTimeout(() => playFrequency(500, 50, 0.5), 50)
+            if (!args.silent) {
+                playFrequency(400, 100, 0.5)
+                setTimeout(() => playFrequency(500, 50, 0.5), 50)
+            }
         }
 
         get x() {
@@ -93,7 +95,8 @@ terminal.addCommand("flappy", async function(args) {
 
         die() {
             this.dead = true
-            playFrequency(300, 1000)
+            if (!args.silent)
+                playFrequency(300, 1000)
         }
 
     }
@@ -241,10 +244,8 @@ terminal.addCommand("flappy", async function(args) {
 }, {
     description: "play a game of flappy turtlo",
     args: {
-        "?f=fullscreen:b": "fullscreen"
-    },
-    defaultValues: {
-        f: false
+        "?f=fullscreen:b": "fullscreen",
+        "?s=silent:b": "silent mode"
     },
     isGame: true
 })
