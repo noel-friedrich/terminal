@@ -149,6 +149,174 @@ class Vector2d {
         return this.x * this.y
     }
 
+    get array() {
+        return [this.x, this.y]
+    }
+
+    toArray() {
+        return [this.x, this.y]
+    }
+
+}
+
+class Vector3d {
+	
+	constructor(x, y, z) {
+		this.x = x
+		this.y = y
+		this.z = z
+	}
+	
+	get length() {
+		return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z)
+	}
+
+    get normalized() {
+        return this.div(this.length)
+    }
+
+    copy() {
+        return new Vector3d(this.x, this.y, this.z)
+    }
+	
+	add(other) {
+		return new Vector3d(
+			this.x + other.x,
+			this.y + other.y,
+			this.z + other.z
+		)
+	}
+
+    lerp(other, t) {
+        return this.add(other.sub(this).mul(t))
+    }
+
+    distanceTo(other) {
+        return this.sub(other).length
+    }
+	
+	mul(scalar) {
+		return new Vector3d(
+			this.x * scalar,
+			this.y * scalar,
+			this.z * scalar
+		)
+	}
+	
+	sub(other) {
+		return this.add(other.mul(-1))
+	}
+	
+	div(scalar) {
+		return this.mul(1 / scalar)
+	}
+	
+	cross(other) {
+		return new Vector3d(
+			this.y * other.z - this.z * other.y,
+			this.z * other.x - this.x * other.z,
+			this.x * other.y - this.y * other.x
+		)
+	}
+	
+	dot(other) {
+		return (
+			this.x * other.x +
+			this.y * other.y +
+			this.z * other.z
+		)
+	}
+	
+	get angleX() {
+		return Math.atan2(this.z, this.y)
+	}
+	
+	rotateX(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x,
+            this.y * cos - this.z * sin,
+            this.y * sin + this.z * cos
+        )
+	}
+
+    setAngleX(angle) {
+        return this.rotateX(angle - this.angleX)
+    }
+
+    get angleY() {
+        return Math.atan2(this.z, this.x)
+    }
+
+    rotateY(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x * cos - this.z * sin,
+            this.y,
+            this.x * sin + this.z * cos
+        )
+    }
+
+    setAngleY(angle) {
+        return this.rotateY(angle - this.angleY)
+    }
+
+    get angleZ() {
+        return Math.atan2(this.y, this.x)
+    }
+
+    rotateZ(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x * cos - this.y * sin,
+            this.x * sin + this.y * cos,
+            this.z
+        )
+    }
+
+    setAngleZ(angle) {
+        return this.rotateZ(angle - this.angleZ)
+    }
+
+    rotateUp(angle) {
+        let temp = this.angleZ
+        return this.setAngleZ(0).rotateY(angle).setAngleZ(temp)
+    }
+
+    setAngleUp(angle) {
+        let temp = this.angleZ
+        return this.setAngleZ(0).setAngleY(angle).setAngleZ(temp)
+    }
+
+    get angleUp() {
+        return this.setAngleZ(0).angleY
+    }
+
+    rotateRight(angle) {
+        return this.rotateZ(angle)
+        let temp = this.angleUp
+        return this.setAngleUp(0).rotateZ(angle).setAngleUp(temp)
+    }
+
+    apply(func) {
+        return new Vector3d(
+            func(this.x),
+            func(this.y),
+            func(this.z)
+        )
+    }
+
+    round() {
+        return this.apply(Math.round)
+    }
+
+    floor() {
+        return this.apply(Math.floor)
+    }
+
 }
 
 class HighscoreApi {
@@ -300,6 +468,7 @@ HighscoreApi.loadUsernameFromLocalStorage()
 
 terminal.modules.game = {
     Vector2d,
+    Vector3d,
     angleDifference,
     HighscoreApi,
     addEventListener: terminal.window.addEventListener,
