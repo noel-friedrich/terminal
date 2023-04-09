@@ -170,7 +170,7 @@ const courseData = [
         boxes: [
             {
                 type: "gravity",
-                pos: { x: 0, y: 25 },
+                pos: { x: 0, y: 23 },
                 size: { x: 25, y: 50 },
                 angle: -Math.PI / 2,
                 force: 0.7
@@ -184,7 +184,7 @@ const courseData = [
             {
                 type: "gravity",
                 pos: { x: 0, y: 75 },
-                size: { x: 75, y: 25 },
+                size: { x: 73, y: 25 },
                 angle: 0
             },
             {
@@ -259,8 +259,8 @@ const courseData = [
             },
             {
                 type: "gravity",
-                pos: { x: 15, y: 70 },
-                size: { x: 20, y: 30 },
+                pos: { x: 15, y: 72 },
+                size: { x: 20, y: 28 },
                 force: 0.1,
                 angle: 0,
             },
@@ -984,7 +984,8 @@ terminal.addCommand("minigolf", async function(args) {
                 "S       Save",
                 "H       Set hole pos",
                 "B       Set ball pos",
-                "CTRL+C  Stop Editor"
+                "CTRL+C  Stop Editor",
+                "Numpad  Move in grid"
             ]) 
 
             if (gameRunning)
@@ -1003,7 +1004,7 @@ terminal.addCommand("minigolf", async function(args) {
                 course.name = name
                 fileData = course.toJSONString()
                 let fileName = name.toLowerCase().replace(/ /g, "_") + ".mniglf"
-                let file = await terminal.createFile(fileName, TextFile, fileData)
+                await terminal.createFile(fileName, TextFile, fileData)
                 terminal.printSuccess("Course saved as " + fileName)
                 await terminal.fileSystem.reload()
                 let path = terminal.currFolder.path + "/" + fileName
