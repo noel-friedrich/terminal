@@ -800,6 +800,23 @@ terminal.addCommand("minigolf", async function(args) {
             return course
         }
 
+        toJSONString() {
+            let data = {}
+            data.name = this.name
+            data.shapePoints = this.shapePoints.map(p => ({ x: p.x, y: p.y }))
+            data.ballStartPos = { x: this.ballStartPos.x, y: this.ballStartPos.y }
+            data.holePos = { x: this.holePos.x, y: this.holePos.y }
+            data.boxes = this.boxes.map(b => {
+                let boxData = {}
+                boxData.type = b.type
+                boxData.pos = { x: b.pos.x, y: b.pos.y }
+                boxData.size = { x: b.size.x, y: b.size.y }
+                boxData.angle = b.angle
+                boxData.force = b.forceStrength
+            })
+            return JSON.stringify(data)
+        }
+
     }
 
     const courses = courseData.map(MinigolfCourse.fromData)
@@ -814,21 +831,45 @@ terminal.addCommand("minigolf", async function(args) {
         terminalWindow.close()
     })
 
+    function drawLines(lines) {
+        context.fillStyle = GRAPHICS.uiColor
+        context.textAlign = "left"
+        context.textBaseline = "top"
+        let textSize = 5 * zoomFactor
+        context.font = textSize + "px " + "monospace"
+        for (let i = 0; i < lines.length; i++) {
+            context.fillText(lines[i], 10, 10 + i * textSize)
+        }
+    }
+
     let gameRunning = true
+
+    let course = courses[args.level - 1]
+
+    if (args.file) {
+
+        terminal.printLine(`Loading course from file ${args.file}...`)
+
+        try {
+
+            let file = await terminal.getFile(args.file)
+            if (file.type != FileType.READABLE) {
+                throw new Error(`File ${args.file} is not readable`)
+            }
+
+            let fileData = JSON.parse(file.content)
+            course = MinigolfCourse.fromData(fileData)
+
+        } catch (e) {
+            terminalWindow.close()
+            throw e
+        }
+
+    }
 
     if (args.edit) {
 
-        let course = new MinigolfCourse()
-        course.setShape([
-            new Vector2d(0, 0),
-            new Vector2d(100, 0),
-            new Vector2d(100, 100),
-            new Vector2d(0, 100),
-        ])
-
-        if (args.level) {
-            course = courses[args.level - 1]
-        }
+        course.name = "New Course"
 
         const moveAllInDirection = (direction) => {
             for (let i = 0; i < course.shapePoints.length; i++) {
@@ -845,6 +886,7 @@ terminal.addCommand("minigolf", async function(args) {
 
         course.selectedShapePointIndex = 0
 
+        let fileData = ""
         zoomFactor = 4
         addEventListener("keydown", e => {
             if (!gameRunning) return
@@ -857,6 +899,7 @@ terminal.addCommand("minigolf", async function(args) {
                     e.preventDefault()
                 } else if (e.key == "ArrowLeft" || (e.key == "Tab" && e.shiftKey)) {
                     course.selectedShapePointIndex--
+                    e.preventDefault()
                 }
             } else {
                 if (e.key == "ArrowUp") {
@@ -906,32 +949,7 @@ terminal.addCommand("minigolf", async function(args) {
             }
 
             else if (e.key == "s") {
-                let output = "{\n"
-                output += `    name: "${course.name}",\n`
-                output += `    shapePoints: [\n`
-                for (let point of course.shapePoints) {
-                    output += `        { x: ${point.x}, y: ${point.y} },\n`
-                }
-                output += "    ],\n"
-                output += `    ballStartPos: { x: ${course.ballStartPos.x}, y: ${course.ballStartPos.y} },\n`
-                output += `    holePos: { x: ${course.holePos.x}, y: ${course.holePos.y} },\n`
-                if (course.boxes.length > 0) {
-                    output += `    boxes: [\n`
-                    for (let box of course.boxes) {
-                        output += `        {\n`
-                        output += `            type: "${box.type}",\n`
-                        output += `            pos: { x: ${box.pos.x}, y: ${box.pos.y} },\n`
-                        output += `            size: { x: ${box.size.x}, y: ${box.size.y} },\n`
-                        output += `            force: ${box.forceStrength},\n`
-                        output += `            angle: ${box.angle},\n`
-                        output += `        },\n`
-                    }
-                    output += "    ],\n"
-                }
-                output += "}"
-
-                terminal.copy(output)
-                console.log(output)
+                gameRunning = false
             }
 
             else if (e.key == "h") {
@@ -950,18 +968,24 @@ terminal.addCommand("minigolf", async function(args) {
                 course.selectedShapePointIndex = 0
         })
 
-        addEventListener("mousemove", e => {
-            let rect = canvas.getBoundingClientRect()
-            let rawPos = new Vector2d(
-                e.clientX - rect.left,
-                e.clientY - rect.top
-            )
-            let pos = canvasToPoint(rawPos)
-        })
-
         function loop() {
             viewCentre = new Vector2d(canvas.width, canvas.height).scale(0.5)
             course.draw(true)
+            drawLines([ 
+                "+       Zoom in",
+                "-       Zoom out",
+                "↑       Move up",
+                "↓       Move down",
+                "←       Move left",
+                "→       Move right",
+                "TAB     Move selection",
+                "SPACE   Add point",
+                "BACKSP  Delete point",
+                "S       Save",
+                "H       Set hole pos",
+                "B       Set ball pos",
+                "CTRL+C  Stop Editor"
+            ]) 
 
             if (gameRunning)
                 terminal.window.requestAnimationFrame(loop)
@@ -971,11 +995,30 @@ terminal.addCommand("minigolf", async function(args) {
 
         while (gameRunning) await sleep(100)
 
+        terminalWindow.close()
+
+        while (true) {
+            try {
+                let name = await terminal.prompt("How should the course be called? ")
+                course.name = name
+                fileData = course.toJSONString()
+                let fileName = name.toLowerCase().replace(/ /g, "_") + ".mniglf"
+                let file = await terminal.createFile(fileName, TextFile, fileData)
+                terminal.printSuccess("Course saved as " + fileName)
+                await terminal.fileSystem.reload()
+                let path = terminal.currFolder.path + "/" + fileName
+                terminal.printCommand("Play the course", `minigolf -f ${path}`)
+                break
+            } catch (e) {
+                terminal.printError(e.message)
+            }
+        }
+
     } else {
 
         let coursesFinished = 0
         let currCourseIndex = args.level - 1
-        let currCourse = courses[currCourseIndex]
+        let currCourse = course
 
         let keysDown = new Set()
         let touchPos = null
@@ -1068,6 +1111,9 @@ terminal.addCommand("minigolf", async function(args) {
                     gameRunning = false
                 }
                 coursesFinished++
+                if (args.file) {
+                    gameRunning = false
+                }
             }
 
             if (gameRunning)
@@ -1080,17 +1126,23 @@ terminal.addCommand("minigolf", async function(args) {
 
         terminalWindow.close()
 
-        terminal.printSuccess(`You completed ${coursesFinished} courses!`)
-        terminal.printLine("I'm currently working on adding more, so stay tuned!")
-
-        if (coursesFinished == courses.length) {
-            let score = Math.floor(coursesFinished / totalShots * 100)
-            terminal.printLine(`Your score is ${score}`)
-            await HighscoreApi.registerProcess("minigolf")
-            await HighscoreApi.uploadScore(score)
+        if (args.file) {
+            terminal.printSuccess(`You completed the ${course.name} course!`)
+            terminal.printLine(`Your score is ${Math.floor(100 / totalShots)}`)
         } else {
-            terminal.printLine("You didn't complete all courses, so no score was registered.")
+            terminal.printSuccess(`You completed ${coursesFinished} courses!`)
+            terminal.printLine("I'm currently working on adding more, so stay tuned!")
+    
+            if (coursesFinished == courses.length) {
+                let score = Math.floor(coursesFinished / totalShots * 100)
+                terminal.printLine(`Your score is ${score}`)
+                await HighscoreApi.registerProcess("minigolf")
+                await HighscoreApi.uploadScore(score)
+            } else {
+                terminal.printLine("You didn't complete all courses, so no score was registered.")
+            }
         }
+
     }
 
 }, {
@@ -1098,7 +1150,8 @@ terminal.addCommand("minigolf", async function(args) {
     args: {
         "?l=level:i": "open a specific level",
         "?e=edit:b": "open map editor",
-        "?f=fullscreen:b": "activate fullscreen mode"
+        "?f=file:s": "open a specific file",
+        "?fullscreen:b": "activate fullscreen mode"
     },
     defaultValues: {
         level: 1
