@@ -150,50 +150,42 @@ const courseData = [
     },
 
     {
-        name: "#8",
+        name: "#9: S",
         shapePoints: [
-            { x: 0, y: 0 },
+            { x: 30, y: 0 },
+            { x: 90, y: 0 },
+            { x: 90, y: 20 },
+            { x: 55, y: 20 },
+            { x: 60, y: 25 },
+            { x: 90, y: 25 },
+            { x: 90, y: 95 },
+            { x: 30, y: 95 },
+            { x: 10, y: 80 },
+            { x: 10, y: 0 },
             { x: 25, y: 0 },
-            { x: 25, y: 75 },
-            { x: 35, y: 75 },
-            { x: 35, y: 25 },
-            { x: 75, y: 25 },
-            { x: 75, y: 0 },
-            { x: 85, y: 0 },
-            { x: 85, y: 25 },
-            { x: 100, y: 25 },
-            { x: 100, y: 100 },
-            { x: 0, y: 100 },
+            { x: 25, y: 65 },
+            { x: 65, y: 65 },
+            { x: 60, y: 60 },
+            { x: 30, y: 60 },
         ],
-        ballStartPos: { x: 12.5, y: 12.5 },
-        holePos: { x: 80, y: 5 },
+        ballStartPos: { x: 17.5, y: 7.5 },
+        holePos: { x: 80, y: 10 },
         boxes: [
             {
                 type: "gravity",
-                pos: { x: 0, y: 25 },
-                size: { x: 25, y: 50 },
-                angle: -Math.PI / 2,
-                force: 0.7
+                pos: { x: 30, y: 0 },
+                size: { x: 25, y: 60 },
+                force: 0.1,
+                angle: 0,
             },
             {
                 type: "gravity",
-                pos: { x: 35, y: 25 },
-                size: { x: 65, y: 15 },
-                angle: Math.PI / 2
+                pos: { x: 65, y: 25 },
+                size: { x: 25, y: 70 },
+                force: 0.1,
+                angle: 3.141592653589793,
             },
-            {
-                type: "gravity",
-                pos: { x: 0, y: 75 },
-                size: { x: 75, y: 25 },
-                angle: 0
-            },
-            {
-                type: "gravity",
-                pos: { x: 75, y: 75 },
-                size: { x: 25, y: 25 },
-                angle: -Math.PI / 2
-            }
-        ]
+        ],
     },
 
     {
