@@ -44,6 +44,11 @@ terminal.modules.window = {
 			content.style.height = "100%"
 			content.style.margin = "0"
 			content.style.position = "fixed"
+            windowContainer.style.width = "100%"
+            windowContainer.style.height = "100%"
+            windowContainer.style.margin = "0"
+            windowContainer.style.position = "fixed"
+            windowContainer.style.transform = "translate(0, 0)"
 		}
 
         if (iframeUrl) {
@@ -51,6 +56,12 @@ terminal.modules.window = {
             iframe.src = iframeUrl
             content.appendChild(iframe)
             terminal.body.appendChild(windowContainer)
+
+            if (fullscreen) {
+                iframe.style.borderRadius = "0"
+                iframe.style.border = "0"
+            }
+
             return {
                 iframe,
                 windowContainer,
@@ -77,6 +88,11 @@ terminal.modules.window = {
                 CHARWIDTH = CONTEXT.measureText("A").width * 1.8
                 CONTEXT.font = "15px Courier New"
             })
+
+            if (fullscreen) {
+                CANVAS.style.borderRadius = "0"
+                CANVAS.style.border = "0"
+            }
         
             return {
                 CANVAS,
