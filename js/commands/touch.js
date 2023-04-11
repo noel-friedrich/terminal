@@ -3,7 +3,10 @@ terminal.addCommand("touch", async function(args) {
         throw new Error("Invalid filename")
     if (terminal.fileExists(args.filename))
         throw new Error("File already exists")
-    let newFile = new TextFile("")
+    if (args.filename.endsWith(".url"))
+        var newFile = new ExecutableFile("")
+    else
+        var newFile = new TextFile("")
     terminal.currFolder.content[args.filename] = newFile
     await terminal.fileSystem.reload()
 }, {
