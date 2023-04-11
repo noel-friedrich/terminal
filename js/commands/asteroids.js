@@ -382,6 +382,7 @@ terminal.addCommand("asteroids", async function(args) {
         await terminal.sleep(100)
     }
 
+    terminalWindow.close()
     let score = ship.score
 
     terminal.printLine(`Your score: ${score}`)
