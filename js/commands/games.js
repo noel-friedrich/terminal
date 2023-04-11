@@ -3,7 +3,7 @@ terminal.addCommand("games", function() {
         'tictactoe', '4inarow', 'chess', 'mill2player', 'snake', '2048',
         'lunar-lander', 'tetris', 'number-guess', 'stacker', 'type-test',
         'pong', 'greed', 'labyrinth', 'perilious-path', 'shoot', 'flappy',
-        'hangman', 'minigolf', 'sodoku'
+        'hangman', 'minigolf', 'sodoku', 'asteroids'
     ]
     let longestCommandLength = gameCommands.reduce((p, c) => Math.max(p, c.length), 0)
     for (let command of gameCommands.sort((a, b) => a.localeCompare(b))) {
