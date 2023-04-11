@@ -322,7 +322,8 @@ terminal.addCommand("asteroids", async function(args) {
 
         if (keysDown.has(" ")) {
             ship.spawnParticle()
-            keysDown.delete(" ")
+            if (!args.chaos)
+                keysDown.delete(" ")
         }
     }
 
@@ -386,13 +387,17 @@ terminal.addCommand("asteroids", async function(args) {
     let score = ship.score
 
     terminal.printLine(`Your score: ${score}`)
-    await HighscoreApi.registerProcess("asteroids")
-    await HighscoreApi.uploadScore(score)
+
+    if (!args.chaos) {
+        await HighscoreApi.registerProcess("asteroids")
+        await HighscoreApi.uploadScore(score)
+    }
 
 }, {
     description: "simulate a bunch of balls jumping around",
     args: {
         "?f=fullscreen:b": "start in fullscreen mode",
+        "?chaos:b": "start with chaos mode enabled",
     },
     isGame: true
 })
