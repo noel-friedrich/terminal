@@ -186,7 +186,7 @@ terminal.addCommand("asteroids", async function(args) {
 
             ship.score++
             this.alive = false
-            spawnExplosion(this.pos, 30)
+            spawnExplosion(this.pos, this.level * 10)
 
             if (this.level > 1) {
                 let children = Math.floor(Math.random() * 2) + 1
