@@ -722,7 +722,7 @@ terminal.addCommand("sodoku", async function(args) {
 
             await board.playFromInput()
 
-            if (difficulty == "hard") {
+            if (difficulty == "hard" && !board.hasCheated) {
                 terminal.printSuccess("You beat the hardest Sudoku puzzle!")
                 terminal.printLine("For this achievement, you get an easter egg:")
                 terminal.printEasterEgg("Sodoku-Egg")
