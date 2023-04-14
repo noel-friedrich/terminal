@@ -276,7 +276,19 @@ terminal.addCommand("asteroids", async function(args) {
 
         update() {
             this.pos.iadd(this.vel)
-            this.alive = !this.isOffScreen()
+
+            if (args.chaos) {
+                if (this.pos.x < 0)
+                    this.pos.x = canvas.width
+                if (this.pos.x > canvas.width)
+                    this.pos.x = 0
+                if (this.pos.y < 0)
+                    this.pos.y = canvas.height
+                if (this.pos.y > canvas.height)
+                    this.pos.y = 0
+            } else {
+                this.alive = !this.isOffScreen()
+            }
 
             for (let asteroid of asteroids) {
                 if (asteroid.inHitBox(this.pos)) {
