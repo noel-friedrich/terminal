@@ -845,6 +845,7 @@ class Terminal {
     commandListURL = "js/load-commands.js"
     mobileKeyboardURL = "js/keyboard.js"
     defaultFileystemURL = "js/defaultFilesystem.js"
+    sidePanelURL = "js/html/side-panel.js"
 
     mobileKeyboard = null
     currInputElement = null
@@ -1895,6 +1896,11 @@ class Terminal {
 
             this.expectingFinishCommand = true
             this.finishCommand()
+
+            // TODO: make this into terminal.data option
+            if (true) {
+                this._loadScript(this.sidePanelURL)
+            }
         }
 
         this.hasInitted = true

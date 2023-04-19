@@ -368,7 +368,8 @@ class TerminalData {
         "storageSize": 300000,
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "0",
-        "easterEggs": "[]"
+        "easterEggs": "[]",
+        "sidepanel": "false"
     }
 
     localStoragePrepend = "terminal-"
@@ -478,6 +479,14 @@ class TerminalData {
         if (mobile === true) mobile = "1"
         if (mobile === false) mobile = "2"
         this.set("mobile", mobile)
+    }
+
+    get sidepanel() {
+        return this.get("sidepanel") === "true"
+    }
+
+    set sidepanel(sidepanel) {
+        this.set("sidepanel", sidepanel.toString())
     }
 
     get storageSize() {

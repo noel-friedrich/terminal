@@ -760,8 +760,8 @@ terminal.addCommand("minigolf", async function(args) {
             }
         }
 
-        draw(editMode=false) {
-            drawBackground()
+        draw(editMode=false, drawBackgroundPlease=true) {
+            if (drawBackgroundPlease) drawBackground()
             this.drawShape(editMode)
 
             for (let box of this.boxes) {
@@ -831,11 +831,11 @@ terminal.addCommand("minigolf", async function(args) {
         terminalWindow.close()
     })
 
-    function drawLines(lines) {
+    function drawLines(lines, sizeFactor=1) {
         context.fillStyle = GRAPHICS.uiColor
         context.textAlign = "left"
         context.textBaseline = "top"
-        let textSize = 5 * zoomFactor
+        let textSize = 5 * zoomFactor * sizeFactor
         context.font = textSize + "px " + "monospace"
         for (let i = 0; i < lines.length; i++) {
             context.fillText(lines[i], 10, 10 + i * textSize)
@@ -1102,7 +1102,13 @@ terminal.addCommand("minigolf", async function(args) {
         function loop() {
             handleInputs()
             currCourse.ball.update(1)
-            currCourse.draw()
+            drawBackground()
+            drawLines([
+                "Arrow keys to move cursor",
+                "Space to shoot",
+                "Or use touch controls"
+            ], 0.7)
+            currCourse.draw(false, false)
             adjustZoom()
 
             if (currCourse.completed) {
