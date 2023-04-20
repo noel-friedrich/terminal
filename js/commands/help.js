@@ -1,7 +1,7 @@
 terminal.addCommand("help", function() {
     terminal.printLine("Welcome to the Help Menu!", Color.COLOR_1)
     terminal.printLine("Here are some commands to try out:\n")
-    let helpCommands = ["cat", "cd", "games", "ls", "lscmds", "man", "turtlo", "easter-eggs"]
+    let helpCommands = ["cat", "cd", "games", "ls", "lscmds", "man", "turtlo", "easter-eggs", "contact"]
     let longestCommandLength = helpCommands.reduce((p, c) => Math.max(p, c.length), 0)
     for (let command of helpCommands.sort((a, b) => a.localeCompare(b))) {
         let spaces = strRepeat(" ", longestCommandLength - command.length + 2)
