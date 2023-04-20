@@ -109,6 +109,7 @@ function addButtons(buttonList) {
         const buttonElement = terminal.document.createElement("button")
         buttonElement.classList.add("side-panel-button")
         buttonElement.textContent = button.text
+        buttonElement.title = `${button.command}`
         buttonElement.addEventListener("click", terminal.makeInputFunc(button.command))
         panelContainer.appendChild(buttonElement)
     }

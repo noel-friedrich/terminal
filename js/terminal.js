@@ -1858,12 +1858,18 @@ class Terminal {
     }
 
     makeInputFunc(text) {
-        return () => {
+        return async () => {
+            if (this.expectingFinishCommand) {
+                this.interrupt()
+                await new Promise(resolve => setTimeout(resolve, 500))
+            }
+
             if (this.currInputElement) {
                 this.removeCurrInput()
-                this.printLine(text)
-                this.input(text)
             }
+
+            await this.animatePrint(text, 5)
+            this.input(text)
         }
     }
 

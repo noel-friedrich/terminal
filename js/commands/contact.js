@@ -184,15 +184,12 @@ let formSuccessful = false
 terminal.addCommand("contact", async function(args) {
     formSuccessful = false
     terminal.parentNode.appendChild(formContainer)
-    nameInput.focus()
-    await new Promise(resolve => {
-        const interval = setInterval(() => {
-            if (formSuccessful) {
-                clearInterval(interval)
-                resolve()
-            }
-        }, 100)
-    })
+
+    terminal.scroll()
+
+    setTimeout(() => nameInput.focus(), 300)
+    
+    while (!formSuccessful) await sleep(1000)
 
     terminal.printSuccess("Message sent!")
     terminal.printLine("I'll get back to you as soon as possible.")
