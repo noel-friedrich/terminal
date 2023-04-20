@@ -61,7 +61,7 @@ function togglePanel() {
 
         getAllPanelButtons().forEach(button => {
             button.animate([
-                { transform: "translateX(350px)" },
+                { transform: "translateX(0)" },
                 { transform: "translateX(50px)" }
             ], {
                 duration: 300,
