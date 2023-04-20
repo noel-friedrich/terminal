@@ -311,9 +311,11 @@ terminal.addCommand("asteroids", async function(args) {
     }
 
     const keysDown = new Set()
+    const validKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", " "])
 
     addEventListener("keydown", event => {
         if (!event.repeat) keysDown.add(event.key)
+        if (validKeys.has(event.key)) event.preventDefault()
     })
     addEventListener("keyup", event => keysDown.delete(event.key))
 

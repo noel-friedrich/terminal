@@ -1024,8 +1024,12 @@ terminal.addCommand("minigolf", async function(args) {
         let keysDown = new Set()
         let touchPos = null
         let touchDownPos = null
+        let validKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "])
 
-        addEventListener("keydown", e => keysDown.add(e.key))
+        addEventListener("keydown", e => {
+            keysDown.add(e.key)
+            if (validKeys.has(e.key)) e.preventDefault()
+        })
         addEventListener("keyup", e => keysDown.delete(e.key))
         addEventListener("touchstart", e => {
             let rect = canvas.getBoundingClientRect()
