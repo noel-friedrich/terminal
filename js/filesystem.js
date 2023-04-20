@@ -369,7 +369,7 @@ class TerminalData {
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "0",
         "easterEggs": "[]",
-        "sidepanel": "false"
+        "sidepanel": "true"
     }
 
     localStoragePrepend = "terminal-"
