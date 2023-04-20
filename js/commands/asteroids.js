@@ -314,6 +314,7 @@ terminal.addCommand("asteroids", async function(args) {
     const validKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", " "])
 
     addEventListener("keydown", event => {
+        if (!gameRunning) return
         if (!event.repeat) keysDown.add(event.key)
         if (validKeys.has(event.key)) event.preventDefault()
     })

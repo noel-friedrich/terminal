@@ -1027,6 +1027,7 @@ terminal.addCommand("minigolf", async function(args) {
         let validKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "])
 
         addEventListener("keydown", e => {
+            if (!gameRunning) return
             keysDown.add(e.key)
             if (validKeys.has(e.key)) e.preventDefault()
         })
