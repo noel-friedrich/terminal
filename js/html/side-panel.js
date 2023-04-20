@@ -116,6 +116,7 @@ function addButtons(buttonList) {
 
 addButtons([
     { text: "About Me", command: "cat root/about.txt" },
+    { text: "Contact Form", command: "contact" },
     { text: "Open Help Menu", command: "help" },
     { text: "List All Commands", command: "lscmds" },
     { text: "Play Minigolf", command: "minigolf" },

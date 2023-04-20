@@ -146,7 +146,7 @@ terminal.fileSystem.root = new Directory({
         "secret": new Directory({
             "passwords.json": new TextFile(passwords_json)
         }, {"<": "cd ..", "passwords": "cat passwords.json"}),
-        "contact.txt": new TextFile(contact_txt),
+        "email.txt": new TextFile(contact_txt),
         "melodies": MELODIES_FOLDER
     }, {"<": "cd ..", "secret": "cd secret/", "contact": "cat contact.txt", "melodies": ["cd melodies/", "cat README.txt"]}),
     "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
