@@ -364,17 +364,20 @@ class HighscoreApi {
         terminal.printCommand(`name set ${this.tempName}`)
     }
 
-    static async registerProcess(game) {
-        try {
-            await terminal.acceptPrompt("[highscores] Do you want to upload your score?", false)
-        } catch {
-            terminal.printLine("[highscores] Score not uploaded")
-            this.tempGame = null
-            return
+    static async registerProcess(game, {
+        ask=true
+    }={}) {
+        if (ask) {
+            try {
+                await terminal.acceptPrompt("[highscores] Do you want to upload your score?", false)
+            } catch {
+                terminal.printLine("[highscores] Score not uploaded")
+                this.tempGame = null
+                return
+            }
         }
 
         this.tempGame = game
-        
         await this.getUsername()
     }
 
@@ -464,6 +467,91 @@ class HighscoreApi {
 
 }
 
+class CanvasDrawer {
+
+    static async promptOptions(context, {
+        options=[
+            "Respawn",
+            "Upload Score",
+            "Exit"
+        ],
+        infoLines=[]
+    }={}) {
+        let promptActive = true
+
+        let canvas = context.canvas
+
+        let extraLines = [
+            "Use arrow keys to select an option",
+            "Press enter to select an option"
+        ].concat(infoLines).concat([""])
+
+        const drawBackground = () => {
+            context.fillStyle = "black"
+            context.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        let optionsIndex = 0
+
+        const drawOptions = () => {
+            let textSize = 20
+            let textMargin = 10
+            let textHeight = textSize + textMargin
+            context.font = textSize + "px monospace"
+            context.textAlign = "center"
+            context.textBaseline = "middle"
+            context.fillStyle = "white"
+
+            let lines = extraLines.concat(options)
+            lines[optionsIndex + extraLines.length] = `> ${lines[optionsIndex + extraLines.length]} <`
+
+            let yOffset = canvas.height / 2 - textHeight * (lines.length - 1) / 2
+            for (let i = 0; i < lines.length; i++) {
+                context.fillText(
+                    lines[i],
+                    canvas.width / 2,
+                    yOffset + textHeight * i
+                )
+            }
+        }
+
+        const draw = () => {
+            drawBackground()
+            drawOptions()
+        }
+
+        terminal.onInterrupt(() => promptActive = false)
+
+        terminal.window.addEventListener("keydown", e => {
+            if (!promptActive) return
+
+            if (e.key == "ArrowUp" || e.key == "ArrowLeft") {
+                optionsIndex--
+                if (optionsIndex < 0) optionsIndex = options.length - 1
+            } else if (e.key == "ArrowDown" || e.key == "ArrowRight") {
+                optionsIndex++
+                if (optionsIndex >= options.length) optionsIndex = 0
+            }
+
+            if (e.key == "Enter") {
+                promptActive = false
+            }
+
+            draw()
+        })
+
+        draw()
+
+        while (promptActive) {
+            await terminal.sleep(100)
+            draw()
+        }
+
+        return optionsIndex
+    }
+
+}
+
 HighscoreApi.loadUsernameFromLocalStorage()
 
 terminal.modules.game = {
@@ -471,6 +559,7 @@ terminal.modules.game = {
     Vector3d,
     angleDifference,
     HighscoreApi,
+    CanvasDrawer,
     addEventListener: terminal.window.addEventListener,
     removeEventListener: terminal.window.removeEventListener,
     requestAnimationFrame: terminal.window.requestAnimationFrame,

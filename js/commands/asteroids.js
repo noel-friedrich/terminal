@@ -342,12 +342,20 @@ terminal.addCommand("asteroids", async function(args) {
         }
     }
 
+    function reset() {
+        ship = new Ship()
+        particles = []
+        explosionParticles = []
+        asteroids = []
+        minL3Asteroids = 8
+        gameRunning = true
+    }
+
     let ship = new Ship()
     let particles = []
     let explosionParticles = []
     let asteroids = []
     let minL3Asteroids = 8
-    ship.thrust = 1
 
     function loop() {
         drawBackground()
@@ -392,20 +400,35 @@ terminal.addCommand("asteroids", async function(args) {
             terminal.window.requestAnimationFrame(loop)
     }
 
-    loop()
+    while (true) {
+        loop()
+        while (gameRunning) {
+            await terminal.sleep(100)
+        }
 
-    while (gameRunning) {
-        await terminal.sleep(100)
-    }
-
-    terminalWindow.close()
-    let score = ship.score
-
-    terminal.printLine(`Your score: ${score}`)
-
-    if (!args.chaos) {
-        await HighscoreApi.registerProcess("asteroids")
-        await HighscoreApi.uploadScore(score)
+        let chosenOptionIndex = await CanvasDrawer.promptOptions(context, {
+            options: [
+                "Play again",
+                `Upload Score (${ship.score})`,
+                "Exit"
+            ]
+        })
+    
+        if (chosenOptionIndex == 0) {
+            reset()
+        } else if (chosenOptionIndex == 1) {
+            terminalWindow.close()
+            if (!args.chaos) {
+                await HighscoreApi.registerProcess("asteroids", {ask: false})
+                await HighscoreApi.uploadScore(ship.score)
+            } else {
+                terminal.printError("Cannot upload score in chaos mode")
+            }
+            return
+        } else {
+            terminalWindow.close()
+            return
+        }
     }
 
 }, {
