@@ -1869,6 +1869,7 @@ class Terminal {
             }
 
             await this.animatePrint(text, 5)
+            this.data.addToHistory(text)
             this.input(text)
         }
     }
