@@ -511,6 +511,8 @@ class TerminalData {
 
     addToHistory(command) {
         let history = this.history
+        let lastItem = history[history.length - 1]
+        if (lastItem == command) return
         history.push(command)
         this.history = history
     }
