@@ -42,8 +42,8 @@ const putLegalLinksInOrder = (noAnimate=false) => {
 function togglePanel() {
     if (currPanelVisible) {
         panelContainer.animate([
-            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)" },
-            { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)" }
+            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)", height: "100%" },
+            { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)", height: "50px" }
         ], {
             duration: 200,
             easing: "ease-in-out",
@@ -71,8 +71,8 @@ function togglePanel() {
         })
     } else {
         panelContainer.animate([
-            { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)" },
-            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)" }
+            { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)", height: "50px" },
+            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)", height: "100%" }
         ], {
             duration: 300,
             easing: "ease-out",

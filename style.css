@@ -340,7 +340,7 @@ py-splashscreen {
     top: 0;
     right: 0;
     width: min(50%, 400px);
-    height: 100%;
+    height: 50px;
     background: rgba(0, 0, 0, 0);
     display: none;
     padding: 15px;
@@ -354,12 +354,12 @@ py-splashscreen {
 .side-panel-button {
     width: 100%;
     background-color: var(--background);
-    border: 1px solid var(--foreground);
+    border: 3px solid var(--foreground);
     padding: 15px;
     font-family: "Courier New";
+    font-weight: bold;
     cursor: pointer;
     font-size: 1.5em;
-    transition: 200ms;
     margin-bottom: 10px;
     transform: translateX(50px);
     color: var(--foreground);
@@ -367,6 +367,7 @@ py-splashscreen {
 
 .side-panel-button:hover {
     border-color: var(--accent-color-1);
+    color: var(--accent-color-1);
 }
 
 .side-panel-close {
