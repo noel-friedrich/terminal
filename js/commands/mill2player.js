@@ -188,7 +188,7 @@ terminal.addCommand("mill2player", async function() {
             let a = await terminal.promptNum(`${player} set [1-24]: `, {min: 1, max: 24}) - 1
             if (getField(a) != N) {
                 terminal.printLine("field must be free!")
-                await playerInput(player)
+                return await playerInput(player)
             }
             setField(a, player)
             await checkMillSituation(player)
