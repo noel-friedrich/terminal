@@ -145,7 +145,7 @@ class MobileKeyboard {
             button.style.visibility = "hidden"
         }
 
-        if (text === "STRG+C") {
+        if (text === "STRG+C" || text.toLowerCase() === "cancel") {
             button.onclick = () => {
                 terminal.interrupt()
             }
