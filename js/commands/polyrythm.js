@@ -110,7 +110,7 @@ terminal.addCommand("polyrythm", async function(args) {
             polyrythmPrevSideProgress[i] = sideProgress
         }
 
-        if (running || true)
+        if (running)
             requestAnimationFrame(redraw)
     }
 
