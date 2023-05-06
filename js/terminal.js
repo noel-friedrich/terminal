@@ -654,8 +654,10 @@ class Command {
             this.terminal.finishCommand()
             return true
         } catch (error) {
-            if (!(error instanceof IntendedError))
+            if (!(error instanceof IntendedError)) {
                 this.terminal.printError(error.message, error.name)
+                console.error(error)
+            }
             this.terminal.finishCommand()
 
             // if the sleep command was called a max number

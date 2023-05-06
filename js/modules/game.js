@@ -65,6 +65,11 @@ class Vector2d {
         return new Vector2d(this.x * x, this.y * x)
     }
 
+    lerp(v, t) {
+        let delta = v.sub(this)
+        return this.add(delta.scale(t))
+    }
+
     dot(v) {
         return this.x * v.x + this.y * v.y
     }
@@ -153,6 +158,14 @@ class Vector2d {
         return [this.x, this.y]
     }
 
+    get min() {
+        return Math.min(...this.array)
+    }
+
+    get max() {
+        return Math.max(...this.array)
+    }
+
     toArray() {
         return [this.x, this.y]
     }
@@ -173,6 +186,18 @@ class Vector3d {
 
     get normalized() {
         return this.div(this.length)
+    }
+
+    get array() {
+        return [this.x, this.y, this.z]
+    }
+
+    get min() {
+        return Math.min(...this.array)
+    }
+
+    get max() {
+        return Math.max(...this.array)
     }
 
     copy() {
@@ -554,6 +579,15 @@ class CanvasDrawer {
 
 HighscoreApi.loadUsernameFromLocalStorage()
 
+function printSquareCanvas({widthChars=60}={}) {
+    let canvas = terminal.document.createElement("canvas")
+    let sizePx = terminal.charWidth * widthChars
+    canvas.width = sizePx
+    canvas.height = sizePx
+    terminal.parentNode.appendChild(canvas)
+    return canvas
+}
+
 terminal.modules.game = {
     Vector2d,
     Vector3d,
@@ -567,4 +601,5 @@ terminal.modules.game = {
     clearInterval: terminal.window.clearInterval,
     setTimeout: terminal.window.setTimeout,
     clearTimeout: terminal.window.clearTimeout,
+    printSquareCanvas: printSquareCanvas
 }
