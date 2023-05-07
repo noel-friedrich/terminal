@@ -445,8 +445,8 @@ class TerminalParser {
             }).join(" "), terminal.data.accentColor1)
             
             let maxArgNameLength = Math.max(...tempArgOptions.map(arg => arg.fullName.length))
-            for (let argOption of tempArgOptions) {
 
+            for (let argOption of tempArgOptions) {
                 let autoDescription = ""
 
                 if (argOption.default) {
@@ -464,17 +464,22 @@ class TerminalParser {
                     autoDescription += "]"
                 }
 
-                let combinedDescription = autoDescription.trim() + " " + argOption.description
+                let combinedDescription = autoDescription + " " + argOption.description
 
                 if (combinedDescription.trim().length == 0)
                     continue
 
                 terminal.print(" > ")
-                terminal.print(argOption.fullName.padEnd(maxArgNameLength + 1), terminal.data.accentColor1)
+
+                let argName = argOption.fullName
+                if (argName.length > 1) argName = "--" + argName
+                else argName = "-" + argName
+                
+                terminal.print(argName.padEnd(maxArgNameLength + 3), terminal.data.accentColor1)
 
                 if (combinedDescription.length > 50) {
                     terminal.printLine(autoDescription)
-                    terminal.print(" ".repeat(maxArgNameLength + 5))
+                    terminal.print(" ".repeat(maxArgNameLength + 7))
                     terminal.printLine(argOption.description)
                 } else if (combinedDescription.length > 0) {
                     terminal.printLine(combinedDescription)
