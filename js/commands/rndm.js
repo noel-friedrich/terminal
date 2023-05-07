@@ -1,11 +1,17 @@
 terminal.addCommand("rndm", async function(args) {
-    if (args.max - args.min <= 1)
+    if (args.max - args.min <= 0)
         throw new Error("max value must be greater than min value")
 
     let randomNum = ""
 
     if (args.t && args.f) {
         throw new Error("cannot use both time and float options")
+    }
+
+    if (!args.f) {
+        if (!Number.isInteger(args.min) || !Number.isInteger(args.max)) {
+            throw new Error("min and max values must be integers in integer mode")
+        }
     }
 
     if (args.t) {
