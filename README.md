@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 170 commands such as `ls`, `cd` and of course `cowsay`
+* 171 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -110,6 +110,7 @@ The following list can also be viewed using the `whatis *` command
 | `flappy` | play a game of flappy turtlo |
 | `font` | change the font of the terminal |
 | `foreground` | change the foreground color of the terminal |
+| `fractal` | solve a mathematical equation |
 | `games` | shows the game menu |
 | `get` | get a value from the server |
 | `greed` | play a game of greed |
