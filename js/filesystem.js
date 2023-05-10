@@ -369,7 +369,8 @@ class TerminalData {
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "0",
         "easterEggs": "[]",
-        "sidepanel": "true"
+        "sidepanel": "true",
+        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3"}'
     }
 
     localStoragePrepend = "terminal-"
@@ -460,6 +461,26 @@ class TerminalData {
         this.set("easterEggs", JSON.stringify(arr))
     }
 
+    get aliases() {
+        return JSON.parse(this.get("aliases"))
+    }
+
+    set aliases(newAliases) {
+        this.set("aliases", JSON.stringify(newAliases))
+    }
+
+    addAlias(alias, command) {
+        let aliases = this.aliases
+        aliases[alias] = command
+        this.aliases = aliases
+    }
+
+    removeAlias(alias) {
+        let aliases = this.aliases
+        delete aliases[alias]
+        this.aliases = aliases
+    }
+
     addEasterEgg(easterEggID) {
         let foundEggs = this.easterEggs
         foundEggs.add(easterEggID)
@@ -535,15 +556,6 @@ class TerminalData {
         for (let key in this.defaultValues) {
             this.set(key, this.defaultValues[key])
         }
-        this.background = this.background
-        this.foreground = this.foreground
-        this.font = this.font
-        this.accentColor1 = this.accentColor1
-        this.accentColor2 = this.accentColor2
-        this.history = this.history
-        this.startupCommands = this.startupCommands
-        this.storageSize = this.storageSize
-        this.mobile = this.mobile
     }
 
 }

@@ -782,7 +782,7 @@ const UtilityFunctions = {
 
     addAlias(alias, command) {
         if (terminal.inTestMode) return
-        terminal.aliases[alias] = command
+        terminal.data.addAlias(alias, command)
         terminal.log(`Added alias "${alias}" for command "${command}"`)
     }
 
@@ -873,13 +873,6 @@ class Terminal {
     data = new TerminalData()
     fileSystem = new FileSystem()
     modules = new TerminalModules()
-
-    aliases = {
-        "tree": "ls -r",
-        "github": "cat /root/github.url",
-        "hugeturtlo": "turtlo --size 2",
-        "hugehugeturtlo": "turtlo --size 3",
-    }
 
     outputChannel = OutputChannel.USER
 
@@ -1067,7 +1060,7 @@ class Terminal {
         })
 
         let commandMatches = configMatches(Object.keys(terminal.allCommands)
-            .concat(Object.keys(terminal.aliases)))
+            .concat(Object.keys(terminal.data.aliases)))
         let fileMatches = configMatches(addApostrophes(allRelativeFiles))
         let allMatches = configMatches(commandMatches.concat(fileMatches))
 
@@ -1096,7 +1089,7 @@ class Terminal {
             return terminal.data.history[terminal.data.history.length - 1] ?? ""
         }) 
         text = text.trim()
-        for (let [alias, command] of Object.entries(terminal.aliases)) {
+        for (let [alias, command] of Object.entries(terminal.data.aliases)) {
             text = text.replaceAll(RegExp(`^${alias}`, "g"), command)
         }
         return text
