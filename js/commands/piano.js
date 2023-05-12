@@ -33,7 +33,9 @@ Country Roads:
   123 312 321 356 6553 2123 211 121
 USSR Anthem:
   8 58 567 336 545 11 2 234 456 789
-  550 989 558 767 336 545 118 7650`
+  550 989 558 767 336 545 118 7650
+Shrek Intro (All Star)
+  r i-zztrr 7-zzttrr izztrrtw`
 
 
 terminal.addCommand("piano", async function(args) {
