@@ -16,7 +16,7 @@ Star Wars (Main Theme):
 Star Wars (Force Theme):
   36 7 8-9-8 3 3-6 7 8 3 8 6 0 9
 Happy Birthday:
-  112143, 112154, 1186432, 552321
+  112143, 112154, 1186432, zz6454
 Avengers Theme:
   2 22 65 4 3 2, 22 67 5 6
 Despacito:
