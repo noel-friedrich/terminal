@@ -552,14 +552,17 @@ class CanvasDrawer {
 
             if (e.key == "ArrowUp" || e.key == "ArrowLeft") {
                 optionsIndex--
+                e.preventDefault()
                 if (optionsIndex < 0) optionsIndex = options.length - 1
             } else if (e.key == "ArrowDown" || e.key == "ArrowRight") {
                 optionsIndex++
+                e.preventDefault()
                 if (optionsIndex >= options.length) optionsIndex = 0
             }
 
             if (e.key == "Enter") {
                 promptActive = false
+                e.preventDefault()
             }
 
             draw()
