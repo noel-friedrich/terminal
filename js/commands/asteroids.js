@@ -85,6 +85,7 @@ terminal.addCommand("asteroids", async function(args) {
         update() {
             if (!this.alive) return
             this.vel.iadd(this.thrustVector)
+            this.vel.iscale(0.99)
             this.pos.iadd(this.vel)
             if (this.vel.length > this.maxSpeed)
                 this.vel.iscale(this.maxSpeed / this.vel.length)
