@@ -6,6 +6,8 @@ terminal.addCommand("asteroids", async function(args) {
         name: "Asteroids", fullscreen: args.fullscreen
     })
 
+    const maxNumParticles = 1000
+
     const canvas = terminalWindow.CANVAS
     const context = terminalWindow.CONTEXT
 
@@ -115,10 +117,12 @@ terminal.addCommand("asteroids", async function(args) {
         }
  
         spawnParticle() {
+            if (!this.alive) return
             let particle = new Particle()
             particle.pos = this.pos.copy()
             particle.vel = this.bulletDirection.copy()
-            particles.push(particle)
+            particle.vel.iadd(this.vel)
+            particles.unshift(particle)
         }
 
         draw() {
@@ -152,7 +156,7 @@ terminal.addCommand("asteroids", async function(args) {
         let numParticles = Math.floor(Math.random() * num / 2) + Math.floor(num)
         for (let i = 0; i < numParticles; i++) {
             let particle = new ExplosionParticle(position.copy())
-            explosionParticles.push(particle)
+            explosionParticles.unshift(particle)
         }
     }
 
@@ -264,6 +268,8 @@ terminal.addCommand("asteroids", async function(args) {
             this.pos = new Vector2d(0, 0)
             this.vel = new Vector2d(0, 0)
             this.alive = true
+            this.tickCount = 0
+            this.maxTickCount = 1000
         }
 
         isOffScreen() {
@@ -277,6 +283,10 @@ terminal.addCommand("asteroids", async function(args) {
 
         update() {
             this.pos.iadd(this.vel)
+            this.tickCount++
+
+            if (this.tickCount > this.maxTickCount)
+                this.die()
 
             if (args.chaos) {
                 if (this.pos.x < 0)
@@ -381,7 +391,11 @@ terminal.addCommand("asteroids", async function(args) {
         }
 
         particles = particles.filter(particle => particle.alive)
-        explosionParticles = explosionParticles.filter(particle => particle.alive)
+        explosionParticles = explosionParticles.filter((particle, i) => {
+            if (i > maxNumParticles) return false
+            if (particle.alive) return true
+            return false
+        })
         asteroids = asteroids.filter(asteroid => asteroid.alive)
 
         if (l3AsteroidCount < minL3Asteroids) {

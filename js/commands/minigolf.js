@@ -813,6 +813,7 @@ terminal.addCommand("minigolf", async function(args) {
                 boxData.size = { x: b.size.x, y: b.size.y }
                 boxData.angle = b.angle
                 boxData.force = b.forceStrength
+                return boxData
             })
             return JSON.stringify(data)
         }
