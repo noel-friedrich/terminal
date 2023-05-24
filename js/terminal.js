@@ -1674,7 +1674,12 @@ class Terminal {
     }
 
     get visibleFunctions() {
-        return this.functions
+        return Object.entries(terminal.commandData)
+            .filter(([c, d]) => !d.isSecret)
+            .map(([c, d]) => {
+                d.name = c
+                return d
+            })
     }
 
     get currFolder() {
