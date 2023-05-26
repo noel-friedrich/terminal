@@ -54,9 +54,14 @@ It's also my submission to the german 'Jugend Forscht' competetion.
 
 (the website is in german)`
 
-const escape_txt = `Escape is my digital Escape Room platform.
-The software is made for german groups of 2-12 people and
-comes with a lot of different rooms to play.`
+const compli_txt = `Compli, An Android to remind people to give compliments.
+
+The App contains a timer telling you how long it's been since you've given
+someone a compliment. If you give a compliment to someone, you can reset this
+timer. Once this timer reaches a configurable threshold, you get a reminding
+notification to compliment someone.
+
+Download the App on the Google Play Store!`
 
 const contact_txt = `E-Mail: noel.friedrich@outlook.de`
 
@@ -130,17 +135,17 @@ terminal.fileSystem.root = new Directory({
             "about.txt": new TextFile(teleasy_txt),
             "teleasy-github.url": new ExecutableFile("https://github.com/noel-friedrich/teleasy")
         }, {"<": "cd ..", "github": "run teleasy-github.url"}),
-        "escape": new Directory({
-            "about.txt": new TextFile(escape_txt),
-            "escape.url": new ExecutableFile("https://noel-friedrich.de/escape")
-        }, {"<": "cd ..", "open": "run escape.url"}),
+        "compli": new Directory({
+            "about.txt": new TextFile(compli_txt),
+            "compli.url": new ExecutableFile("https://github.com/noel-friedrich/compli")
+        }, {"<": "cd ..", "open": "run compli.url"}),
     }, {
         "<": "cd ..",
         "ppath": ["cd perilious-path", "cat about.txt"],
         "coville": ["cd coville", "cat about.txt"],
         "acb": ["cd anticookiebox", "cat about.txt"],
         "teleasy": ["cd teleasy", "cat about.txt"],
-        "escape": ["cd escape", "cat about.txt"]
+        "compli": ["cd compli", "cat about.txt"]
     }),
     "noel": new Directory({
         "secret": new Directory({

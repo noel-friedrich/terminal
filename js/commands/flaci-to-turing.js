@@ -82,6 +82,7 @@ terminal.addCommand("flaci-to-turing", async function(args) {
         "file": "file to convert",
         "?s=save:b": "save the converted file"
     },
+    isSecret: true,
     helpFunc() {
         terminal.addLineBreak()
         terminal.printLink("flaci.com", "https://flaci.com/", undefined, false)

@@ -90,10 +90,14 @@ body {
     display: inline;
     cursor: default;
     color: var(--foreground);
-    transition: color 0.5s;
+    transition: color 200ms;
     white-space: pre-wrap;
     tab-size: 4;
     word-break: break-word;
+}
+
+#terminal a:hover {
+    color: var(--accent-color-1);
 }
 
 .terminal-container {
