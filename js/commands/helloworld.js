@@ -9,11 +9,6 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("                                                                "),
         () => terminal.print("Start by using the side menu to enter a few easy commands.      "),
         () => terminal.print("Theres about 200 things to discover. How many can you find?     "),
-        () => {
-            terminal.print("Type '")
-            terminal.printCommand("help", "help", undefined, false)
-            terminal.print("' to get a starting point.                            ")
-        },
         () => terminal.print("                                                                "),
         () => {
             terminal.printLink("Blog", "https://noel-friedrich.de/blobber", undefined, false)
