@@ -2,7 +2,7 @@
 > simulating a terminal as my homepage  
 > available at [noel-friedrich.de/terminal](https://noel-friedrich.de/terminal/)  
 
-[![Screenshot of Website](https://raw.githubusercontent.com/noel-friedrich/terminal/main/res/img/screenshots/website-screenshot-1.png)](https://noel-friedrich.de/terminal/)
+[![Screenshot of Website](https://raw.githubusercontent.com/noel-friedrich/terminal/main/res/img/screenshots/website-screenshot.png)](https://noel-friedrich.de/terminal/)
 
 ## Table of contents
 * [Introduction](#introduction)
@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 171 commands such as `ls`, `cd` and of course `cowsay`
+* 172 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -205,6 +205,7 @@ The following list can also be viewed using the `whatis *` command
 | `terml` | run a .terml file |
 | `tetris` | play a classic game of tetris |
 | `tictactoe` | play a game of tic tac toe against the computer. |
+| `time` | Shows the current time. |
 | `timer` | set a timer |
 | `todo` | manage a todo list |
 | `touch` | create a file in the current directory |
