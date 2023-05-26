@@ -1059,7 +1059,7 @@ class Terminal {
             return m
         })
 
-        let commandMatches = configMatches(Object.keys(terminal.allCommands)
+        let commandMatches = configMatches(terminal.visibleFunctions.map(f => f.name)
             .concat(Object.keys(terminal.data.aliases)))
         let fileMatches = configMatches(addApostrophes(allRelativeFiles))
         let allMatches = configMatches(commandMatches.concat(fileMatches))
