@@ -8,7 +8,7 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|  "),
         () => terminal.print("                                                                "),
         () => terminal.print("Start by using the side menu to enter a few easy commands.      "),
-        () => terminal.print("Theres about 200 things to discover. How many can you find?     "),
+        () => terminal.print("There's about 200 things to discover. How many can you find?    "),
         () => terminal.print("                                                                "),
         () => {
             terminal.printLink("Blog", "https://noel-friedrich.de/blobber", undefined, false)
