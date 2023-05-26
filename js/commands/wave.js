@@ -7,6 +7,8 @@ terminal.addCommand("wave", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+
+    while (true) await sleep(100)
 }, {
     description: "play with a wave"
 })
