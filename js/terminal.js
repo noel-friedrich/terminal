@@ -848,6 +848,8 @@ class KeyboardShortcut {
 class Terminal {
 
     parentNode = document.getElementById("terminal")
+    loadingOverlayContainer = document.getElementById("loading-overlay")
+    loadingOverlayOutput = document.getElementById("loading-output")
     containerNode = document.querySelector(".terminal-container")
     commandListURL = "js/load-commands.js"
     mobileKeyboardURL = "js/keyboard.js"
@@ -875,6 +877,27 @@ class Terminal {
     modules = new TerminalModules()
 
     outputChannel = OutputChannel.USER
+
+    loadingKey = null
+
+    async setLoading(file) {
+        let randomKey = Math.random().toString()
+        this.loadingKey = randomKey
+
+        // wait a bit before showing the loading overlay
+        await this.sleep(150)
+
+        if (this.loadingKey != randomKey)
+            return
+
+        this.loadingOverlayContainer.style.display = "block"
+        this.loadingOverlayOutput.textContent = file
+    }
+
+    async unsetLoading() {
+        this.loadingKey = null
+        this.loadingOverlayContainer.style.display = "none"
+    }
 
     scroll(behavior="smooth", toLeft=true) {
         let opts = {
@@ -1623,6 +1646,10 @@ class Terminal {
         if (!testMode)
             this.log(`Inputted Text: "${text}"`)
 
+        // clear interrupt signal
+        this._interruptCallbackQueue = []
+        this._interruptSignal = false
+
         if (this.mobileKeyboard) {
             this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.CMD_RUNNING)
         }
@@ -1716,7 +1743,12 @@ class Terminal {
         return Math.floor(this.widthPx / this.charWidth) - 5
     }
 
-    async _loadScript(url, extraData={}) {
+    async _loadScript(url, extraData={}, {
+        asyncMode=false
+    }={}) {
+        if (!asyncMode) {
+            this.setLoading(url)
+        }
         // make a new iframe to load the script in
         // to prevent the script from accessing the global scope
         // instead, it will access the iframe's global scope
@@ -1726,8 +1758,6 @@ class Terminal {
         // and cannot access each other's variables
         // which is good because it prevents command scripts
         // from interfering with each other (name conflicts, etc.)
-
-        // to make sure the browser doesn't cache the script
 
         let iframe = document.createElement("iframe")
         let script = document.createElement("script")
@@ -1750,6 +1780,10 @@ class Terminal {
         await new Promise(resolve => script.onload = resolve)
 
         this.log(`Loaded Script: ${url}`)
+
+        if (!asyncMode) {
+            this.unsetLoading()
+        }
 
         return iframe.contentWindow
     }
@@ -1894,8 +1928,6 @@ class Terminal {
             let i = 0
             for (let startupCommand of this.data.startupCommands) {
                 await this.input(startupCommand, true)
-                if (i < this.data.startupCommands.length - 1)
-                    this.addLineBreak()
             }
 
             if (this.isMobile) {
@@ -1906,13 +1938,13 @@ class Terminal {
                 this.printCommand("click to enable", "keyboard on")
             }
 
-            this.expectingFinishCommand = true
-            this.finishCommand()
-
             // TODO: make this into terminal.data option
             if (true) {
-                this._loadScript(this.sidePanelURL)
+                this._loadScript(this.sidePanelURL, {}, {asyncMode: true})
             }
+
+            this.expectingFinishCommand = true
+            this.finishCommand()
         }
 
         this.hasInitted = true
