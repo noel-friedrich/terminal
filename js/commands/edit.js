@@ -75,8 +75,12 @@ let prevLineCount = null
 let currentlyEditing = false
 
 function updateLineNums() {
-    lineCount = elements.content.querySelectorAll("div").length
-    if (prevLineCount !== lineCount) {
+    lineCount = elements.content.childNodes.length
+
+    if (lineCount == 0) {
+        elements.sidebar.textContent = "1"
+        prevLineCount = lineCount
+    } else if (prevLineCount !== lineCount) {
         elements.sidebar.textContent = ""
         for (let i = 0; i < lineCount; i++) {
             let line = createElement("div", {className: "editor-line-num"}, elements.sidebar)
