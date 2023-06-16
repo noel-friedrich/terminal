@@ -13,7 +13,6 @@ html {
     --font: "Cascadia Code", monospace;
     --accent-color-1: yellow; 
     --accent-color-2: rgb(139, 195, 74);
-    --btn-color: black;
     --error-color: red;
 }
 
@@ -126,54 +125,6 @@ body {
 
 #terminal input:focus {
     outline: none;
-}
-
-#terminal-buttons {
-    position: absolute;
-    right: 15%;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 20%;
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-row-gap: 10px;
-}
-
-#terminal-buttons.mobile {
-    position: fixed;
-    top: auto;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    transform: none;
-    padding: 10px;
-    box-sizing: border-box;
-    margin-bottom: 70px;
-}
-
-#terminal-buttons > button {
-    display: var(--terminal-btn-display);
-    background: var(--foreground);
-    border: none;
-    padding: 20px;
-    font-family: var(--font);
-    font-size: 2.8em;
-    color: var(--btn-color);
-    cursor: pointer;
-    box-sizing: border-box;
-    border: 2px solid transparent;
-    transition: 300ms;
-}
-
-#terminal-buttons.mobile > button {
-    padding: 2px;
-    font-size: 2em;
-}
-
-#terminal-buttons > button:hover {
-    background: transparent;
-    color: var(--foreground);
-    border: 2px dotted var(--foreground);
 }
 
 #turtlo-container {
@@ -345,7 +296,6 @@ py-splashscreen {
     right: 0;
     width: min(50%, 400px);
     height: 50px;
-    background: rgba(0, 0, 0, 0);
     display: none;
     padding: 15px;
     padding-top: 60px;
@@ -353,6 +303,7 @@ py-splashscreen {
     overflow: auto;
     overflow-x: hidden;
     transform: translateX(350px);
+    background-color: var(--background);
 }
 
 .side-panel-button {
