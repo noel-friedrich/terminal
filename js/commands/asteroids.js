@@ -197,7 +197,7 @@ terminal.addCommand("asteroids", async function(args) {
                 let children = Math.floor(Math.random() * 2) + 1
                 for (let i = 0; i < children; i++) {
                     let asteroid = new Asteroid(this.level - 1)
-                    asteroid.pos = this.pos.copy()
+                    asteroid.pos = this.pos.copy().add(Vector2d.random().scale(this.size))
                     asteroids.push(asteroid)
                 }
             }
@@ -450,7 +450,7 @@ terminal.addCommand("asteroids", async function(args) {
     description: "simulate a bunch of balls jumping around",
     args: {
         "?f=fullscreen:b": "start in fullscreen mode",
-        "?chaos:b": "start with chaos mode enabled",
+        "?c=chaos:b": "start with chaos mode enabled",
     },
     isGame: true
 })
