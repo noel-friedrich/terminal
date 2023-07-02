@@ -303,7 +303,6 @@ py-splashscreen {
     overflow: auto;
     overflow-x: hidden;
     transform: translateX(350px);
-    background-color: var(--background);
 }
 
 .side-panel-button {
@@ -375,4 +374,22 @@ py-splashscreen {
     .legal-links {
         transform: none !important;
     }
+}
+
+#terminal::-webkit-scrollbar-track,
+.side-panel-container::-webkit-scrollbar-track {
+	background-color: transparent;
+}
+
+#terminal::-webkit-scrollbar,
+.side-panel-container::-webkit-scrollbar {
+	width: 10px;
+    height: 10px;
+    margin-right: 1px;
+	background-color: transparent;
+}
+
+#terminal::-webkit-scrollbar-thumb,
+.side-panel-container::-webkit-scrollbar-thumb {
+	background-color: var(--foreground);
 }
