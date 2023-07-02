@@ -7,8 +7,13 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("| | | | (_) |  __/ |_| | | |  | |  __/ (_| | |  | | (__| | | |  "),
         () => terminal.print("|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|  "),
         () => terminal.print("                                                                "),
-        () => terminal.print("Start by using the side menu to enter a few easy commands.      "),
-        () => terminal.print("There's about 200 things to discover. How many can you find?    "),
+        () => terminal.print("Welcome to my website! It's also a very interactive terminal!   "),
+        () => terminal.print("You may enter commands to navigate over 200 unique features.    "),
+        () => {
+            terminal.print("Start your adventure using the ")
+            terminal.printCommand("help", "help", undefined, false)
+            terminal.print(" command. Have lots of fun!  ")
+        },
         () => terminal.print("                                                                "),
         () => {
             terminal.printLink("Blog", "https://noel-friedrich.de/blobber", undefined, false)
