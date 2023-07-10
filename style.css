@@ -376,11 +376,13 @@ py-splashscreen {
     }
 }
 
+.terminal-container::-webkit-scrollbar-track,
 #terminal::-webkit-scrollbar-track,
 .side-panel-container::-webkit-scrollbar-track {
 	background-color: transparent;
 }
 
+.terminal-container::-webkit-scrollbar,
 #terminal::-webkit-scrollbar,
 .side-panel-container::-webkit-scrollbar {
 	width: 10px;
@@ -389,6 +391,7 @@ py-splashscreen {
 	background-color: transparent;
 }
 
+.terminal-container::-webkit-scrollbar-thumb,
 #terminal::-webkit-scrollbar-thumb,
 .side-panel-container::-webkit-scrollbar-thumb {
 	background-color: var(--foreground);
