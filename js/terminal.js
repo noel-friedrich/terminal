@@ -188,6 +188,31 @@ class ParserError extends Error {
 
 class TerminalParser {
 
+    static isVariable = (token) => /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(token)
+    static commandIsAssignment = (command) => /^\$[a-zA-Z][a-zA-Z0-9]*\s*=/.test(command)
+    static extractVariableName = (command) => command.match(/^\$([a-zA-Z][a-zA-Z0-9]*)\s*=/)[1]
+
+    static replaceVariables(tokens, variables) {
+        return tokens.map(token => {
+            if (this.isVariable(token)) {
+                let name = this.extractVariableName(token + "=")
+                if (name in variables) return variables[name]
+            }
+            return token
+        })
+    }
+    
+    static extractAssignment(command) {
+        if (!TerminalParser.commandIsAssignment(command)) return null
+
+        let variableName = TerminalParser.extractVariableName(command)
+        let variableValue = command.split("=", 2)[1]
+        return {
+            name: variableName,
+            value: variableValue
+        }
+    }
+
     static tokenize(input) {
         let tokens = []
         let tempToken = ""
@@ -651,11 +676,13 @@ class Command {
 
         try {
             let argObject = this.processArgs(args, rawArgs)
+
             if (this.callback.constructor.name === 'AsyncFunction') {
                 await this.callback(processArgs ? argObject : args)
             } else {
                 this.callback(processArgs ? argObject : args)
             }
+
             this.terminal.finishCommand()
             return true
         } catch (error) {
@@ -822,7 +849,8 @@ let CORRECTNESS_CACHE = {}
 
 const OutputChannel = {
     USER: "user",
-    NONE: "none"
+    NONE: "none",
+    CACHE_AND_USER: "cache_and_user",
 }
 
 class KeyboardShortcut {
@@ -846,6 +874,8 @@ class KeyboardShortcut {
 }
 
 class Terminal {
+
+    parser = TerminalParser
 
     parentNode = document.getElementById("terminal")
     loadingOverlayContainer = document.getElementById("loading-overlay")
@@ -877,8 +907,31 @@ class Terminal {
     modules = new TerminalModules()
 
     outputChannel = OutputChannel.USER
+    outputCacheVarName = null
+
+    variableCache = {}
 
     loadingKey = null
+
+    getOutputCache(key) {
+        if (this.variableCache[key] === undefined)
+            return ""
+        return this.variableCache[key]
+    }
+
+    writeToOutputCache(value) {
+        if (this.outputChannel == OutputChannel.NONE)
+            throw new Error("Cannot write to output cache when output channel is set to none")
+        if (this.outputCacheVarName === null)
+            throw new Error("Cannot write to output cache when output cache var name is not set")
+
+        let currCache = this.getOutputCache(this.outputCacheVarName)
+        this.variableCache[this.outputCacheVarName] = currCache + value
+    }
+
+    getVariableValue(name) {
+        return this.variableCache[name]
+    }
 
     async setLoading(file) {
         let randomKey = Math.random().toString()
@@ -1171,9 +1224,21 @@ class Terminal {
             return
         }
 
+        if (TerminalParser.isVariable(text)) {
+            let name = TerminalParser.extractVariableName(text + "=")
+            this.setInputCorrectness(name in this.variableCache)
+            return
+        }
+
+        let assignmentInfo = TerminalParser.extractAssignment(text)
+        if (assignmentInfo) {
+            text = assignmentInfo.value
+        }
+
         let tokens = TerminalParser.tokenize(text)
+        tokens = TerminalParser.replaceVariables(tokens, this.variableCache)
         let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
-        if (!this.commandExists(commandText)) {
+        if (!this.commandExists(commandText)) { 
             this.setInputCorrectness(false)
             return
         }
@@ -1472,7 +1537,11 @@ class Terminal {
         }
     }
 
-    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined}={}) {
+    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined, addToCache=true}={}) {
+        if (this.outputChannel == OutputChannel.CACHE_AND_USER && addToCache) {
+            this.writeToOutputCache(text)
+        }
+
         text ??= ""
         let output = undefined
         if (color === undefined && !forceElement && fontStyle === undefined && background === undefined) {
@@ -1635,9 +1704,9 @@ class Terminal {
     }
 
     async standardInputPrompt() {
-        let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true})
+        let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true, addToCache: false})
         element.style.marginLeft = "-2em"
-        this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN)
+        this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN, {addToCache: false})
         let text = await this.prompt("", {affectCorrectness: true})
         await this.input(text)
     }
@@ -1652,6 +1721,28 @@ class Terminal {
 
         if (this.mobileKeyboard) {
             this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.CMD_RUNNING)
+        }
+
+        if (TerminalParser.isVariable(text)) {
+            let varName = TerminalParser.extractVariableName(text + "=")
+            if (this.variableCache[varName] == undefined) {
+                this.printError(`Variable '${varName}' is not defined\n`)
+            } else {
+                let varValue = this.variableCache[varName]
+                this.printLine(varValue)
+            }
+            this.standardInputPrompt()
+            return
+        }
+
+        let assignmentInfo = TerminalParser.extractAssignment(text)
+        if (assignmentInfo) {
+            this.variableCache[assignmentInfo.name] = ""
+            this.outputCacheVarName = assignmentInfo.name
+            text = assignmentInfo.value
+            this.outputChannel = OutputChannel.CACHE_AND_USER
+        } else {
+            this.outputChannel = OutputChannel.USER
         }
 
         let tokens = TerminalParser.tokenize(text)
@@ -1810,6 +1901,10 @@ class Terminal {
     }
 
     async finishCommand({force=false}={}) {
+        if (this.outputChannel === OutputChannel.CACHE_AND_USER) {
+            this.outputChannel = OutputChannel.USER
+        }
+
         if ((!this.expectingFinishCommand && !force) || this.currInputElement)
             return
         this.expectingFinishCommand = false
