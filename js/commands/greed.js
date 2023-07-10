@@ -185,6 +185,102 @@ terminal.addCommand("greed", async function(args) {
 
     }
 
+    class Solver {
+
+        static callCount = 0
+
+        static evalPos(data, playerX, playerY, score, currDepth=1, maxDepth=2) {
+            this.callCount++
+
+            if (currDepth >= maxDepth) {
+                return [score, null]
+            }
+
+            let bestScore = 0
+            let bestMove = null
+
+            const inBounds = (x, y) => {
+                return !(
+                    x < 0 || y < 0 ||
+                    y >= data.length ||
+                    x >= data[0].length
+                )
+            }
+
+            let possibleMoves = [[0, 1], [0, -1], [1, 0], [-1, 0]]
+
+            moveLoop:
+            for (let move of possibleMoves) {
+                let currX = playerX + move[0]
+                let currY = playerY + move[1]
+
+                if (!inBounds(currX, currY)) {
+                    continue
+                }
+
+                let value = data[currY][currX]
+                if (value == -1) {
+                    continue
+                }
+
+                let dataCopy = data.map(row => {
+                    return row.map(cell => {
+                        return (cell == "@" || cell == " ") ? -1 : cell
+                    })
+                })
+
+                dataCopy[currY][currX] = -1
+
+                for (let i = 1; i < value; i++) {
+                    currX += move[0]
+                    currY += move[1]
+                    if (!inBounds(currX, currY)) {
+                        continue moveLoop
+                    }
+                    if (dataCopy[currY][currX] == -1) {
+                        continue moveLoop
+                    }
+                    dataCopy[currY][currX] = -1
+                }
+
+                let [moveScore, _] = this.evalPos(dataCopy, currX, currY, score + value, currDepth + 1, maxDepth)
+
+                if (moveScore > bestScore) {
+                    bestMove = move
+                    bestScore = moveScore
+                }
+            }
+
+            return [bestScore, bestMove]
+        }
+
+        static getBestMove(data, playerPos, depth) {
+            this.callCount = 0
+
+            if (this.logging) {
+                console.log(`-- starting search with depth=${depth} --`)
+            }
+
+            let [score, move] = this.evalPos(
+                data,
+                playerPos.x,
+                playerPos.y,
+                0, 1, depth
+            )
+
+            if (this.logging) {
+                console.log(`-- ending search, score=${score} --`)
+            }
+
+            if (move) {
+                return Vector2d.fromArray(move)
+            } else {
+                return null
+            }
+        }
+
+    }
+
     terminal.printLine("Use the arrow keys to move the player. You will move the")
     terminal.printLine("number of spaces equal to the number on the tile you land on")
     terminal.printLine("Don't crash into the walls or yourself!")
@@ -193,7 +289,13 @@ terminal.addCommand("greed", async function(args) {
     addEventListener("keydown", event => {
         if (!game.running || game.processing) return
 
-        if (event.key == "ArrowUp") {
+        if (event.key == "s") {
+            let bestMove = Solver.getBestMove(game.data, game.player.pos, 10)
+            if (bestMove) {
+                game.movePlayer(bestMove)
+            }
+            event.preventDefault()
+        } else if (event.key == "ArrowUp") {
             game.movePlayer(new Vector2d(0, -1))
             event.preventDefault()
         } else if (event.key == "ArrowDown") {
