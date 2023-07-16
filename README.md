@@ -225,6 +225,7 @@ The following list can also be viewed using the `whatis *` command
 | `whoami` | get client info |
 | `yes` | print a message repeatedly |
 | `zip` | zip a file |
+| `weather` | get the current weather |
 
 ## Status
 Project is _IN PROGRESS_
