@@ -74,7 +74,7 @@ async function getImageFromUpload() {
 
         input.onchange = function(event) {
             if (!input.value.length) {
-                reject()
+                reject(new Error("No image selected"))
                 return
             }
             let fileReader = new FileReader()
@@ -88,7 +88,13 @@ async function getImageFromUpload() {
             fileReader.readAsDataURL(input.files[0])
         }
 
-        terminal.document.body.onfocus = () => {if (!input.value.length) reject()}
+        terminal.document.body.onfocus = () => {
+            setTimeout(() => {
+                if (!input.value.length) {
+                    reject(new Error("No image selected"))
+                }
+            }, 500)
+        }
     })
 }
 
