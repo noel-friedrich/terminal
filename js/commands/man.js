@@ -5,7 +5,12 @@ terminal.addCommand("man", async function(args) {
     if (args.command == "man") {
         throw new Error("Recursion.")
     }
-    terminal.printLine("description: \"" + command.description + "\"")
+
+    terminal.printTable([
+        ["name", command.name],
+        ["author", command.author],
+        ["description", command.description],
+    ])
     if (command.args.length == 0) {
         terminal.printLine("args: doesn't accept any arguments")
     } else {

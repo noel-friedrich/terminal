@@ -640,6 +640,7 @@ class Command {
         this.helpFunc = info.helpFunc ?? null
         this.description = info.description ?? ""
         this.defaultValues = info.defaultValues ?? info.standardVals ?? {}
+        this.author = info.author ?? "Noel Friedrich"
         this.windowScope = null
     }
 
