@@ -13,7 +13,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 173 commands such as `ls`, `cd` and of course `cowsay`
+* 174 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -220,12 +220,12 @@ The following list can also be viewed using the `whatis *` command
 | `w` | print the current time elapsed |
 | `wave` | play with a wave |
 | `wc` | display word and line count of file |
+| `weather` | Get the current weather |
 | `whatday` | get the weekday of a date |
 | `whatis` | display a short description of a command |
 | `whoami` | get client info |
 | `yes` | print a message repeatedly |
 | `zip` | zip a file |
-| `weather` | get the current weather |
 
 ## Status
 Project is _IN PROGRESS_
