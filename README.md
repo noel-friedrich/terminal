@@ -7,6 +7,7 @@
 ## Table of contents
 * [Introduction](#introduction)
   * [fun stuff to try](#fun-stuff-to-try)
+* [Contributing](#contributing)
 * [Commands](#commands)
 * [Status](#status)
 
@@ -44,6 +45,11 @@ The page is build to work like a Unix-Terminal, including:
 * generate fake whatsapp conversations using `fakechat`  
 
 _and so much more_
+
+## Contributing
+
+Feel free to contribute to this project by adding new commands or improving existing ones.
+For detailed instructions on how to do so, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
 
 ## Commands
 
