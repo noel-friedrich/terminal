@@ -1,9 +1,9 @@
-terminal.addCommand("img2ascii", async function() {
+terminal.addCommand("img2ascii", async function(args) {
     await terminal.modules.load("upload", terminal)
 
     let image = await terminal.modules.upload.image()
 
-    let outputSize = {x: 60, y: undefined}
+    let outputSize = {x: args.width, y: 0}
     outputSize.y = parseInt(outputSize.x * (image.height / image.width) * 0.6)
 
     let asciiChars = " .:-=+*#%@"
@@ -49,5 +49,11 @@ terminal.addCommand("img2ascii", async function() {
         terminal.printLine()
     }
 }, {
-    description: "Convert an image to ASCII art"
+    description: "Convert an image to ASCII art",
+    args: {
+        "?w=width:i:1~500": "the width of the output image in characters"
+    },
+    defaultValues: {
+        width: 60
+    }
 })
