@@ -7,6 +7,7 @@ terminal.addCommand("live-rocket", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
-    description: "a simple avoid game that you steer using camera input"
+    description: "a simple avoid game that you steer using camera input",
 })

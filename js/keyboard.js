@@ -141,18 +141,7 @@ class MobileKeyboard {
 
     makeButton(text) {
         let button = document.createElement("button")
-        button.style.width = "100%"
-        button.style.height = "100%"
-        button.style.border = "none"
-        button.style.backgroundColor = "#333"
-        button.style.color = "white"
-        button.style.fontSize = "1.5rem"
-        button.style.fontFamily = "monospace"
-        button.style.outline = "none"
-        button.style.cursor = "pointer"
-        button.style.userSelect = "none"
-        button.style.height = "2.5rem"
-        button.style.outline = "1px solid black"
+        button.classList.add("keyboard-button")
         button.dataset.keyCode = this.getKeyCode(text)
 
         if (text === null) {

@@ -11,32 +11,21 @@ const asciiPiano = `+-+---+---+-+-+---+---+---+-+-+---+---+-+
 +---+---+---+---+---+---+---+---+---+---+
       < Press keys to play notes. >      
       
-Star Wars (Main Theme):
-  1 5 4-3-2 8 5 4-3-2 8 5 4-3-4-2
-Star Wars (Force Theme):
-  36 7 8-9-8 3 3-6 7 8 3 8 6 0 9
-Happy Birthday:
-  112143, 112154, 1186432, zz6454
-Avengers Theme:
-  2 22 65 4 3 2, 22 67 5 6
+Star Wars (Main Theme):   1 5 4-3-2 8 5 4-3-2 8 5 4-3-4-2
+Star Wars (Force Theme):  36 7 8-9-8 3 3-6 7 8 3 8 6 0 9
+Happy Birthday:           112143 112154 1186432 zz6454
+Avengers Theme:           2 22 65 4 3 2, 22 67 5 6
+Twinkle Twinkle:          1 1 5 5 6 6 5, 4 4 3 3 2 2 1
+Harry Potter:             36 876 09 7 6 875 z3
+Shrek Intro (All Star):   r i-zztrr 7-zzttrr izztrrtw
+Country Roads:            123 312 321 356 6553 2123 211 121
 Despacito:
-  8 7 63 3333 6666 6564 4444 66667
-  8 5 5555 888 99 7 8 7 6 3
+  8 7 63 3333 6666 6564 4444 66667 8 5 5555 888 99 7 8 7 6 3
 Disney's Up Theme:
-  4643 4632 2421 265 265 4-2
-  4543 3531 8-0-8-7
-Twinkle Twinkle Little Star:
-  1 1 5 5 6 6 5, 4 4 3 3 2 2 1
-Harry Potter:
-  36 876 09 7 6 875 z3
-Country Roads:
-  123 312 321 356 6553 2123 211 121
+  4643 4632 2421 265 265 4-2 4543 3531 8-0-8-7
 USSR Anthem:
   8 58 567 336 545 11 2 234 456 789
-  550 989 558 767 336 545 118 7650
-Shrek Intro (All Star)
-  r i-zztrr 7-zzttrr izztrrtw`
-
+  550 989 558 767 336 545 118 7650`
 
 terminal.addCommand("piano", async function(args) {
     const notesToUrl = {
