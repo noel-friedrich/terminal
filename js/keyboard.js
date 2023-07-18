@@ -5,7 +5,17 @@ class KeyboardLayout {
             ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
             ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
             ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-            ["z", "x", "c", "v", "b", "n", "m", "<"],
+            ["⇑", "z", "x", "c", "v", "b", "n", "m", "<"],
+            ["Tab", "Space", "Enter"]
+        ]
+    }
+
+    static get DEFAULT_UPPERCASE() {
+        return [
+            ["!", "\"", "-", "$", "%", "&", "/", "(", ")", "="],
+            ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+            ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+            ["⇓", "Z", "X", "C", "V", "B", "N", "M", "<"],
             ["Tab", "Space", "Enter"]
         ]
     }
@@ -115,9 +125,13 @@ class MobileKeyboard {
         terminal.document.body.appendChild(this.container)
     }
 
-    updateLayout(layout) {
+    updateLayout(layout, keepCallback=false) {
         this.layout = layout
         this.parseLayout(layout)
+
+        if (keepCallback && this.oninput) {
+            this.oninput = this.oninput
+        }
     }
 
     clearLayout() {
@@ -143,9 +157,7 @@ class MobileKeyboard {
 
         if (text === null) {
             button.style.visibility = "hidden"
-        }
-
-        if (text === "STRG+C" || text.toLowerCase() === "cancel") {
+        } else if (text === "STRG+C" || text.toLowerCase() === "cancel") {
             button.onclick = () => {
                 terminal.interrupt()
             }
@@ -200,7 +212,14 @@ class MobileKeyboard {
             event.key = this.getKeyCode(key)
             event.keyValue = this.getKeyValue(key)
             event.isFunctionKey = this.isFunctionKey(key)
-            callback(event)
+        
+            if (event.key == "⇑") {
+                this.updateLayout(KeyboardLayout.DEFAULT_UPPERCASE, true)
+            } else if (event.key == "⇓") {
+                this.updateLayout(KeyboardLayout.DEFAULT, true)
+            } else {
+                callback(event)
+            }
         })
     }
 
