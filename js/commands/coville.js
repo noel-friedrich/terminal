@@ -7,6 +7,8 @@ terminal.addCommand("coville", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
-    description: "interactive virus simulation (in german)"
+    description: "interactive virus simulation (in german)",
+    isSecret: true
 })

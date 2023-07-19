@@ -7,6 +7,7 @@ terminal.addCommand("cardoid", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
     description: "start a cardoid generator"
 })
