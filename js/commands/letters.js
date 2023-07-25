@@ -462,6 +462,7 @@ terminal.addCommand("letters", function(args) {
     description: "prints the given text in ascii art",
     args: {
         "*text": "the text to print"
-    }
+    },
+    example: "letters hello world"
 })
 
