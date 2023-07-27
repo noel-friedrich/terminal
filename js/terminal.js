@@ -868,8 +868,8 @@ class KeyboardShortcut {
         this.shift = shift
     }
 
-    run() {
-        this.callback.call(this)
+    run(event) {
+        this.callback(event)
     }
 
 }
@@ -2109,7 +2109,7 @@ class Terminal {
 
         if (shortcut) {
             event.preventDefault()
-            shortcut.run()
+            shortcut.run(event)
         }
     }
 
@@ -2205,6 +2205,20 @@ terminal.addKeyboardShortcut(new KeyboardShortcut(
         terminal.printEasterEgg(eggName)
     },
     {ctrl: true, shift: true, alt: true}
+))
+
+terminal.addKeyboardShortcut(new KeyboardShortcut(
+    "+", async () => {
+        terminal.enlargeText() 
+    },
+    {ctrl: true, shift: undefined}
+))
+
+terminal.addKeyboardShortcut(new KeyboardShortcut(
+    "-", async () => {
+        terminal.shrinkText()
+    },
+    {ctrl: true, shift: undefined}
 ))
 
 // count page visits
