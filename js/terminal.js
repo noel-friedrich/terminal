@@ -2082,6 +2082,16 @@ class Terminal {
         }
     }
 
+    enlargeText() {
+        let currFontSize = parseFloat(getComputedStyle(this.parentNode).fontSize)
+        this.parentNode.style.fontSize = `${currFontSize + 1}px`
+    }
+
+    shrinkText() {
+        let currFontSize = parseFloat(getComputedStyle(this.parentNode).fontSize)
+        this.parentNode.style.fontSize = `${currFontSize - 1}px`
+    }
+
     _onkeydownShortcut(event) {
         let key = event.key
 
