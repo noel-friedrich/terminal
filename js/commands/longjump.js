@@ -2,6 +2,27 @@ terminal.addCommand("longjump", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
 
+    terminal.printLine("Loading Highscores...")
+
+    let allHighscores = []
+    try {
+        allHighscores = await HighscoreApi.getHighscores("longjump")
+    } catch (e) {
+        terminal.log("Failed to load highscores.")
+    }
+
+    let turtloImage = new Image()
+    turtloImage.src = "res/img/turtlo/walking-0.png"
+    await new Promise((resolve) => {
+        turtloImage.onload = resolve
+    })
+
+    let turtloImageLanded = new Image()
+    turtloImageLanded.src = "res/img/turtlo/hidden.png"
+    await new Promise((resolve) => {
+        turtloImageLanded.onload = resolve
+    })
+
     let terminalWindow = terminal.modules.window.make({
         name: "LongJump", fullscreen: args.fullscreen
     })
@@ -12,6 +33,8 @@ terminal.addCommand("longjump", async function(args) {
     let viewOffset = new Vector2d(0, 0)
     let desiredOffset = new Vector2d(0, 0)
     let groundHeight = 0.8
+
+    let touchModeActive = false
 
     function posToScreenPos(pos) {
         let meterScaleFactor = Math.min(canvas.width, canvas.height) / 2
@@ -46,18 +69,19 @@ terminal.addCommand("longjump", async function(args) {
     }
 
     function drawText(position, text, {
-        color="white", size=0.1, align="center", baseline="middle", bold=false
+        color="white", size=0.1, align="center", baseline="middle", bold=false, rotation=0
     }={}) {
         let meterScaleFactor = Math.min(canvas.width, canvas.height) / 2
         let drawPosition = posToScreenPos(position)
+        context.save()
+        context.translate(drawPosition.x, drawPosition.y)
+        context.rotate(rotation)
         context.fillStyle = color
-        context.font = `${size * meterScaleFactor}px Courier New`
+        context.font = `${bold ? "bold " : ""}${size * meterScaleFactor}px sans-serif`
         context.textAlign = align
         context.textBaseline = baseline
-        if (bold) {
-            context.font = `bold ${context.font}`
-        }
-        context.fillText(text, drawPosition.x, drawPosition.y)
+        context.fillText(text, 0, 0)
+        context.restore()
     }
 
     function drawCircle(position, radius, color="white") {
@@ -83,6 +107,25 @@ terminal.addCommand("longjump", async function(args) {
         }
     }
 
+    function drawImage(position, size, image, rotation=0) {
+        let meterScaleFactor = Math.min(canvas.width, canvas.height) / 2
+        let drawPosition = posToScreenPos(position)
+        context.save()
+        context.translate(drawPosition.x, drawPosition.y)
+        context.rotate(rotation)
+        let sizeX = size * meterScaleFactor
+        let sizeY = (size * image.height / image.width) * meterScaleFactor
+        context.imageSmoothingEnabled = false
+        context.drawImage(
+            image,
+            -sizeX / 2 * meterScaleFactor,
+            -sizeY / 2 * meterScaleFactor,
+            sizeX * meterScaleFactor,
+            sizeY * meterScaleFactor
+        )
+        context.restore()
+    }
+
     function updateViewOffset() {
         let diff = desiredOffset.sub(viewOffset)
         viewOffset = viewOffset.add(diff.scale(zoomSpeed))
@@ -95,15 +138,32 @@ terminal.addCommand("longjump", async function(args) {
     class Player {
 
         constructor() {
-            this.size = new Vector2d(0.08, 0.12)
+            this.size = 0.0005
             this.position = new Vector2d(0, 0)
-            this.lastPosition = new Vector2d(0, 0)
             this.velocity = new Vector2d(0, 0)
 
             this.isSwinging = true
             this.swingAmplitude = 0.5
             this.swingLengthMs = 2000
             this.landed = false
+            this._lastPosition = null
+
+            this.spawnTime = Date.now()
+        }
+
+        get canJump() {
+            if (this.isSwinging) {
+                let msSinceSpawn = Date.now() - this.spawnTime
+                if (msSinceSpawn > 1000) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        get lastPosition() {
+            if (!this._lastPosition) return this.position
+            return this._lastPosition
         }
 
         jump() {
@@ -113,11 +173,18 @@ terminal.addCommand("longjump", async function(args) {
         }
 
         _drawBody() {
-            drawRect(
-                this.position.sub(this.size.scale(0.5)),
+            drawImage(
+                this.position,
                 this.size,
-                "yellow"
+                this.landed ? turtloImageLanded : turtloImage,
+                this.angle + Math.PI / 2 * 3
             )
+        }
+
+        get angle() {
+            if (!this.lastPosition) return 0
+            if (this.landed) return Math.PI / 2 * 3
+            return this.position.angleTo(this.lastPosition)
         }
 
         _drawScore() {
@@ -128,18 +195,18 @@ terminal.addCommand("longjump", async function(args) {
             )
             drawText(
                 new Vector2d(this.position.x, 0.03),
-                `Press Space to play again`,
+                touchModeActive ? `Tap to restart` : `Press Space to play again`,
                 {color: "yellow"}
             )
             drawText(
                 new Vector2d(this.position.x, 0.14),
-                `Press Enter to upload your score`,
+                touchModeActive ? `` : `Press Enter to upload your score`,
                 {color: "yellow"}
             )
         }
 
         update() {
-            this.lastPosition = this.position
+            this._lastPosition = this.position
 
             if (this.isSwinging) {
                 let swingPosX = Date.now() / this.swingLengthMs % 1
@@ -160,9 +227,10 @@ terminal.addCommand("longjump", async function(args) {
                 if (this.position.y > groundHeight) {
                     this.velocity = new Vector2d(this.velocity.x, -this.velocity.y).scale(jumpEfficiency)
                     this.position = new Vector2d(this.position.x, groundHeight)
+                    spawnExplosion(this.position.add(new Vector2d(0, -0.01)), this.velocity.length * 20)
                 }
 
-                if (this.velocity.length < 0.001) {
+                if (this.velocity.length < 0.001 && Math.abs(this.position.y - groundHeight) < 0.01) {
                     this.landed = true
                     zoomSpeed = 0.03
                 }
@@ -171,8 +239,8 @@ terminal.addCommand("longjump", async function(args) {
 
         draw() {
             if (this.isSwinging) {
-                this._drawBody()
                 drawLine(this.position, new Vector2d(0, 0))
+                this._drawBody()
             } else if (!this.landed) {
                 desiredOffset = this.position.scale(-1)
                 this._drawBody()
@@ -189,13 +257,69 @@ terminal.addCommand("longjump", async function(args) {
 
     }
 
+    class Particle {
+
+        constructor(position) {
+            this.color = [
+                "#90ed68",
+                "#7ae34d",
+                "#4e9131"
+            ][Math.floor(Math.random() * 3)]
+            this.position = position
+            let sizeFactor = Math.random() * 0.02 + 0.01
+            this.size = new Vector2d(sizeFactor, sizeFactor)
+            this.velocity = new Vector2d(Math.random() - 0.5, Math.random() - 0.5).scale(0.005)
+            this.readyToDie = false
+        }
+
+        get volume() {
+            return this.size.x * this.size.y
+        }
+
+        update() {
+            this.velocity.iadd(new Vector2d(0, gravityConstant * this.volume * 1000).scale(3))
+            this.position.iadd(this.velocity)
+            if (this.position.y > groundHeight) {
+                this.readyToDie = true
+            }
+        }
+
+        draw() {
+            if (this.readyToDie) return
+            drawRect(this.position, this.size, this.color)
+        }
+
+    }
+
+    function spawnExplosion(position, strength=1) {
+        for (let i = 0; i < strength * 100; i++) {
+            let particle = new Particle(position.copy())
+            particle.velocity = Vector2d.fromAngle(Math.PI / -2 - 0.5 + Math.random()).scale(0.007)
+            particles.push(particle)
+        }
+    }
+
     let running = true
     let player = new Player()
+    let particles = []
     let randomSeed = Math.floor(Math.random() * 1000000)
     let selectedUpload = false
 
     const groundStartX = -20
-    const groundWidth = 40
+    const groundWidth = 60
+
+    function drawParticles() {
+        for (let particle of particles) {
+            particle.draw()
+        }
+        particles = particles.filter(p => !p.readyToDie)
+    }
+
+    function updateParticles() {
+        for (let particle of particles) {
+            particle.update()
+        }
+    }
 
     function drawGround() {
         drawRect(
@@ -203,12 +327,15 @@ terminal.addCommand("longjump", async function(args) {
             new Vector2d(groundWidth, 10),
         )
 
-        for (let x = groundStartX; x < groundStartX + groundWidth; x += 0.04) {
-            let grassHeight = Math.sin(x * 201) * 0.025 + 0.07
+        let randomGrassHeight = mulberry32(randomSeed + 100)
+        for (let x = groundStartX; x < groundStartX + groundWidth;) {
+            let grassHeight = randomGrassHeight() * 0.07 + 0.03
             drawLine(
                 new Vector2d(x, groundHeight - grassHeight),
-                new Vector2d(x, groundHeight)
+                new Vector2d(x, groundHeight),
+                {color: "#7ae34d"}
             )
+            x += randomGrassHeight() * 0.03 + 0.01
         }
 
         for (let x = groundStartX; x < groundStartX + groundWidth; x += 1) {
@@ -219,6 +346,24 @@ terminal.addCommand("longjump", async function(args) {
                     color: "black"
                 }
             )
+        }
+
+        let prevScore = -1
+        for (let highscore of allHighscores) {
+            if (highscore.score === prevScore) continue
+
+            let x = highscore.score / 10
+            drawText(
+                new Vector2d(x, groundHeight + 0.15),
+                `- ${highscore.name} (${highscore.score}m)`,
+                {
+                    color: "black",
+                    rotation: Math.PI / 2,
+                    size: 0.05,
+                    align: "left"
+                }
+            )
+            prevScore = highscore.score
         }
     }
 
@@ -248,7 +393,7 @@ terminal.addCommand("longjump", async function(args) {
     addEventListener("keydown", function(event) {
         if (!running) return
 
-        if (event.key == " " && player.isSwinging) {
+        if (event.key == " " && player.canJump) {
             player.isSwinging = false
             player.jump()
         }
@@ -265,11 +410,30 @@ terminal.addCommand("longjump", async function(args) {
         }
     })
 
+    addEventListener("touchstart", function(event) {
+        if (!running) return
+
+        touchModeActive = true
+
+        if (player.canJump) {
+            player.isSwinging = false
+            player.jump()
+        }
+
+        if (player.landed) {
+            player = new Player()
+            zoomSpeed = 0.05
+            desiredOffset = new Vector2d(0, 0)
+        }
+    })
+
     function gameLoop() {
         context.clearRect(0, 0, canvas.width, canvas.height)
 
-        drawGround()
         drawSky()
+        updateParticles()
+        drawParticles()
+        drawGround()
         drawSwing()
         player.update()
         player.draw()
