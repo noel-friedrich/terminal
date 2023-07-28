@@ -241,6 +241,8 @@ terminal.addCommand("longjump", async function(args) {
         })
 
         drawCircle(new Vector2d(0, 0), 0.03)
+
+        drawText(new Vector2d(0, -0.7), "Press Space to jump", { color: "yellow", bold: true })
     }
 
     addEventListener("keydown", function(event) {

@@ -121,6 +121,7 @@ addButtons([
     { text: "Open Help Menu", command: "help" },
     { text: "List All Commands", command: "lscmds" },
     { text: "Play Minigolf", command: "minigolf" },
+    { text: "Play LongJump", command: "longjump" },
     { text: "List  All Games", command: "games" },
     { text: "Open A Calendar", command: `cal ${new Date().getFullYear()}` },
     { text: "Open A Clock", command: "clock" },
