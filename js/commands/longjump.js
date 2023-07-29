@@ -118,10 +118,10 @@ terminal.addCommand("longjump", async function(args) {
         context.imageSmoothingEnabled = false
         context.drawImage(
             image,
-            -sizeX / 2 * meterScaleFactor,
-            -sizeY / 2 * meterScaleFactor,
-            sizeX * meterScaleFactor,
-            sizeY * meterScaleFactor
+            -sizeX / 2,
+            -sizeY / 2,
+            sizeX,
+            sizeY
         )
         context.restore()
     }
@@ -138,7 +138,7 @@ terminal.addCommand("longjump", async function(args) {
     class Player {
 
         constructor() {
-            this.size = 0.0005
+            this.size = 0.2
             this.position = new Vector2d(0, 0)
             this.velocity = new Vector2d(0, 0)
 
@@ -200,7 +200,7 @@ terminal.addCommand("longjump", async function(args) {
             )
             drawText(
                 new Vector2d(this.position.x, 0.14),
-                touchModeActive ? `` : `Press Enter to upload your score`,
+                touchModeActive ? ``     : `Press Enter to upload your score`,
                 {color: "yellow"}
             )
         }
