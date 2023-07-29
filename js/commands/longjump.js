@@ -220,6 +220,7 @@ terminal.addCommand("longjump", async function(args) {
                 }
 
                 this.position = posFromX(swingPosX)
+                particles.push(new FlyParticle(this.position))
             } else if (!this.landed) {
                 this.velocity.iadd(new Vector2d(0, gravityConstant))
                 this.position = this.position.add(this.velocity)
@@ -234,6 +235,8 @@ terminal.addCommand("longjump", async function(args) {
                     this.landed = true
                     zoomSpeed = 0.03
                 }
+
+                particles.push(new FlyParticle(this.position))
             }
         }
 
@@ -286,7 +289,31 @@ terminal.addCommand("longjump", async function(args) {
 
         draw() {
             if (this.readyToDie) return
-            drawRect(this.position, this.size, this.color)
+            drawRect(this.position.add(this.size.scale(-0.5)), this.size, this.color)
+        }
+
+    }
+
+    class FlyParticle extends Particle {
+
+        constructor(position) {
+            super(position)
+            this.velocity = new Vector2d(0, 0)
+            this.color = "#90ed68"
+            this.originalSize = 0.03
+            this.originalDieCounter = 25
+            this.size = new Vector2d(this.originalSize, this.originalSize)
+            this.dieCounter = this.originalDieCounter
+        }
+
+        update() {
+            this.dieCounter--
+            if (this.dieCounter < 0) {
+                this.readyToDie = true
+            }
+
+            let sizeDecrease = -1 / this.originalDieCounter * this.originalSize
+            this.size.iadd(new Vector2d(sizeDecrease, sizeDecrease))
         }
 
     }
