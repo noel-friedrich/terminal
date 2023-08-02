@@ -370,7 +370,7 @@ class TerminalData {
         "mobile": "0",
         "easterEggs": "[]",
         "sidepanel": "true",
-        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3"}'
+        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
     }
 
     localStoragePrepend = "terminal-"

@@ -93,17 +93,17 @@ terminal.addCommand("longjump", async function(args) {
         context.fill()
     }
 
-    function drawCloud(position) {
+    function drawCloud(position, color) {
         let random = mulberry32(Math.floor(position.x * 1000 + position.y * 1000))
 
-        drawCircle(position, 0.1, "white")
+        drawCircle(position, 0.1, color)
         for (let i = 0; i < 10; i++) {
             let angle = random() * Math.PI * 2
             let offset = new Vector2d(
                 Math.sin(angle) * 0.15,
                 Math.cos(angle) * 0.05
             )
-            drawCircle(position.add(offset), 0.1, "white")
+            drawCircle(position.add(offset), 0.1, color)
         }
     }
 
@@ -362,6 +362,23 @@ terminal.addCommand("longjump", async function(args) {
                 new Vector2d(x, groundHeight),
                 {color: "#7ae34d"}
             )
+
+            if (randomGrassHeight() < 0.05) {
+                // draw flower
+                drawRect(
+                    new Vector2d(x - 0.015, groundHeight - grassHeight - 0.015),
+                    new Vector2d(0.03, 0.03),
+                    [
+                        "#ff0000",
+                        "#ff00ff",
+                        "#ffff00",
+                        "#00ffff",
+                        "#0000ff",
+                        "#ff7f00"
+                    ][Math.floor(randomGrassHeight() * 6)]
+                )
+            }
+
             x += randomGrassHeight() * 0.03 + 0.01
         }
 
@@ -399,7 +416,7 @@ terminal.addCommand("longjump", async function(args) {
         for (let x = groundStartX; x < groundStartX + groundWidth;) {
             x += random() * 2 + 1
             let cloudPosY = random() * -3
-            drawCloud(new Vector2d(x, cloudPosY))
+            drawCloud(new Vector2d(x, cloudPosY), "rgba(255, 255, 255, 0.5)")
         }
     }
 
