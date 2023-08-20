@@ -20,7 +20,7 @@ terminal.addCommand("helloworld", async function() {
             terminal.print(" ")
             terminal.printLink("Github", "https://github.com/noel-friedrich/terminal", undefined, false)
             terminal.print(" ")
-            terminal.printLink("StadtOhren", "http://stadt-ohren.de", undefined, false)
+            terminal.printLink("Perli", "https://noel-friedrich.de/perli", undefined, false)
             terminal.print(" ")
             terminal.printLink("Compli", "https://play.google.com/store/apps/details?id=de.noelfriedrich.compli", undefined, false)
             terminal.print(" ")
@@ -29,7 +29,9 @@ terminal.addCommand("helloworld", async function() {
             terminal.printLink("Partycolo", "https://noel-friedrich.de/partycolo", undefined, false)
             terminal.print(" ")
             terminal.printLink("Spion", "https://noel-friedrich.de/spion", undefined, false)
-            terminal.print("     ")
+            terminal.print(" ")
+            terminal.printLink("Turtlo", "https://noel-friedrich.de/turtlo", undefined, false)
+            terminal.print("   ")
         }
     ]
 
