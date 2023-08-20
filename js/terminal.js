@@ -1861,24 +1861,31 @@ class Terminal {
         // from interfering with each other (name conflicts, etc.)
 
         let iframe = document.createElement("iframe")
-        let script = document.createElement("script")
-        script.src = `${url}?${loadIndex}`
         iframe.style.display = "none"
         document.body.appendChild(iframe)
+
         let iframeDocument = iframe.contentDocument || iframe.contentWindow.document
 
-        iframe.contentWindow.terminal = this
-        for (let key in extraData)
-            iframe.contentWindow[key] = extraData[key]
-        for (let key in UtilityFunctions)
-            iframe.contentWindow[key] = UtilityFunctions[key]
-        iframe.contentWindow["sleep"] = this.sleep
-        iframe.contentWindow["audioContext"] = this.audioContext
-        iframe.contentWindow["loadIndex"] = loadIndex
+        // firefox wants an iframe to contain at least an empty html page,
+        // otherwise it won't fire script.onload later
+        iframeDocument.write("<!DOCTYPE html>\n<html><head></head><body></body></html>")
 
-        iframeDocument.body.appendChild(script)
-
-        await new Promise(resolve => script.onload = resolve)
+        await new Promise(resolve => {
+            let script = document.createElement("script")
+            script.onload = resolve
+            script.src = `${url}?${loadIndex}`
+    
+            iframe.contentWindow.terminal = this
+            for (let key in extraData)
+                iframe.contentWindow[key] = extraData[key]
+            for (let key in UtilityFunctions)
+                iframe.contentWindow[key] = UtilityFunctions[key]
+            iframe.contentWindow["sleep"] = this.sleep
+            iframe.contentWindow["audioContext"] = this.audioContext
+            iframe.contentWindow["loadIndex"] = loadIndex
+    
+            iframeDocument.body.appendChild(script)
+        })
 
         this.log(`Loaded Script: ${url}`)
 
