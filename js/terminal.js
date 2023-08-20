@@ -1860,30 +1860,28 @@ class Terminal {
         // which is good because it prevents command scripts
         // from interfering with each other (name conflicts, etc.)
 
-        let iframe = document.createElement("iframe")
-        iframe.style.display = "none"
-        document.body.appendChild(iframe)
+        let iframe = await new Promise(resolve => {
+            let iframeElement = document.createElement("iframe")
+            iframeElement.addEventListener("load", () => resolve(iframeElement))
+            iframeElement.style.display = "none"
+            document.body.appendChild(iframeElement)
+        })
 
+        // add variables to iframe namespace
         let iframeDocument = iframe.contentDocument || iframe.contentWindow.document
+        iframe.contentWindow.terminal = this
+        for (let key in extraData)
+            iframe.contentWindow[key] = extraData[key]
+        for (let key in UtilityFunctions)
+            iframe.contentWindow[key] = UtilityFunctions[key]
+        iframe.contentWindow["sleep"] = this.sleep
+        iframe.contentWindow["audioContext"] = this.audioContext
+        iframe.contentWindow["loadIndex"] = loadIndex
 
-        // firefox wants an iframe to contain at least an empty html page,
-        // otherwise it won't fire script.onload later
-        iframeDocument.write("<!DOCTYPE html>\n<html><head></head><body></body></html>")
-
-        await new Promise(resolve => {
+        await new Promise(resolve => {    
             let script = document.createElement("script")
-            script.onload = resolve
+            script.addEventListener("load", resolve)
             script.src = `${url}?${loadIndex}`
-    
-            iframe.contentWindow.terminal = this
-            for (let key in extraData)
-                iframe.contentWindow[key] = extraData[key]
-            for (let key in UtilityFunctions)
-                iframe.contentWindow[key] = UtilityFunctions[key]
-            iframe.contentWindow["sleep"] = this.sleep
-            iframe.contentWindow["audioContext"] = this.audioContext
-            iframe.contentWindow["loadIndex"] = loadIndex
-    
             iframeDocument.body.appendChild(script)
         })
 
