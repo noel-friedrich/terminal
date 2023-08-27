@@ -14,5 +14,6 @@ terminal.addCommand("particle", async function(args) {
     },
     standardVals: {
         n: 100000
-    }
+    },
+    isSecret: true
 })
