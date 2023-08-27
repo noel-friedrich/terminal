@@ -40,10 +40,6 @@ terminal.modules.window = {
         windowContainer.appendChild(content)
         
         if (fullscreen) {
-			content.style.width = "100%"
-			content.style.height = "100%"
-			content.style.margin = "0"
-			content.style.position = "fixed"
             windowContainer.style.width = "100%"
             windowContainer.style.height = "100%"
             windowContainer.style.margin = "0"
@@ -60,6 +56,7 @@ terminal.modules.window = {
             if (fullscreen) {
                 iframe.style.borderRadius = "0"
                 iframe.style.border = "0"
+                windowContainer.style.borderRadius = "0"
             }
 
             return {
@@ -70,6 +67,13 @@ terminal.modules.window = {
                 }
             }
         } else {
+            if (fullscreen) {
+                content.style.width = "100%"
+                content.style.height = "100%"
+                content.style.margin = "0"
+                content.style.position = "fixed"
+            }
+
             const CANVAS = terminal.document.createElement("canvas")
             CANVAS.style.backgroundColor = backgroundColor
             content.appendChild(CANVAS)
