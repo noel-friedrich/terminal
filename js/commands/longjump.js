@@ -205,7 +205,7 @@ terminal.addCommand("longjump", async function(args) {
             )
             drawText(
                 new Vector2d(this.position.x, 0.14),
-                touchModeActive ? ``     : `Press Enter to upload your score`,
+                touchModeActive ? `Swipe to upload score` : `Press Enter to upload your score`,
                 {color: "yellow"}
             )
         }
@@ -459,8 +459,16 @@ terminal.addCommand("longjump", async function(args) {
         }
     })
 
+    let touchStartPos = null
+
     addEventListener("touchstart", function(event) {
         if (!running) return
+
+        let touch = event.touches[0] || event.changedTouches[0]
+        touchStartPos = new Vector2d(
+            touch.pageX,
+            touch.pageY
+        )
 
         touchModeActive = true
 
@@ -468,11 +476,27 @@ terminal.addCommand("longjump", async function(args) {
             player.isSwinging = false
             player.jump()
         }
+    })
 
-        if (player.landed) {
-            player = new Player()
-            zoomSpeed = 0.05
-            desiredOffset = new Vector2d(0, 0)
+    addEventListener("touchend", function(event) {
+        if (touchStartPos == null || !player.landed) return
+
+        let touch = event.touches[0] || event.changedTouches[0]
+        let touchEndPos = new Vector2d(
+            touch.pageX,
+            touch.pageY
+        )
+
+        let delta = touchStartPos.sub(touchEndPos).length
+        if (delta < 50) {
+            if (player.landed) {
+                player = new Player()
+                zoomSpeed = 0.05
+                desiredOffset = new Vector2d(0, 0)
+            }
+        } else {
+            selectedUpload = true
+            running = false
         }
     })
 
