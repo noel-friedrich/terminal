@@ -168,7 +168,12 @@ terminal.addCommand("longjump", async function(args) {
 
         jump() {
             this.isSwinging = false
-            this.velocity = this.position.sub(this.lastPosition)
+
+            let swingPosX = Date.now() / this.swingLengthMs % 1
+            swingPosX = Math.cos(swingPosX * Math.PI * 2) * 0.7
+            let speed = Math.abs(swingPosX)
+
+            this.velocity = this.position.sub(this.lastPosition).normalized.scale(0.1 * speed)
             zoomSpeed = 0.1
         }
 
