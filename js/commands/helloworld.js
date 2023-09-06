@@ -30,8 +30,8 @@ terminal.addCommand("helloworld", async function() {
             terminal.print(" ")
             terminal.printLink("Spion", "https://noel-friedrich.de/spion", undefined, false)
             terminal.print(" ")
-            terminal.printLink("Turtlo", "https://noel-friedrich.de/turtlo", undefined, false)
-            terminal.print("   ")
+            terminal.printLink("YouTube", "https://www.youtube.com/@noel.friedrich", undefined, false)
+            terminal.print("  ")
         }
     ]
 
