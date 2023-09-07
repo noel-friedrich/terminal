@@ -27,7 +27,7 @@ terminal.addCommand("highscores", async function(args) {
     let tableData = []
     for (let highscore of highscores) {
         let rank = await HighscoreApi.getRank(args.game, highscore.score, allHighscores)
-        tableData.push([rank, highscore.name, highscore.score, highscore.time])
+        tableData.push([rank, highscore.name, Math.abs(highscore.score), highscore.time])
     }
     
     terminal.printTable(tableData, ["Rank", "Name", "Score", "Time"])
