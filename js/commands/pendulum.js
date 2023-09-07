@@ -8,6 +8,7 @@ terminal.addCommand("pendulum", async function(args) {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
     description: "start a pendulum wave simulation",
     args: {
