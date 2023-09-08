@@ -1128,7 +1128,7 @@ class Terminal {
             words.pop()
             words.push(match)
             return words.join(" ")
-        })
+        }).filter(s => s != text)
 
         const addApostrophes = ms => ms.map(m => {
             if (m.includes(" ")) {
