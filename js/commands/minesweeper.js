@@ -295,30 +295,51 @@ terminal.addCommand("minesweeper", async function(args) {
         playing = false
     })
 
-    addEventListener("keydown", event => {
+    const onkeydown = (eventkey, event) => {
         let timeElapsed = Date.now() - startTime
         if (!playing || timeElapsed < 100) return
 
-        if (event.key == "ArrowUp") {
+        if (eventkey == "ArrowUp") {
             board.selectionPos.y = Math.max(board.selectionPos.y - 1, 0)
-        } else if (event.key == "ArrowDown") {
+            event.preventDefault()
+        } else if (eventkey == "ArrowDown") {
             board.selectionPos.y = Math.min(board.selectionPos.y + 1, board.height - 1)
-        } else if (event.key == "ArrowLeft") {
+            event.preventDefault()
+        } else if (eventkey == "ArrowLeft") {
             board.selectionPos.x = Math.max(board.selectionPos.x - 1, 0)
-        } else if (event.key == "ArrowRight") {
+            event.preventDefault()
+        } else if (eventkey == "ArrowRight") {
             board.selectionPos.x = Math.min(board.selectionPos.x + 1, board.width - 1)
+            event.preventDefault()
         }
 
-        if (event.key == "Enter") {
+        if (eventkey == "Enter") {
             board.uncoverRecursive(board.selectionPos)
+            event.preventDefault()
         }
 
-        if (event.key.toUpperCase() == "F") {
+        if (eventkey.toUpperCase() == "F") {
             board.placeFlag(board.selectionPos.copy())
+            event.preventDefault()
         }
 
         updateOutput()
-    })
+    }
+
+    addEventListener("keydown", event => onkeydown(event.key, event))
+
+    if (terminal.mobileKeyboard) {
+        terminal.mobileKeyboard.updateLayout([
+            [null, "↑", null],
+            ["←", "↓", "→"],
+            ["F", "Enter"],
+            ["STRG+C"]
+        ])
+
+        terminal.mobileKeyboard.onkeydown = function(e, keycode) {
+            onkeydown(keycode, e)
+        }
+    }
 
     while (playing) {
         await sleep(100)
