@@ -2035,8 +2035,10 @@ class Terminal {
             let error404 = await this.getCommand("error404")
             error404.run()
         } else {
-            let i = 0
             for (let startupCommand of this.data.startupCommands) {
+                if (startupCommand.startsWith("turtlo") && terminal.mobileKeyboard) {
+                    continue
+                }
                 await this.input(startupCommand, true)
             }
 
