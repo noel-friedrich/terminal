@@ -64,7 +64,6 @@ class MobileKeyboard {
         container.style.height = "auto"
         container.style.display = "none"
         container.style.zIndex = "1000"
-        container.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
         container.style.color = "white"
         container.style.padding = "1rem"
         container.style.boxSizing = "border-box"
@@ -74,20 +73,12 @@ class MobileKeyboard {
 
     createToggleButton() {
         let button = document.createElement("button")
+        button.classList.add("top-button")
         button.style.position = "absolute"
         button.style.top = "0"
         button.style.right = "0"
-        button.style.width = "2.5rem"
-        button.style.height = "2.5rem"
-        button.style.border = "none"
-        button.style.backgroundColor = "transparent"
-        button.style.color = "white"
-        button.style.fontSize = "1.5rem"
-        button.style.fontFamily = "monospace"
-        button.style.outline = "none"
-        button.style.cursor = "pointer"
-        button.style.userSelect = "none"
         button.style.zIndex = "1001"
+        button.style.margin = "10px"
 
         button.textContent = "⌨"
 
@@ -238,7 +229,6 @@ class MobileKeyboard {
             rowElement.style.display = "grid"
             rowElement.style.gridTemplateColumns = `repeat(${row.length}, 1fr)`
             rowElement.style.borderRadius = "0.5em"
-            rowElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
             rowElement.style.color = "white"
             rowElement.style.fontFamily = "monospace"
             rowElement.style.outline = "none"
