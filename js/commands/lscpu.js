@@ -8,9 +8,30 @@ terminal.addCommand("lscpu", function() {
     const speed = (runs / ms / 1000000) * cyclesPerRun
     const ghz = Math.round(speed * 10) / 10
 
-    terminal.printLine(`platform: ${navigator.platform}`)
-    terminal.printLine(`cores: ${navigator.hardwareConcurrency}`)
-    terminal.printLine(`clock speed (guess): ${ghz}ghz`)
+    let vendor = "unknown"
+    let renderer = "unknown"
+
+    try {
+        const canvas = document.createElement("canvas")
+        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+        if (gl) {
+            const debugInfo = gl.getExtension("WEBGL_debug_renderer_info")
+            vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)
+            renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+        } else {
+            throw new Error()
+        }
+    } catch {
+        terminal.printError("Couldn't access gpu info")
+    }
+
+    terminal.printTable([
+        ["cores", navigator.hardwareConcurrency],
+        ["platform (guess)", navigator.platform],
+        ["clockspeed (guess)", `${ghz} ghz`],
+        ["gpu vendor", vendor],
+        ["gpu renderer", renderer]
+    ])
 }, {
     description: "get some helpful info about your cpu"         
 })
