@@ -7,6 +7,8 @@ terminal.addCommand("perilious-path", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
-    description: "play perilous path"
+    description: "play perilous path",
+    isGame: true
 })

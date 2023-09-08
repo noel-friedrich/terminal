@@ -1,10 +1,7 @@
 terminal.addCommand("games", function() {
-    let gameCommands = [
-        'tictactoe', '4inarow', 'chess', 'mill2player', 'snake', '2048',
-        'lunar-lander', 'tetris', 'number-guess', 'stacker', 'type-test',
-        'pong', 'greed', 'labyrinth', 'perilious-path', 'shoot', 'flappy',
-        'hangman', 'minigolf', 'sodoku', 'asteroids', 'longjump', 'plane'
-    ]
+    let gameCommands = Object.entries(terminal.commandData)
+        .filter(([_, info]) => info.isGame)
+        .map(([name, _]) => name)
     let longestCommandLength = gameCommands.reduce((p, c) => Math.max(p, c.length), 0)
     for (let command of gameCommands.sort((a, b) => a.localeCompare(b))) {
         terminal.printCommand(command, command, Color.PURPLE, false)

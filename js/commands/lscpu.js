@@ -26,9 +26,9 @@ terminal.addCommand("lscpu", function() {
     }
 
     terminal.printTable([
-        ["cores", navigator.hardwareConcurrency],
+        ["logical cpu cores", navigator.hardwareConcurrency],
         ["platform (guess)", navigator.platform],
-        ["clockspeed (guess)", `${ghz} ghz`],
+        ["cpu clockspeed (guess)", `${ghz} ghz`],
         ["gpu vendor", vendor],
         ["gpu renderer", renderer]
     ])
