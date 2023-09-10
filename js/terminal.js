@@ -964,13 +964,16 @@ class Terminal {
 
     scroll(behavior="smooth", toLeft=true) {
         let opts = {
-            top: 10 ** 10, // sufficiently large number
+            top: 10 ** 9, // sufficiently large number
+            // (number must be lower than 10**10, as firefox doesn't allow those values)
             behavior
         }
         if (toLeft)
             opts.left = 0
         this.parentNode.scrollTo(opts)
         this.containerNode.scrollTo(opts)
+        
+        console.log("Scroll called")
     }
 
     isUrlParamSet(param) {

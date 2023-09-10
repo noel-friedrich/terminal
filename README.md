@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 176 commands such as `ls`, `cd` and of course `cowsay`
+* 178 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -129,6 +129,8 @@ The following list can also be viewed using the `whatis *` command
 | `highscore-remove` | Remove a highscore |
 | `highscores` | Show global highscores for a game |
 | `history` | print the command history |
+| `hr` | create a hr code |
+| `hr-draw` | turn drawings into bitmaps |
 | `href` | open a link in another tab |
 | `image-crop` | start image cropper program |
 | `img2ascii` | Convert an image to ASCII art |
