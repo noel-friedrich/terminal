@@ -972,8 +972,6 @@ class Terminal {
             opts.left = 0
         this.parentNode.scrollTo(opts)
         this.containerNode.scrollTo(opts)
-        
-        console.log("Scroll called")
     }
 
     isUrlParamSet(param) {
