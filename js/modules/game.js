@@ -322,7 +322,7 @@ class Vector3d {
 
     rotateRight(angle) {
         return this.rotateZ(angle)
-        let temp = this.angleUp
+        let temp = this.angleUpS
         return this.setAngleUp(0).rotateZ(angle).setAngleUp(temp)
     }
 

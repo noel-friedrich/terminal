@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 178 commands such as `ls`, `cd` and of course `cowsay`
+* 179 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -93,6 +93,7 @@ The following list can also be viewed using the `whatis *` command
 | `cowsay` | let the cow say something |
 | `cowthink` | let the cow say something |
 | `cp` | copy a file |
+| `crossp` | calculate the cross product of 2 3d vectors |
 | `curl` | download a file from the internet |
 | `cw` | get the calendar week of a date |
 | `debug` | activate the debug mode to enable untested new features |
