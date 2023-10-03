@@ -333,7 +333,13 @@ class TerminalParser {
         }
 
         argOptions.name = name
+        argOptions.forms = [name]
         argOptions.description = ""
+        argOptions.error = undefined
+        argOptions.tokenIndex = undefined
+        argOptions.tokenSpan = 0
+        argOptions.value = undefined
+        argOptions.isManuallySetValue = false
 
         if (argOptions.name.includes("=")) {
             argOptions.forms = argOptions.name.split("=")
@@ -351,48 +357,41 @@ class TerminalParser {
         return argOptions.find(arg => arg.name == argName || arg.forms.includes(argName))
     }
 
-    static parseNamedArgs(tokens, argOptions, error, disableEquals) {
-        let namedArgs = {}
+    static parseNamedArgs(tokens, argOptions, parsingError) {
         let deleteIndeces = []
-
-        if (!disableEquals) {
-            let i = 0
-            for (let token of tokens) {
-                if (token.match(/^[^=]+=[^=]+$/)) {
-                    let parts = token.split("=").filter(p => p != "")
-                    if (parts.length != 2) {
-                        throw new Error(`Unexpected token "${token}"`)
-                    }
-                    let name = parts[0]
-                    let value = parts[1]
-                    namedArgs[name] = value
-                    deleteIndeces.push(i)
-                    let argOption = this.getArgOption(argOptions, name)
-                    if (!argOption) {
-                        error(`Unexpected property "${name}" (E142)`)
-                    } else if (argOption.type == "boolean") {
-                        error(`Property "${name}" is a boolean and cannot be assigned a value`)
-                    }
-                }
-                i++
-            }
-        }
 
         for (let i = 0; i < tokens.length; i++) {
             let currToken = tokens[i]
             let nextToken = tokens[i + 1]
             let deleteNext = true
+
             const handleArg = name => {
                 let argOption = this.getArgOption(argOptions, name)
+
                 if (!argOption) {
-                    error(`Unexpected property "${name}" (E212)`)
+                    parsingError.message = `Unexpected property "${name}"`
+                    parsingError.tokenIndex = i
+                } else if (!argOption.optional) {
+                    argOption.tokenIndex = i
+                    parsingError.message = `Property "${name}" is not optional, must be passed directly`
+                    parsingError.tokenIndex = i
+                    parsingError.tokenSpan = 1
                 } else if (argOption.type == "boolean") {
-                    namedArgs[name] = true
+                    argOption.tokenIndex = i
+                    this._parseArgumentValue(argOption, true, parsingError)
                     deleteNext = false
                 } else {
-                    namedArgs[name] = nextToken ?? true
+                    if (nextToken) {
+                        argOption.tokenIndex = i
+                        argOption.tokenSpan = 1
+                        this._parseArgumentValue(argOption, nextToken, parsingError)
+                    } else {
+                        parsingError.message = `property "${name}" (${argOption.type}) expects a value`
+                        parsingError.tokenIndex = i + 1
+                    }
                 }
             }
+
             if (currToken.match(/^--?[a-zA-Z][a-zA-Z0-9:_\-:.]*$/g)) {
                 if (currToken.startsWith("--")) {
                     let name = currToken.slice(2)
@@ -403,229 +402,235 @@ class TerminalParser {
                 } else {
                     for (let j = 0; j < currToken.length; j++) {
                         let char = currToken[j]
+                        let argOption = this.getArgOption(argOptions, char)
                         if (char == "-") continue
-                        namedArgs[char] = true
+                        if (argOption) {
+                            argOption.tokenIndex = i
+                            this._parseArgumentValue(argOption, true, parsingError)
+                        }
                         if (j == currToken.length - 1) {
                             handleArg(char)
                         } else {
-                            let argOption = this.getArgOption(argOptions, char)
                             if (!argOption) {
-                                error(`Unexpected property "${char}" (E312)`)
+                                parsingError.message = `Unexpected property "${char}"`
+                                parsingError.tokenIndex = i
                             } else if (argOption.type != "boolean") {
-                                error(`Property "${char}" is not a boolean and cannot be assigned no value`)
+                                parsingError.message = `Property "${char}" is not a boolean and must be assigned a value`
+                                parsingError.tokenIndex = i
                             }
                         }
+
+                        if (parsingError.message) return null
                     }
                 }
+
                 deleteIndeces.push(i)
                 if (deleteNext)
                     deleteIndeces.push(i + 1)
             }
+
+            if (parsingError.message) return null
         }
 
-        let tokensCopy = tokens.map((t, i) => [i, t])
-            .filter(([i, t]) => !deleteIndeces.includes(i))
-            .map(([i, t]) => t)
-
-        return [tokensCopy, namedArgs]
+        return deleteIndeces
     }
 
-    static parseArgs(tempTokens, command={
+    static _parseArgumentValue(argOption, value, parsingError) {
+        function addVal(value) {
+            if (argOption.expanding && argOption.value) {
+                value = argOption.value + " " + value
+            }
+            argOption.value = value
+            argOption.isManuallySetValue = true
+        }
+
+        const error = msg => {
+            parsingError.message = msg
+            parsingError.tokenIndex = argOption.tokenIndex
+            parsingError.tokenSpan = argOption.tokenSpan
+        }
+
+        if (argOption.type == "number") {
+            let num = parseFloat(value)
+            if (argOption.numtype == "integer") {
+                if (!Number.isInteger(num)) {
+                    error(`At property "${argOption.name}": Expected an integer`)
+                }
+            }
+
+            if (isNaN(num) || isNaN(value)) {
+                error(`At property "${argOption.name}": Expected a number`)
+            }
+
+            if (argOption.min != null && num < argOption.min) {
+                error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
+            }
+
+            if (argOption.max != null && num > argOption.max) {
+                error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
+            }
+
+            addVal(num)
+        } else if (argOption.type == "boolean") {
+            if (value != "true" && value != "false" && value !== true && value !== false) {
+                error(`At property "${argOption.name}": Expected a boolean`)
+            }
+            addVal(value == "true" || value === true)
+        } else if (argOption.type == "file") {
+            if (!terminal.fileExists(value)) {
+                error(`File not found: "${value}"`)
+            }
+            addVal(value)
+        } else {
+            addVal(value)
+        }
+    }
+
+    static parseArguments(tempTokens, command={
         defaultValues: {},
         args: {},
         name: "",
         helpFunc: null,
         info: {}
-    }, silent=false) {
+    }) {
         let args = command.args, defaultValues = command.defaultValues ?? {}
-        if (args.length == 0 && tempTokens.length == 0)
-            return {}
 
         let argsArray = (args.toString() == "[object Object]") ? Object.keys(args) : args
         let argOptions = argsArray.map(this.parseArgOptions).flat()
-            .concat([this.parseArgOptions("?help:b"), this.parseArgOptions("?h:b")])
+
+        const parsingError = {
+            message: undefined,
+            tokenIndex: undefined,
+            tokenSpan: 0
+        }
 
         Object.entries(defaultValues).forEach(([name, value]) => {
             this.getArgOption(argOptions, name).default = value
+            this.getArgOption(argOptions, name).value = value
         })
 
         if (args.toString() == "[object Object]")
             Object.entries(args).map(([arg, description], i) => {
                 argOptions[i].description = description
             })
+        
+        const ignoreIndeces = this.parseNamedArgs(tempTokens, argOptions, parsingError)
+        
+        if (parsingError.message) {
+            return {argOptions, parsingError}
+        }
 
-        function error(errMessage, isHelp=false) {
-            if (silent) throw new IntendedError()
+        ignoreIndeces.push(0)
 
-            let tempArgOptions = argOptions.filter(arg => !arg.isHelp)
-
-            terminal.print("$ ", terminal.data.accentColor2)
-            terminal.print(command.name + " ")
-            if (tempArgOptions.length == 0)
-                terminal.print("doesn't accept any arguments")
-            terminal.printLine(tempArgOptions.map(arg => {
-                let name = arg.name
-                if (arg.optional) name = "?" + name
-                return `<${name}>`
-            }).join(" "), terminal.data.accentColor1)
+        let argOptionIndex = 0
+        for (let i = 0; i < tempTokens.length; i++) {
+            if (ignoreIndeces.includes(i))
+                continue
             
-            let maxArgNameLength = Math.max(...tempArgOptions.map(arg => arg.fullName.length))
+            const token = tempTokens[i]
+            const argOption = argOptions[argOptionIndex]
 
-            for (let argOption of tempArgOptions) {
-                let autoDescription = ""
-
-                if (argOption.default) {
-                    autoDescription += ` [default: ${argOption.default}]`
-                } else if (argOption.optional) {
-                    autoDescription += " [optional]"
-                }
-
-                if (argOption.type == "number") {
-                    autoDescription += " [numeric"
-                    if (argOption.min != null) {
-                        autoDescription += `: ${argOption.min}`
-                        autoDescription += ` to ${argOption.max}`
-                    }
-                    autoDescription += "]"
-                }
-
-                let combinedDescription = autoDescription + " " + argOption.description
-
-                if (combinedDescription.trim().length == 0)
-                    continue
-
-                terminal.print(" > ")
-
-                let argName = argOption.fullName
-                if (argName.length > 1) argName = "--" + argName
-                else argName = "-" + argName
-                
-                terminal.print(argName.padEnd(maxArgNameLength + 3), terminal.data.accentColor1)
-
-                if (combinedDescription.length > 50) {
-                    terminal.printLine(autoDescription)
-                    terminal.print(" ".repeat(maxArgNameLength + 7))
-                    terminal.printLine(argOption.description)
-                } else if (combinedDescription.length > 0) {
-                    terminal.printLine(combinedDescription)
-                }
-
+            if (!argOption) {
+                parsingError.message = "Too many arguments"
+                parsingError.tokenIndex = i
+                parsingError.tokenSpan = 99999
+                return {argOptions, parsingError}
             }
 
-            if (isHelp && command.helpFunc) {
-                command.helpFunc()
-            }
-
-            if (errMessage)
-                terminal.printError(errMessage, "ParseError")
-
-            throw new IntendedError()
-        }
-
-        let argValues = Object.fromEntries(argOptions.map(arg => [arg.name, undefined]))
-        let [tokens, namedArgs] = this.parseNamedArgs(tempTokens, argOptions, error, command.info.disableEqualsArgNotation)
-
-        if (namedArgs.help || namedArgs.h) {
-            if (silent) {
-                return
-            }
-            error(undefined, true)
-        }
-
-        let requiredCount = argOptions.filter(arg => !arg.optional).length
-        if (tokens.length < requiredCount) {
-            let s = requiredCount == 1 ? "" : "s"
-            error(`Expected at least ${requiredCount} argument${s}, got ${tokens.length}`)
-        }
-
-        function parseValue(value, argOption) {
-            function addVal(name, value) {
-                if (argOption.expanding && argValues[name]) {
-                    value = argValues[name] + " " + value
+            argOptionIndex++
+            if (argOption.expanding) {
+                if (!argOption._hasExpanded) {
+                    argOption.tokenIndex = i
+                    argOption.tokenSpan = 0
+                    argOption._hasExpanded = true
+                } else {
+                    argOption.tokenSpan++
                 }
-                argValues[name] = value
-            } 
+
+                argOptionIndex--
+            } else {
+                argOption.tokenIndex = i
+            }
+
+            this._parseArgumentValue(argOption, token, parsingError)
+
+            if (parsingError.message) {
+                return {argOptions, parsingError}
+            }
+        }
+
+        const requiredCount = argOptions.filter(arg => !arg.optional).length
+        if (tempTokens.length - 1 < requiredCount) {
+            const missingArgOption = argOptions[tempTokens.length - 1]
+            parsingError.message = `argument "${missingArgOption.name}" (${missingArgOption.type}) is missing`
+            parsingError.tokenIndex = 99999
+            return {argOptions, parsingError}
+        }
+
+        return {argOptions, parsingError}
+    }
+
+    static _printParserError(command, argOptions, errMessage, {isHelp=false}={}) {
+        let tempArgOptions = argOptions.filter(arg => !arg.isHelp)
+
+        terminal.print("$ ", terminal.data.accentColor2)
+        terminal.print(command.name + " ")
+        if (tempArgOptions.length == 0)
+            terminal.print("doesn't accept any arguments")
+        terminal.printLine(tempArgOptions.map(arg => {
+            let name = arg.name
+            if (arg.optional) name = "?" + name
+            return `<${name}>`
+        }).join(" "), terminal.data.accentColor1)
+        
+        let maxArgNameLength = Math.max(...tempArgOptions.map(arg => arg.fullName.length))
+
+        for (let argOption of tempArgOptions) {
+            let autoDescription = ""
+
+            if (argOption.default) {
+                autoDescription += ` [default: ${argOption.default}]`
+            } else if (argOption.optional) {
+                autoDescription += " [optional]"
+            }
 
             if (argOption.type == "number") {
-                let num = parseFloat(value)
-                if (argOption.numtype == "integer") {
-                    if (!Number.isInteger(num)) {
-                        error(`At property "${argOption.name}": Expected an integer, got "${value}"`)
-                    }
+                autoDescription += " [numeric"
+                if (argOption.min != null) {
+                    autoDescription += `: ${argOption.min}`
+                    autoDescription += ` to ${argOption.max}`
                 }
-
-                if (isNaN(num) || isNaN(value)) {
-                    error(`At property "${argOption.name}": Expected a number, got "${value}"`)
-                }
-
-                if (argOption.min != null && num < argOption.min) {
-                    error(`At property "${argOption.name}": Number must be at least ${argOption.min}, got ${num}`)
-                }
-
-                if (argOption.max != null && num > argOption.max) {
-                    error(`At property "${argOption.name}": Number must be at most ${argOption.max}, got ${num}`)
-                }
-
-                addVal(argOption.name, num)
-            } else if (argOption.type == "boolean") {
-                if (value != "true" && value != "false") {
-                    error(`At property "${argOption.name}": Expected a boolean, got "${value}"`)
-                }
-                addVal(argOption.name, value == "true")
-            } else if (argOption.type == "file") {
-                if (!terminal.fileExists(value)) {
-                    error(`File not found: "${value}"`)
-                }
-                addVal(argOption.name, value)
-            } else {
-                addVal(argOption.name, value)
+                autoDescription += "]"
             }
-        }
 
-        for (let i = 0;; i++) {
-            let token = tokens.shift()
-            if (token == undefined) break
+            let combinedDescription = autoDescription + " " + argOption.description
+
+            if (combinedDescription.trim().length == 0)
+                continue
+
+            terminal.print(" > ")
+
+            let argName = argOption.fullName
+            if (argName.length > 1) argName = "--" + argName
+            else argName = "-" + argName
             
-            let argOption = argOptions[i]
-            if (i > 0 && argOptions[i - 1].expanding) {
-                argOption = argOptions[i - 1]
-                i--
-            }
-            if (argOption == undefined) {
-                error(`Unexpected Argument`)
-            }
+            terminal.print(argName.padEnd(maxArgNameLength + 3), terminal.data.accentColor1)
 
-            if (argOption.isHelp) {
-                error(`Too many arguments`)
-            }
-
-            parseValue(token, argOption)
-        }
-
-        for (let [name, value] of Object.entries(namedArgs)) {
-            let argOption = this.getArgOption(argOptions, name)
-            if (argOption == undefined) {
-                error(`Unknown argument "${name}"`)
-            }
-            parseValue(value.toString(), argOption)
-        }
-
-        for (let [key, value] of Object.entries(defaultValues)) {
-            if (argValues[key] == undefined) {
-                argValues[key] = value
+            if (combinedDescription.length > 50) {
+                terminal.printLine(autoDescription)
+                terminal.print(" ".repeat(maxArgNameLength + 7))
+                terminal.printLine(argOption.description)
+            } else if (combinedDescription.length > 0) {
+                terminal.printLine(combinedDescription)
             }
         }
 
-        for (let argOption of argOptions) {
-            let value = argValues[argOption.name]
-            if (value == undefined) continue
-            argOption.forms.forEach(form => {
-                argValues[form] = value
-            })
+        if (isHelp && command.helpFunc) {
+            command.helpFunc()
         }
 
-        return argValues
-
+        if (errMessage)
+            terminal.printError(errMessage, "ParseError")
     }
 
 }
@@ -652,36 +657,52 @@ class Command {
         this.windowScope.terminal = newTerminal
     }
 
-    checkArgs(args) {
+    checkArgs(tokens) {
         if (this.info.rawArgMode)
             return true
         try {
-            TerminalParser.parseArgs(args, this, true)
-            return true
+            const {parsingError} = TerminalParser.parseArguments(tokens, this)
+            return !parsingError.message
         } catch (error) {
             return false
         }
     }
 
-    processArgs(args, rawArgs) {
+    processArgs(tokens, rawArgs) {
         if (this.info.rawArgMode)
             return rawArgs
-        return TerminalParser.parseArgs(args, this, this.terminal.inTestMode)
+
+        let {argOptions, parsingError} = TerminalParser.parseArguments(tokens, this)
+        if (parsingError.message) {
+            TerminalParser._printParserError(this, argOptions, parsingError.message)
+            throw new IntendedError()
+        }
+
+        let valueObject = {}
+        for (let argOption of argOptions) {
+            for (let form of argOption.forms) {
+                valueObject[form] = argOption.value
+            }
+        }
+
+        console.log(valueObject)
+
+        return valueObject
     }
 
-    async run(args, rawArgs, {callFinishFunc=true, terminalObj=undefined, processArgs=true}={}) {
+    async run(tokens, rawArgs, {callFinishFunc=true, terminalObj=undefined, processArgs=true}={}) {
         if (terminalObj)
             this.terminal = terminalObj
         if (callFinishFunc)
             this.terminal.expectingFinishCommand = true
 
         try {
-            let argObject = this.processArgs(args, rawArgs)
+            let argObject = this.processArgs(tokens, rawArgs)
 
             if (this.callback.constructor.name === 'AsyncFunction') {
-                await this.callback(processArgs ? argObject : args)
+                await this.callback(processArgs ? argObject : rawArgs)
             } else {
-                this.callback(processArgs ? argObject : args)
+                this.callback(processArgs ? argObject : rawArgs)
             }
 
             this.terminal.finishCommand()
@@ -1254,13 +1275,13 @@ class Terminal {
             return
         }
 
-        let commandData = this.commandData[commandText]
+        let commandData = this.commandData[commandText] 
         this.setInputCorrectness(true)
 
         let tempCommand = new Command(commandText, () => undefined, commandData)
         tempCommand.windowScope = this.window
         tempCommand.terminal = this
-        this.setInputCorrectness(tempCommand.checkArgs(args))
+        this.setInputCorrectness(tempCommand.checkArgs(tokens))
     }
 
     _createDefaultGetHistoryFunc() {
@@ -1289,6 +1310,118 @@ class Terminal {
         if (input) {
             input.focus(options)
         }
+    }
+
+    updateCorrectnessText(prompt, element) {
+        const {text, color} = this.getCorrectnessText(prompt)
+        element.textContent = text ? "\n" + text : ""
+        if (color) {
+            element.style.color = color
+        }
+
+        terminal.scroll()
+    }
+
+    getCorrectnessText(prompt) {
+        if (prompt.length == 0)
+            return ""
+
+        let tokens = TerminalParser.tokenize(prompt)
+
+        const underlinePart = (startIndex, length, message, color=Color.ERROR) => {
+            if (message == "") return {text: ""}
+
+            const inputOffset = this.fileSystem.pathStr.length
+            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(length - 1) + "\n"
+            out += " ".repeat(inputOffset + startIndex) + "|\n"
+            
+            let lines = message.split("\n").filter(l => !!l)
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i]
+                let beforeChar = i == lines.length - 1 ? "└" : "├"
+                out += " ".repeat(inputOffset + startIndex) + beforeChar + " " + line + "\n"
+            }
+
+            return {text: out, color}
+        }
+
+        const underLineToken = (tokenIndex, tokenSpan, message, color=Color.ERROR) => {
+            if (tokenIndex >= tokens.length) {
+                let offset = prompt.length + 1
+                if (prompt.slice(-1) == " ") offset--
+                return underlinePart(offset, 3, message, color)
+            }
+
+            tokenSpan = Math.min(tokenSpan, tokens.length - 1 - tokenIndex)
+
+            const positionFromToken = tokenIndex => {
+                let startPosition = 0
+                let tempPrompt = prompt
+                for (let i = 0; i < tokens.length; i++) {
+                    const token = tokens[i]
+                    let firstIndex = tempPrompt.indexOf(token)
+                    tempPrompt = tempPrompt.slice(firstIndex + token.length)
+                    startPosition = prompt.length - (tempPrompt.length + token.length) + 1
+
+                    if (i == tokenIndex) {
+                        break
+                    }
+                }
+                return startPosition
+            }
+
+            let startPosition = positionFromToken(tokenIndex)
+            let endPosition = startPosition + tokens[tokenIndex].length
+            for (let i = 0; i < tokenSpan; i++) {
+                endPosition = positionFromToken(tokenIndex + i + 1)
+                endPosition += tokens[tokenIndex + i + 1].length
+            }
+
+            return underlinePart(startPosition - 1, endPosition - startPosition, message, color)
+        }
+
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+        if (!this.commandExists(commandText)) { 
+            return underlinePart(prompt.indexOf(commandText), commandText.length, `command not found`)
+        }
+
+        let commandData = this.commandData[commandText]
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+
+        let {argOptions, parsingError} = TerminalParser.parseArguments(tokens, tempCommand)
+
+        if (parsingError.message && tokens.length > 1 && !commandData.rawArgMode) {
+            return underLineToken(parsingError.tokenIndex, parsingError.tokenSpan, parsingError.message)
+        }
+
+        const makeCommandInfoString = () => {
+            let out = ""
+
+            let filteredOptions = argOptions.filter(o => !o.isManuallySetValue)
+            for (let argOption of filteredOptions) {
+                if (argOption.name.length == 1) {
+                    out += `-`
+                } else {
+                    out += `--`
+                }
+                out += `${argOption.name} (`
+                if (argOption.optional) {
+                    out += "optional, "
+                }
+                out += `${argOption.type}) ${argOption.description}\n`
+            }
+            
+            return out
+        }
+
+        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0) {
+            return underLineToken(0, 0, `"${commandData.description}"`, Color.COLOR_2)
+        }
+
+        return underLineToken(9999, 1, makeCommandInfoString(), Color.COLOR_2)
     }
 
     async prompt(msg, {password=false, affectCorrectness=false,
@@ -1358,6 +1491,12 @@ class Terminal {
         }
         inputContainer.style.width = `${inputMinWidth()}px`
 
+        let correctnessOutput = null
+
+        if (affectCorrectness) {
+            correctnessOutput = terminal.print("", Color.ERROR, {forceElement: true})
+        }
+
         this.scroll()
         this.currInputElement = inputElement
         this.currSuggestionElement = suggestionElement
@@ -1378,6 +1517,9 @@ class Terminal {
                 if (text !== lastItemOfHistory() && text.length > 0)
                     addToHistory(text)
                 this.removeCurrInput()
+                if (correctnessOutput) {
+                    correctnessOutput.remove()
+                }
                 resolve(text)
             }
 
@@ -1451,6 +1593,9 @@ class Terminal {
                 if (affectCorrectness) {
                     let cleanedInput = this.sanetizeInput(inputElement.value)
                     this.updateInputCorrectness(cleanedInput)
+                    if (correctnessOutput) {
+                        this.updateCorrectnessText(inputElement.value, correctnessOutput)
+                    }
                 }
             }
 
@@ -1716,7 +1861,7 @@ class Terminal {
 
     async standardInputPrompt() {
         let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true, addToCache: false})
-        element.style.marginLeft = "-2em"
+        element.style.marginLeft = `-${this.charWidth * 3}px`
         this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN, {addToCache: false})
         let text = await this.prompt("", {affectCorrectness: true})
         await this.input(text)
@@ -1766,10 +1911,10 @@ class Terminal {
         let rawArgs = text.slice(commandText.length)
         if (this.commandExists(commandText)) {
             let command = await this.getCommand(commandText)
-            return await command.run(args, rawArgs, {callFinishFunc: !testMode, terminalObj: this})
+            return await command.run(tokens, rawArgs, {callFinishFunc: !testMode, terminalObj: this})
         } else {
             let cmdnotfound = await this.getCommand("cmdnotfound")
-            await cmdnotfound.run([commandText, rawArgs], commandText, {
+            await cmdnotfound.run(["cmdnotfound", commandText, rawArgs], commandText, {
                 callFinishFunc: !testMode,
                 terminalObj: this,
                 processArgs: false
