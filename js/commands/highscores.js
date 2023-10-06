@@ -43,10 +43,10 @@ terminal.addCommand("highscores", async function(args) {
 }, {
     description: "Show global highscores for a game",
     args: {
-        "game": "the game to show the highscores for",
-        "?n": "only show highscores with this name",
+        "game:s": "the game to show the highscores for",
+        "?n:s": "only show highscores with this name",
         "?l:i:1~10000": "limit the number of highscores to show",
-        "?show-all": "show all highscores, not just the top ones"
+        "?show-all:b": "show all highscores, not just the top ones"
     },
     standardVals: {
         "n": null,

@@ -315,6 +315,8 @@ class TerminalParser {
                 argOptions.type = "string"
             } else if (type == "f") {
                 argOptions.type = "file"
+            } else if (type == "c") {
+                argOptions.type = "command"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
@@ -481,6 +483,11 @@ class TerminalParser {
                 error(`File not found: "${value}"`)
             }
             addVal(value)
+        } else if (argOption.type == "command") {
+            if (!terminal.commandExists(value)) {
+                error(`Command not found: "${value}"`)
+            }
+            addVal(value)
         } else {
             addVal(value)
         }
@@ -561,7 +568,7 @@ class TerminalParser {
 
         const requiredCount = argOptions.filter(arg => !arg.optional).length
         if (tempTokens.length - 1 < requiredCount) {
-            const missingArgOption = argOptions[tempTokens.length - 1]
+            const missingArgOption = argOptions[Math.max(tempTokens.length - 1, 0)]
             parsingError.message = `argument "${missingArgOption.name}" (${missingArgOption.type}) is missing`
             parsingError.tokenIndex = 99999
             return {argOptions, parsingError}
@@ -684,8 +691,6 @@ class Command {
                 valueObject[form] = argOption.value
             }
         }
-
-        console.log(valueObject)
 
         return valueObject
     }
@@ -1318,8 +1323,6 @@ class Terminal {
         if (color) {
             element.style.color = color
         }
-
-        terminal.scroll()
     }
 
     getCorrectnessText(prompt) {
