@@ -88,7 +88,7 @@
 
             searchInput.oninput = () => {
                 const prompt = searchInput.value
-                const tokens = prompt.split(" ").filter(p => p.length > 0)
+                const tokens = prompt.split(" ").filter(p => p.length > 0).map(t => t.toLowerCase())
 
                 let results = Object.entries(terminal.commandData)
                 results.sort((a, b) => {

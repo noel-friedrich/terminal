@@ -12,13 +12,13 @@ terminal.addCommand("longjump", async function(args) {
     }
 
     let turtloImage = new Image()
-    turtloImage.src = "res/img/turtlo/walking-0.png"
+    turtloImage.src = terminal.baseUrl + "res/img/turtlo/walking-0.png"
     await new Promise((resolve) => {
         turtloImage.onload = resolve
     })
 
     let turtloImageLanded = new Image()
-    turtloImageLanded.src = "res/img/turtlo/hidden.png"
+    turtloImageLanded.src = terminal.baseUrl + "res/img/turtlo/hidden.png"
     await new Promise((resolve) => {
         turtloImageLanded.onload = resolve
     })

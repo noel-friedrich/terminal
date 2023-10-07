@@ -353,7 +353,7 @@ class HighscoreApi {
 	static username = null
 
     static async req(url, data) {
-        url = this.baseUrl + url + ".php?"
+        url = terminal.baseUrl + this.baseUrl + url + ".php?"
         for (let key in data)
             url += encodeURIComponent(key) + "=" + encodeURIComponent(data[key]) + "&"
         let response = await fetch(url.slice(0, -1))
