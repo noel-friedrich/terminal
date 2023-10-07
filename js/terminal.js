@@ -710,14 +710,16 @@ class Command {
                 this.callback(processArgs ? argObject : rawArgs)
             }
 
-            this.terminal.finishCommand()
+            if (callFinishFunc)
+                this.terminal.finishCommand()
             return true
         } catch (error) {
             if (!(error instanceof IntendedError)) {
                 this.terminal.printError(error.message, error.name)
                 console.error(error)
             }
-            this.terminal.finishCommand()
+            if (callFinishFunc)
+                this.terminal.finishCommand()
 
             // if the sleep command was called a max number
             // of times, it's considered to be a success
@@ -948,6 +950,7 @@ class Terminal {
     variableCache = {}
 
     loadingKey = null
+    baseUrl = ""
 
     getOutputCache(key) {
         if (this.variableCache[key] === undefined)
@@ -979,13 +982,17 @@ class Terminal {
         if (this.loadingKey != randomKey)
             return
 
-        this.loadingOverlayContainer.style.display = "block"
-        this.loadingOverlayOutput.textContent = file
+        if (this.loadingOverlayContainer && this.loadingOverlayOutput) {
+            this.loadingOverlayContainer.style.display = "block"
+            this.loadingOverlayOutput.textContent = file
+        }
     }
 
     async unsetLoading() {
         this.loadingKey = null
-        this.loadingOverlayContainer.style.display = "none"
+        if (this.loadingOverlayContainer) {
+            this.loadingOverlayContainer.style.display = "none"
+        }
     }
 
     scroll(behavior="smooth", toLeft=true) {
@@ -1500,7 +1507,7 @@ class Terminal {
             correctnessOutput = terminal.print("", Color.ERROR, {forceElement: true})
         }
 
-        this.scroll()
+        this.scroll("smooth", false)
         this.currInputElement = inputElement
         this.currSuggestionElement = suggestionElement
         this.currInputContainer = inputContainer
@@ -1655,7 +1662,7 @@ class Terminal {
                     inputElement.onkeydown(event, false)
                     inputElement.oninput(event)
 
-                    this.scroll()
+                    this.scroll("smooth", false)
                 }
             }
 
@@ -2030,7 +2037,7 @@ class Terminal {
         await new Promise(resolve => {    
             let script = document.createElement("script")
             script.addEventListener("load", resolve)
-            script.src = `${url}?${loadIndex}`
+            script.src = `${this.baseUrl}${url}?${loadIndex}`
             iframeDocument.body.appendChild(script)
         })
 
@@ -2172,11 +2179,16 @@ class Terminal {
         }
     }
 
-    async init() {
+    async init({
+        runInput=true,
+        runStartupCommands=true,
+        loadSidePanel=true,
+        ignoreMobile=false
+    }={}) {
         await this._loadScript(this.commandListURL)
         await this.fileSystem.load()
 
-        if (this.isMobile) {
+        if (this.isMobile && !ignoreMobile) {
             await this._loadScript(this.mobileKeyboardURL)
         }
 
@@ -2184,28 +2196,34 @@ class Terminal {
             let error404 = await this.getCommand("error404")
             error404.run()
         } else {
-            for (let startupCommand of this.data.startupCommands) {
-                if (startupCommand.startsWith("turtlo") && terminal.mobileKeyboard) {
-                    continue
+            if (runStartupCommands) {
+                for (let startupCommand of this.data.startupCommands) {
+                    if (startupCommand.startsWith("turtlo") && terminal.mobileKeyboard) {
+                        continue
+                    }
+                    await this.input(startupCommand, true)
                 }
-                await this.input(startupCommand, true)
             }
 
-            if (this.isMobile) {
-                this.print("Mobile keyboard active. ")
-                this.printCommand("click to disable", "keyboard off")
-            } else if (this.autoIsMobile) {
-                this.print("Mobile keyboard inactive. ")
-                this.printCommand("click to enable", "keyboard on")
+            if (!ignoreMobile) {
+                if (this.isMobile) {
+                    this.print("Mobile keyboard active. ")
+                    this.printCommand("click to disable", "keyboard off")
+                } else if (this.autoIsMobile) {
+                    this.print("Mobile keyboard inactive. ")
+                    this.printCommand("click to enable", "keyboard on")
+                }
             }
 
             // TODO: make this into terminal.data option
-            if (true) {
+            if (loadSidePanel) {
                 this._loadScript(this.sidePanelURL, {}, {asyncMode: true})
             }
 
             this.expectingFinishCommand = true
-            this.finishCommand()
+            if (runInput) {
+                this.finishCommand()
+            }
         }
 
         this.hasInitted = true
@@ -2287,7 +2305,16 @@ class Terminal {
         return result
     }
 
-    constructor(terminalName="none") {
+    constructor(terminalName="none", {
+        parentNode=undefined,
+        baseUrl=undefined
+    }={}) {
+        if (parentNode) {
+            this.parentNode = parentNode
+        }
+
+        this.baseUrl = baseUrl || ""
+
         this.startTime = Date.now()
 
         this.name = terminalName
@@ -2346,45 +2373,3 @@ class Terminal {
     }
 
 }
-
-const terminal = new Terminal("main")
-terminal.clear()
-terminal.init()
-
-// add shortcuts
-terminal.addKeyboardShortcut(new KeyboardShortcut(
-    "L", async () => {
-        // wait for any pending commands to be interrupted
-        // sleep to allow the interrupt to finish and print
-        terminal.interrupt()
-        await new Promise(resolve => setTimeout(resolve, 100))
-
-        terminal.clear(true)
-    },
-    {ctrl: true, shift: undefined}
-))
-
-terminal.addKeyboardShortcut(new KeyboardShortcut(
-    "E", async () => {
-        const eggName = "Shortcut Egg"
-        terminal.printEasterEgg(eggName)
-    },
-    {ctrl: true, shift: true, alt: true}
-))
-
-terminal.addKeyboardShortcut(new KeyboardShortcut(
-    "+", async () => {
-        terminal.enlargeText() 
-    },
-    {ctrl: true, shift: undefined}
-))
-
-terminal.addKeyboardShortcut(new KeyboardShortcut(
-    "-", async () => {
-        terminal.shrinkText()
-    },
-    {ctrl: true, shift: undefined}
-))
-
-// count page visits
-window.addEventListener("load", () => setTimeout(() => fetch("api/count_visit.php"), 0))

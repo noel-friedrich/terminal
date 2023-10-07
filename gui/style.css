@@ -1,0 +1,216 @@
+@font-face {
+    font-family: 'Cascadia Code';
+    src: url('../res/fonts/CascadiaCode.woff2') format('woff2'), /* Chrome 6+, Firefox 3.6+, IE 9+, Safari 5.1+ */
+         url('../res/fonts/CascadiaCode.ttf') format('truetype'); /* Chrome 4+, Firefox 3.5, Opera 10+, Safari 3—5 */
+}  
+
+body {
+    margin: 0;
+    width: 100%;
+    font-family: "Lora";
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+header {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1em;
+    background-color: #f5f5f5;
+    display: flex;
+    cursor: default;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+}
+
+header .logo {
+    height: 2.5em;
+    display: inline-block;
+    margin-right: .7em;
+}
+
+header h1 {
+    display: inline-block;
+    margin: 0;
+    font-family: 'Cascadia Code', "monospace";
+}
+
+header h1 > a {
+    color: black;
+    text-decoration: none;
+}
+
+main {
+    padding: 1.5em;
+    font-size: 1.2em;
+    width: min(700px, 100%);
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+main h1 {
+    font-size: 1.8em;
+    text-align: center;
+    font-family: 'Cascadia Code', "monospace";
+}
+
+main p.subtitle {
+    text-align: center;
+    margin-top: -1em;
+}
+
+main p {
+    text-align: justify;
+}
+
+main > :first-child {
+    margin-top: 0;
+}
+
+main form {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+main input[type="checkbox"] {
+    width: 1.5em;
+    height: 1.5em;
+}
+
+.checkbox-container {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+    margin-bottom: .5em;
+    border: 1px solid #ccc;
+    padding: .5em;
+    border-radius: 5px;
+    background-color: #f8f8f8;
+    font-size: 1.1em;
+    font-family: "Quicksand";
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+main input[type="checkbox"] + label {
+    margin-left: .5em;
+    margin-top: 0em;
+    display: inline;
+    position: absolute;
+}
+
+main input:not([type="checkbox"]),
+main button,
+a.linkbutton {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+    margin-bottom: .5em;
+    border: 1px solid #ccc;
+    padding: .5em;
+    border-radius: 5px;
+    background-color: #f8f8f8;
+    font-size: 1.1em;
+    font-family: "Quicksand";
+    font-weight: bold;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+main input[data-has-error="true"] {
+    color: red;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+}
+
+main label {
+    margin-top: -.4em;
+    margin-bottom: .6em;
+    font-family: "Quicksand";
+    font-size: smaller;
+    display: block;
+}
+
+a.linkbutton {
+    text-decoration: none;
+    color: black;
+    text-align: center;
+}
+
+main input[type="submit"],
+main button,
+a.linkbutton {
+    cursor: pointer;
+}
+
+main input[type="submit"]:hover,
+main button:hover,
+a.linkbutton:hover {
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+}
+
+footer {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1em;
+    background-color: #f5f5f5;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    margin-top: auto;
+}
+
+footer > p {
+    margin: 0;
+}
+
+.error {
+    color: red;
+    margin-top: .5em;
+    margin-bottom: .5em;
+}
+
+.success {
+    color: rgb(29, 190, 29);
+    margin-top: .5em;
+    margin-bottom: .5em;
+}
+
+.terminal-container {
+    font-family: var(--font);
+    font-size: 1rem;
+    background-color: var(--background);
+    color: var(--foreground);
+    padding: 1rem;
+    border-radius: 10px;
+    overflow: auto;
+    box-sizing: border-box;
+    max-width: 100%;
+    height: auto;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    z-index: 9999;
+    margin-top: 2rem;
+    resize: vertical;
+    margin-bottom: 5em;
+}
+
+#terminal {
+    width: max-content;
+    height: max-content;
+    white-space: pre-wrap;
+    tab-size: 4;
+    word-break: break-word;
+    --padding: 0;
+    overflow-y: hidden;
+}
+
+.terminal-container::-webkit-scrollbar-thumb,
+#terminal::-webkit-scrollbar-thumb,
+.side-panel-container::-webkit-scrollbar-thumb {
+	background-color: #eaff01 !important;
+}
+
+#commandContainer {
+    display: grid;
+    gap: .5em;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+#commandContainer > * {
+    margin: 0;
+}
