@@ -80,7 +80,6 @@ main input[type="checkbox"] {
 .checkbox-container {
     width: 100%;
     box-sizing: border-box;
-    display: block;
     margin-bottom: .5em;
     border: 1px solid #ccc;
     padding: .5em;
@@ -89,13 +88,13 @@ main input[type="checkbox"] {
     font-size: 1.1em;
     font-family: "Quicksand";
     box-shadow: 0 0 5px rgba(0,0,0,0.1);
+
+    display: grid;
+    grid-template-columns: 2em 1fr;
 }
 
-main input[type="checkbox"] + label {
-    margin-left: .5em;
-    margin-top: 0em;
-    display: inline;
-    position: absolute;
+.checkbox-container > label {
+    margin: 0;
 }
 
 main input:not([type="checkbox"]),
