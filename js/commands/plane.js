@@ -1,7 +1,7 @@
 terminal.addCommand("plane", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
-        iframeUrl: "../flugzeug-spiel/",
+        iframeUrl: terminal.baseUrl + "../flugzeug-spiel/",
         name: "Plane Game",
         fullscreen: args.fullscreen
     })

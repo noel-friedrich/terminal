@@ -1,12 +1,14 @@
-terminal.addCommand("name-gen", async function() {
+terminal.addCommand("name-gen", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
-        iframeUrl: "../names/",
-        name: "AI Name Finder. Rate some and click 'done'"
+        iframeUrl: terminal.baseUrl + "../names/",
+        name: "AI Name Finder. Rate some and click 'done'",
+        fullscreen: args.f
     })
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
 }, {
-    description: "start a name generator"
+    description: "start a name generator",
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
