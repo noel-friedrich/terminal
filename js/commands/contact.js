@@ -162,7 +162,7 @@ submitButton.addEventListener("click", async () => {
         return
     }
 
-    let submitUrl = "./api/contact.php"
+    let submitUrl = terminal.baseUrl + "./api/contact.php"
     let formData = new FormData()
     for (let [name, info] of Object.entries(formInfo)) {
         formData.append(name, info.input.value)

@@ -3,7 +3,8 @@ terminal.addCommand("pendulum", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
         iframeUrl: "../pendulum-wave/?n=" + encodeURIComponent(args.n) + "&o=" + encodeURIComponent(args.o),
-        name: "Pendulum Wave Simulation"
+        name: "Pendulum Wave Simulation",
+        fullscreen: args.f
     })
     terminal.onInterrupt(() => {
         terminalWindow.close()
@@ -13,7 +14,8 @@ terminal.addCommand("pendulum", async function(args) {
     description: "start a pendulum wave simulation",
     args: {
         "?n:i:1~10000": "number of pendulums",
-        "?o:n:0~1": "offset of pendulums"
+        "?o:n:0~1": "offset of pendulums",
+        "?f=fullscreen:b": "start in fullscreen mode"
     },
     standardVals: {
         n: 20,
