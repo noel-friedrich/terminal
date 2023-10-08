@@ -3,7 +3,7 @@ terminal.addCommand("avoida", async function(args) {
     await terminal.modules.load("window", terminal)
 
     let terminalWindow = terminal.modules.window.make({
-        name: "Avoida Game", fullscreen: true
+        name: "Avoida Game", fullscreen: true, removeBar: true
     })
 
     const canvas = terminalWindow.CANVAS

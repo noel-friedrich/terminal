@@ -5,7 +5,8 @@ terminal.modules.window = {
         name="My new Window",
         iframeUrl=undefined,
         fullscreen=false,
-        addResizeListener=true
+        addResizeListener=true,
+        removeBar=false
     }={}) {
         const windowContainer = terminal.document.createElement("div")
         windowContainer.classList.add("terminal-window")
@@ -67,12 +68,12 @@ terminal.modules.window = {
                 }
             }
         } else {
-            // if (fullscreen) {
-            //     content.style.width = "100%"
-            //     content.style.height = "100%"
-            //     content.style.margin = "0"
-            //     content.style.position = "fixed"
-            // }
+            if (removeBar) {
+                content.style.width = "100%"
+                content.style.height = "100%"
+                content.style.margin = "0"
+                content.style.position = "fixed"
+            }
 
             const CANVAS = terminal.document.createElement("canvas")
             CANVAS.style.backgroundColor = backgroundColor
