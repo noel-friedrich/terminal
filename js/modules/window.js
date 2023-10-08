@@ -67,12 +67,12 @@ terminal.modules.window = {
                 }
             }
         } else {
-            if (fullscreen) {
-                content.style.width = "100%"
-                content.style.height = "100%"
-                content.style.margin = "0"
-                content.style.position = "fixed"
-            }
+            // if (fullscreen) {
+            //     content.style.width = "100%"
+            //     content.style.height = "100%"
+            //     content.style.margin = "0"
+            //     content.style.position = "fixed"
+            // }
 
             const CANVAS = terminal.document.createElement("canvas")
             CANVAS.style.backgroundColor = backgroundColor
