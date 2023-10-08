@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 179 commands such as `ls`, `cd` and of course `cowsay`
+* 180 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -63,6 +63,7 @@ The following list can also be viewed using the `whatis *` command
 | `alias` | create a new alias for a given function |
 | `ant-opt` | interactive solution to the travelling salesman problem using ant colony optimization |
 | `asteroids` | simulate a bunch of balls jumping around |
+| `avoida` | play a game of avoida |
 | `background` | change the background color of the terminal |
 | `base64` | encode/decode a message using base64 |
 | `bc` | start a bc (basic calculator) session |
