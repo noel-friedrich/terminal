@@ -195,7 +195,7 @@ footer > p {
     tab-size: 4;
     word-break: break-word;
     --padding: 0;
-    overflow-y: hidden;
+    overflow-y: hidd    en;
 }
 
 .terminal-container::-webkit-scrollbar-thumb,
