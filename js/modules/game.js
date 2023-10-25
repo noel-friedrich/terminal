@@ -12,6 +12,14 @@ class Vector2d {
         this.y = y
     }
 
+    static get zero() {
+        return new Vector2d(0, 0)
+    }
+
+    static fromFunc(f) {
+        return new Vector2d(f(0), f(1))
+    }
+
     copy() {
         return new Vector2d(this.x, this.y)
     }
