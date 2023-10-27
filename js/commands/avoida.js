@@ -12,6 +12,10 @@ terminal.addCommand("avoida", async function(args) {
     const objectScaleFactor = 1
     let displayAngle = 0.1
 
+    canvas.style.userSelect = "none"
+    canvas.style.webkitUserSelect = "none"
+    canvas.style.mozUserSelect = "none"
+
     function makeTileMap({
         width=21,
         length=300,
@@ -291,6 +295,8 @@ terminal.addCommand("avoida", async function(args) {
 
         await sleep(40)
     }
+
+    await sleep(1000)
 
     terminalWindow.close()
     terminal.printLine("Your score: " + player.score)
