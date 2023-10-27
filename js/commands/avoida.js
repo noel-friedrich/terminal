@@ -12,8 +12,54 @@ terminal.addCommand("avoida", async function(args) {
     const objectScaleFactor = 1
     let displayAngle = 0.1
 
-    let bitmap = Array.from({length: 1000}, 
-        () => Array.from({length: 21}, () => Math.random() < 0.2 ? true : false))
+    function makeTileMap({
+        width=21,
+        length=300,
+        transitionHeight=15,
+        copyFrom=null,
+        copyOverlapHeight=10
+    }={}) {
+        let tileMap = Array.from({length}, 
+            () => Array.from({length: width}, () => Math.random() < 0.2 ? true : false))
+        
+        const middleX = Math.floor(width / 2)
+        let currX = middleX
+        for (let i = 0; i < tileMap.length; i++) {
+            tileMap[i][currX] = false
+            if (currX < tileMap[0].length - 1) {
+                tileMap[i][currX + 1] = false
+            }
+
+            let middleDirection = (middleX - currX) > 0 ? 1 : -1
+            if (Math.random() < 0.8) {
+                currX += middleDirection
+            } else {
+                currX -= middleDirection
+            }
+
+            currX = Math.min(tileMap[0].length - 1, Math.max(0, currX))
+        }
+
+        let offsetHeight = copyFrom == null ? 0 : copyOverlapHeight
+        for (let i = offsetHeight; (i < transitionHeight + offsetHeight) && i < length; i++) {
+            for (let j = 0; j < width; j++) {
+                tileMap[i][j] = false
+            }
+
+            tileMap[i][Math.max(middleX - 2, 0)] = true
+            tileMap[i][Math.min(middleX + 2, width - 1)] = true
+        }
+
+        for (let i = 0; i < offsetHeight; i++) {
+            for (let j = 0; j < width; j++) {
+                tileMap[i][j] = copyFrom[copyFrom.length - offsetHeight - 1 + i][j]
+            }
+        }
+
+        return tileMap
+    }
+
+    let bitmap = makeTileMap({height: 1000})
 
     class Player {
         constructor() {
@@ -23,11 +69,13 @@ terminal.addCommand("avoida", async function(args) {
             this.sideMovement = 0
             this.fov = Math.PI / 1.5
             this.viewDistance = 10
+            this.speed = 1
+            this.hearts = 5
         }
 
         move(distance) {
-            this.pos.y += distance
-            this.pos.x += this.sideMovement
+            this.pos.y += distance * this.speed
+            this.pos.x += this.sideMovement * this.speed
 
             let x = Math.floor(this.pos.x)
             let y = Math.floor(this.pos.y)
@@ -36,30 +84,40 @@ terminal.addCommand("avoida", async function(args) {
                 let value = row[x]
                 if (value === true) {
                     bitmap[y][x] = false
+                    this.hearts--
                 }
             }
 
             this.pos.x = Math.max(0, Math.min(bitmap[0].length - 1, this.pos.x))
+
+            let distanceToEnd = bitmap.length - this.pos.y
+            if (distanceToEnd < 11) {
+                bitmap = makeTileMap({copyFrom: bitmap})
+                this.pos.y = 0
+            }
+
+            this.speed += 0.001
+        }
+
+        get score() {
+            return Math.floor(this.speed * 71) - 71
+        }
+
+        resetPos() {
+            this.pos = new Vector2d(bitmap[0].length / 2, 0)
         }
     }
 
     let player = new Player()
-    const middleX = Math.floor(player.pos.x)
-    let currX = middleX
-    for (let i = 0; i < bitmap.length; i++) {
-        bitmap[i][currX] = false
-        if (currX < bitmap[0].length - 1) {
-            bitmap[i][currX + 1] = false
-        }
 
-        let middleDirection = (middleX - currX) > 0 ? 1 : -1
-        if (Math.random() < 0.8) {
-            currX += middleDirection
-        } else {
-            currX -= middleDirection
-        }
+    function drawHeart(startX, startY, size=10) {
+        context.fillStyle = "red"
+        context.fillRect(startX, startY, size, size)
+    }
 
-        currX = Math.min(bitmap[0].length - 1, Math.max(0, currX))
+    function drawScore(score, textSize) {
+        context.font = `${textSize}px monospace`
+        context.fillText(score.toString(), 10, textSize)
     }
 
     function render() {
@@ -116,6 +174,13 @@ terminal.addCommand("avoida", async function(args) {
         }
 
         context.restore()
+
+        let heartSize = Math.min(canvas.width, canvas.height) / 10
+        for (let i = 0; i < player.hearts; i++) {
+            drawHeart(canvas.width - ((i + 1) * heartSize * 1.2), heartSize * 0.2, heartSize)
+        }
+
+        drawScore(player.score, heartSize)
     }
 
     let gameRunning = true
@@ -161,29 +226,36 @@ terminal.addCommand("avoida", async function(args) {
         if (parseKeyCode(event.key, false)) event.preventDefault()
     })
 
-    let touchStartX = undefined
-    addEventListener("touchstart", event => {
-        touchStartX = event.touches[0].screenX
-    })
-
-    addEventListener("touchend", event => {
-        touchStartX = undefined
-        keyDown.LEFT = false
-        keyDown.RIGHT = false
-    })
-
-    addEventListener("touchmove", event => {
-        let delta = event.touches[0].screenX - touchStartX
-        if (delta > 100) {
+    function updateTouchX(pageX) {
+        let rect = canvas.getBoundingClientRect()
+        let x = (pageX - rect.left) / canvas.clientWidth
+        if (x > 0.6) {
             keyDown.RIGHT = true
             keyDown.LEFT = false
-        } else if (delta < -100) {
+        } else if (x < 0.4) {
             keyDown.LEFT = true
             keyDown.RIGHT = false
         } else {
             keyDown.LEFT = false
             keyDown.RIGHT = false
         }
+    }
+
+    addEventListener("touchstart", event => {
+        updateTouchX(event.touches[0].pageX)
+    })
+
+    addEventListener("touchmove", event => {
+        updateTouchX(event.touches[0].pageX)
+    })
+
+    addEventListener("touchend", event => {
+        keyDown.LEFT = false
+        keyDown.RIGHT = false
+    })
+
+    canvas.addEventListener("contextmenu", event => {
+        event.preventDefault()
     })
 
     function processInput() {
@@ -212,8 +284,19 @@ terminal.addCommand("avoida", async function(args) {
         player.move(0.2)
         render()
         processInput()
+
+        if (player.hearts <= 0) {
+            gameRunning = false
+        }
+
         await sleep(40)
     }
+
+    terminalWindow.close()
+    terminal.printLine("Your score: " + player.score)
+
+    await HighscoreApi.registerProcess("avoida")
+    await HighscoreApi.uploadScore(player.score)
 }, {
     description: "play a game of avoida",
     isGame: true,
