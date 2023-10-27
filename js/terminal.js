@@ -937,6 +937,8 @@ class Terminal {
     debugMode = false
     tempCommandInputHistory = []
 
+    guiMode = false
+
     keyboardShortcuts = []
 
     name = ""
@@ -2307,12 +2309,14 @@ class Terminal {
 
     constructor(terminalName="none", {
         parentNode=undefined,
-        baseUrl=undefined
+        baseUrl=undefined,
+        guiMode=false
     }={}) {
         if (parentNode) {
             this.parentNode = parentNode
         }
 
+        this.guiMode = guiMode
         this.baseUrl = baseUrl || ""
 
         this.startTime = Date.now()

@@ -83,6 +83,8 @@ runButton.onclick = async () => {
 }
 
 async function createHTML() {
+    const urlParams = new URLSearchParams(window.location.search)
+
     command_data.args ??= []
     if (Array.isArray(command_data.args)) {
         command_data.args = Object.fromEntries(command_data.args.map(c => [c, ""]))
@@ -179,6 +181,11 @@ async function createHTML() {
             }   
         }
 
+        if (urlParams.get(argumentName) && urlParams.get(argumentName) != "undefined") {
+            input.value = urlParams.get(argumentName)
+            setTimeout(() => input.oninput(), 0)
+        }
+
         inputElements.push(input)
     
     }
@@ -197,7 +204,8 @@ let loadIndex = 0
 async function main() {
     terminal = new Terminal("main", {
         parentNode: document.querySelector("#terminal"),
-        baseUrl: "../../"
+        baseUrl: "../../",
+        guiMode: true
     })
 
     terminal.init({
@@ -206,6 +214,27 @@ async function main() {
         runStartupCommands: false,
         ignoreMobile: true
     })
+
+    terminal.makeInputFunc = (inputText) => {
+        let tokens = TerminalParser.tokenize(inputText)
+        let [commandText, argTokens] = TerminalParser.extractCommandAndArgs(tokens)
+        if (terminal.commandExists(commandText)) {
+            return async () => {
+                let url = `../${commandText}/index.html?`
+                let command = await terminal.getCommand(commandText)
+                let {argOptions, parsingError} = TerminalParser.parseArguments(tokens, command)
+
+                for (let argOption of argOptions) {
+                    url += encodeURIComponent(argOption.name) + "="
+                    url += encodeURIComponent(argOption.value) + "&"
+                }
+
+                window.location.href = url
+            }
+        } else {
+            return () => {}
+        }
+    }
 
     terminal.printLine("Click on 'Run' to execute")
     terminal.printLine("the command.")
