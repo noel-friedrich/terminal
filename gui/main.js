@@ -181,9 +181,18 @@ async function createHTML() {
             }   
         }
 
-        if (urlParams.get(argumentName) && urlParams.get(argumentName) != "undefined") {
-            input.value = urlParams.get(argumentName)
-            setTimeout(() => input.oninput(), 0)
+        let urlParamValue = urlParams.get(argOptions.name)
+        if (urlParamValue && urlParamValue != "undefined" && urlParamValue != "null") {
+            input.value = urlParamValue
+
+            if (argOptions.type == "boolean" && urlParamValue == "true") {
+                input.checked = true
+                setTimeout(() => input.onclick(), 0)
+            } else {
+                setTimeout(() => input.oninput(), 0)
+            }
+
+            
         }
 
         inputElements.push(input)

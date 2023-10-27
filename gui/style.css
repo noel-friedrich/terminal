@@ -193,9 +193,8 @@ footer > p {
     height: max-content;
     white-space: pre-wrap;
     tab-size: 4;
-    word-break: break-word;
     --padding: 0;
-    overflow-y: hidd    en;
+    overflow-y: hidden;
 }
 
 .terminal-container::-webkit-scrollbar-thumb,
