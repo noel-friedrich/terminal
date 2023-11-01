@@ -147,6 +147,8 @@ class Matrix {
             for (let ci = 0; ci < result.dimensions.columns; ci++) {
                 let row = this.getRow(ri)
                 let column = other.getColumn(ci)
+
+                console.log(row, column)
                 let dotProduct = row.map((n, i) => n.mul(column[i]))
                     .reduce((p, c) => p.add(c))
                 result.setValue(ri, ci, dotProduct)

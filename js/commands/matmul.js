@@ -5,7 +5,7 @@ terminal.addCommand("matmul", async function() {
     terminal.addLineBreak()
 
     const matrixB = await inputMatrix(await inputMatrixDimensions({
-        matrixName: "B", forcedRows: matrixA.dimensions.rows
+        matrixName: "B", forcedRows: matrixA.dimensions.columns
     }))
     terminal.addLineBreak()
 
