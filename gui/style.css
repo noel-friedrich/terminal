@@ -191,7 +191,7 @@ footer > p {
 #terminal {
     width: max-content;
     height: max-content;
-    white-space: pre-wrap;
+    white-space: pre;
     tab-size: 4;
     --padding: 0;
     overflow-y: hidden;

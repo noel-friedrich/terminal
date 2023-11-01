@@ -1436,6 +1436,36 @@ class Terminal {
         return underLineToken(9999, 1, makeCommandInfoString(), Color.COLOR_2)
     }
 
+    createStyledInput() {
+        let input = document.createElement("input")
+        input.type = "text"
+        input.className = "terminal-input"
+        input.autocomplete = "off"
+        input.autocorrect = "off"
+        input.autocapitalize = "off"
+        input.spellcheck = "false"
+        input.name = "terminal-input"
+        return input
+    }
+
+    createTerminalButton({
+        text="Press here!",
+        charWidth=8,
+        onPress=undefined
+    }={}) {
+        let button = this.document.createElement("button")
+
+        button.textContent = text
+        button.onclick = onPress
+        
+        button.style.width = `${this.charWidth * charWidth}px`
+        button.style.backgroundColor = terminal.data.foreground.toString()
+        button.style.color = terminal.data.background.toString()
+        button.style.cursor = "pointer"
+
+        return button
+    }
+
     async prompt(msg, {password=false, affectCorrectness=false,
         getHistory = this._createDefaultGetHistoryFunc(),
         addToHistory = this._createDefaultAddToHistoryFunc(),
@@ -1460,14 +1490,7 @@ class Terminal {
             let inputContainer = document.createElement("div")
             inputContainer.className = "terminal-input-container"
 
-            let input = document.createElement("input")
-            input.type = "text"
-            input.className = "terminal-input"
-            input.autocomplete = "off"
-            input.autocorrect = "off"
-            input.autocapitalize = "off"
-            input.spellcheck = "false"
-            input.name = "terminal-input"
+            let input = this.createStyledInput()
 
             if (this.mobileKeyboard) {
                 input.addEventListener("focus", () => {

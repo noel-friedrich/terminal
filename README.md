@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 181 commands such as `ls`, `cd` and of course `cowsay`
+* 182 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -154,6 +154,7 @@ The following list can also be viewed using the `whatis *` command
 | `lunar-lander` | play a classic game of moon-lander |
 | `man` | show the manual page for a command |
 | `mandelbrot` | draws the mandelbrot set |
+| `matmul` | multiply two matrices with each other |
 | `mill2player` | play a game of mill with a friend locally |
 | `minesweeper` | play a game of minesweeper |
 | `minigolf` | play a game of minigolf |

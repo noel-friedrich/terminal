@@ -95,6 +95,10 @@ body {
     word-break: break-word;
 }
 
+#terminal .terminalbutton {
+    
+}
+
 #terminal a:hover {
     color: var(--accent-color-1);
 }
