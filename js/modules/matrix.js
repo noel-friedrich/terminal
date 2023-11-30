@@ -1,13 +1,24 @@
 const MatrixCellType = {
     Numeric: 0,
-    Variable: 1
+    Expression: 1
 }
 
 class MatrixCell {
 
     constructor(value) {
-        this.type = (typeof value === "number") ? MatrixCellType.Numeric : MatrixCellType.Variable
         this.value = value
+    }
+
+    get type() {
+        return (typeof this.value === "number") ? MatrixCellType.Numeric : MatrixCellType.Expression
+    }
+
+    static toMatrixCell(object) {
+        if (object instanceof MatrixCell) {
+            return object
+        } else {
+            return new MatrixCell(object)
+        }
     }
 
     static get Default() {
@@ -16,6 +27,43 @@ class MatrixCell {
 
     toString() {
         return this.value.toString()
+    }
+
+    toSimplifiedString() {
+        if (this.type != MatrixCellType.Numeric) {
+            return this.toString()
+        }
+
+        if (Number.isInteger(this.value)) {
+            return this.value.toString()
+        }
+
+        if (this.value == 0) {
+            return "0"
+        }
+
+        // find fraction approximation (very inefficiently!)
+        // only works for denominator < 10000
+
+        let bestFraction = null
+        let bestError = Infinity
+        for (let denominator = 1; denominator < 10000; denominator++) {
+            let numerator = Math.round(this.value * denominator)
+            const newValue = numerator / denominator
+            
+            const error = Math.abs(this.value - newValue)
+
+            if (error == 0) {
+                return `${numerator}/${denominator}`
+            }
+
+            if (error < bestError) {
+                bestError = error
+                bestFraction = `${numerator}/${denominator}`
+            }
+        }
+
+        return bestFraction
     }
 
     _arithmeticFunc(other, f, templateString) {
@@ -45,6 +93,38 @@ class MatrixCell {
         return this._arithmeticFunc(other, (x, y) => x / y, "x/y")
     }
 
+    copy() {
+        return new MatrixCell(this.value)
+    }
+
+    simplify(steps=100) {
+        if (this.type == MatrixCellType.Numeric) {
+            return this.copy()
+        }
+
+        let newValue = this.value
+
+        if (this.type == MatrixCellType.Expression) {
+            for (let i = 0; i < steps; i++) {
+                newValue = newValue
+                    .replaceAll("0+", "")
+                    .replaceAll("+0", "")
+                    .replaceAll("+-", "-")
+                    .replaceAll("--", "+")
+                    .replaceAll(/([a-zA-Z])\*-1/g, "-$1")
+                    .replaceAll(/-1\*([a-zA-Z])/g, "-$1")
+                    .replaceAll(/\(([a-zA-Z])\*1\)/g, "$1")
+                    .replaceAll(/\(1\*([a-zA-Z])\)/g, "$1")
+                    .replaceAll(/\(\(([a-zA-Z])\*([a-zA-Z])\)\*([a-zA-Z])\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(([a-zA-Z])\*\(([a-zA-Z])\*([a-zA-Z])\)\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(\(([a-zA-Z])\+([a-zA-Z])\)\+([a-zA-Z])\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(([a-zA-Z])\+\(([a-zA-Z])\+([a-zA-Z])\)\)/g, "($1*$2*$3)")
+            }
+        }
+
+        return new MatrixCell(newValue)
+    }
+
 }
 
 class MatrixDimensions {
@@ -52,6 +132,21 @@ class MatrixDimensions {
     constructor(rows, columns) {
         this.rows = rows
         this.columns = columns
+    }
+
+    transpose() {
+        return new MatrixDimensions(this.columns, this.rows)
+    }
+
+    add(n) {
+        return new MatrixDimensions(
+            this.rows + n,
+            this.columns + n
+        )
+    }
+
+    copy() {
+        return new MatrixDimensions(this.rows, this.columns)
     }
 
     static get Undefined() {
@@ -62,14 +157,35 @@ class MatrixDimensions {
         return `${this.rows}x${this.columns}`
     }
 
+    get isSquare() {
+        return this.rows == this.columns
+    }
+
+    equals(otherDimensions) {
+        return this.rows == otherDimensions.rows && this.columns == otherDimensions.columns
+    }
+
 }
 
 class Matrix {
 
     constructor(dimensions, arrayData=undefined) {
         this.dimensions = dimensions
+
         this._data = Array.from({length: dimensions.rows},
             () => Array.from({length: dimensions.columns}, () => MatrixCell.Default))
+
+        if (Array.isArray(arrayData)) {
+            for (let i = 0; i < arrayData.length; i++) {
+                if (Array.isArray(arrayData[i])) {
+                    for (let j = 0; j < arrayData[i].length; j++) {
+                        if (i < this._data.length && j < this._data[i].length && arrayData[i][j] !== undefined) {
+                            this._data[i][j].value = arrayData[i][j]
+                        }
+                    }
+                }
+            }
+        }
     }
 
     static fromArray(arrayData) {
@@ -98,18 +214,43 @@ class Matrix {
         return this._data[rowIndex][columnIndex]
     }
 
+    getCellValue(rowIndex, columnIndex) {
+        return this._data[rowIndex][columnIndex].value
+    }
+
     get rows() {
         return this._data
+    }
+
+    get rowsValues() {
+        return this._data.map(
+            row => row.map(
+                cell => cell.value
+            )
+        )
     }
 
     get columns() {
         return Array.from({length: this.dimensions.columns}, (_, ci) => this.getColumn(ci))
     }
 
+    get columnsValues() {
+        return this.columns.map(
+            column => column.map(
+                cell => cell.value
+            )
+        )
+    }
+
     toStringArray() {
         return this._data.map(
             row => row.map(
-                element => element.toString()
+                element => {
+                    if (typeof element.value === "number") {
+                        return element.toSimplifiedString()
+                    }
+                    return element.toString()
+                }
             )
         )
     }
@@ -148,7 +289,6 @@ class Matrix {
                 let row = this.getRow(ri)
                 let column = other.getColumn(ci)
 
-                console.log(row, column)
                 let dotProduct = row.map((n, i) => n.mul(column[i]))
                     .reduce((p, c) => p.add(c))
                 result.setValue(ri, ci, dotProduct)
@@ -157,15 +297,161 @@ class Matrix {
         return result
     }
 
+    transpose() {
+        return new Matrix(this.dimensions.transpose(), this.columnsValues)
+    }
+
+    without(rowIndex, columnIndex) {
+        const result = new Matrix(this.dimensions.add(-1))
+
+        for (let i = 0; i < this.dimensions.rows; i++) {
+            for (let j = 0; j < this.dimensions.columns; j++) {
+                if (i == rowIndex || j == columnIndex) {
+                    continue
+                }
+
+                let newRowIndex = i
+                let newColumnIndex = j
+
+                if (i > rowIndex) {
+                    newRowIndex--
+                }
+
+                if (j > columnIndex) {
+                    newColumnIndex--
+                }
+
+                result._data[newRowIndex][newColumnIndex] = this._data[i][j]
+            }   
+        }
+
+        return result
+    }
+
+    get isSquare() {
+        return this.dimensions.isSquare
+    }
+
+    get n() {
+        return this.dimensions.rows
+    }
+
+    determinant() {
+        if (!this.isSquare) {
+            throw new Error("Determinant is undefined for non-square matrices")
+        }
+
+        if (this.n == 1) {
+            return this._data[0][0]
+        }
+
+        let sum = new MatrixCell(0)
+
+        for (let j = 0; j < this.n; j++) {
+            const sgn = new MatrixCell((j % 2 == 0) ? 1 : -1)
+            sum = sum.add(this.getCell(0, j).mul(sgn).mul(this.without(0, j).determinant()))
+        }
+
+        return sum
+    }
+
+    mapValue(mapFunc) {
+        const result = new Matrix(this.dimensions.copy())
+        for (let i = 0; i < result.dimensions.rows; i++) {
+            for (let j = 0; j < result.dimensions.columns; j++) {
+                result._data[i][j].value = mapFunc(this.getCell(i, j), i, j)
+            }
+        }
+        return result
+    }
+
+    map(mapFunc) {
+        const result = new Matrix(this.dimensions.copy())
+        for (let i = 0; i < result.dimensions.rows; i++) {
+            for (let j = 0; j < result.dimensions.columns; j++) {
+                result._data[i][j] = mapFunc(this.getCell(i, j), i, j)
+            }
+        }
+        return result
+    }
+
+    static RandomIntegers(n, m, maxInt=10) {
+        if (m === undefined) {
+            m = n
+        }
+
+        return new Matrix(new MatrixDimensions(n, m)).mapValue(
+            () => Math.floor(Math.random() * maxInt)
+        )
+    }
+
+    minors() {
+        return this.map((cell, i, j) => {
+            return this.without(i, j).determinant()
+        })
+    }
+
+    cofactor() {    
+        return this.minors().map((cell, i, j) => {
+            return cell.mul(new MatrixCell(((i + j) % 2 == 0) ? 1 : -1))
+        })
+    }
+
+    adjunct() {
+        return this.cofactor().transpose()
+    }
+
+    inverse() {
+        const det = this.determinant()
+        if (det == 0) {
+            throw new Error("Matrix is not invertible (det = 0)")
+        }
+
+        return this.adjunct().scale(new MatrixCell(1).div(det))
+    }
+
+    simplify() {
+        return this.map(cell => cell.simplify())
+    }
+
+    add(otherMatrix) {
+        if (!this.dimensions.equals(otherMatrix.dimensions)) {
+            return new Error("Matrix Dimensions must be equal")
+        }
+
+        return this.map((cell, i, j) => {
+            return cell.add(otherMatrix.getCell(i, j))
+        })
+    }
+
+    scale(scalar) {
+        return this.map(cell => {
+            return cell.mul(MatrixCell.toMatrixCell(scalar))
+        })
+    }
+
 }
 
 async function inputMatrixDimensions({
     matrixName="A",
-    forcedRows=undefined
+    forcedRows=undefined,
+    square=false
 }={}) {
     let message = `Matrix ${matrixName} Dimensions [e.g. 3x2]: `
     if (forcedRows) {
         message += `${forcedRows}x`
+    }
+
+    if (square) {
+        while (true) {
+            const input = await terminal.prompt(`Matrix ${matrixName} size: `)
+            if (/^[0-9]+$/.test(input)) {
+                const n = parseInt(input)
+                return new MatrixDimensions(n, n)
+            } else {
+                terminal.printError("Invalid Format! Valid format is positive integer, e.g. \"3\"", "ParserError")
+            }
+        }
     }
 
     while (true) {
@@ -237,7 +523,12 @@ async function inputMatrix(dimensions) {
 
             input.oninput = () => {
                 updateInputWidth()
-                if (input.value.toString().match(/^\-?[0-9]+(?:\.[0-9]+)?$/)) {
+                if (input.value.match(/^\-?[0-9]+\/[0-9]+$/)) {
+                    const parts = input.value.split("/")
+                    let numericValue = parseInt(parts[0]) / parseInt(parts[1])
+                    matrix.setValue(ri, ci, new MatrixCell(numericValue))
+                    setGood()
+                } else if (input.value.toString().match(/^\-?[0-9]+(?:\.[0-9]+)?$/)) {
                     let numericValue = parseFloat(input.value)
                     matrix.setValue(ri, ci, new MatrixCell(numericValue))
                     setGood()
