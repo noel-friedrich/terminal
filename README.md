@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 185 commands such as `ls`, `cd` and of course `cowsay`
+* 186 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -158,6 +158,7 @@ The following list can also be viewed using the `whatis *` command
 | `matinv` | find the inverse of a matrix |
 | `matmin` | find the matrix of minors of a given matrix |
 | `matmul` | multiply two matrices with each other |
+| `matred` | reduce a given matrix to reduced row echelon form |
 | `mill2player` | play a game of mill with a friend locally |
 | `minesweeper` | play a game of minesweeper |
 | `minigolf` | play a game of minigolf |

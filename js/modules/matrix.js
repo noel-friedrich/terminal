@@ -67,6 +67,7 @@ class MatrixCell {
     }
 
     _arithmeticFunc(other, f, templateString) {
+        other = MatrixCell.toMatrixCell(other)
         if (this.type == MatrixCellType.Numeric && other.type == MatrixCellType.Numeric) {
             return new MatrixCell(f(this.value, other.value))
         } else {
@@ -188,26 +189,37 @@ class Matrix {
         }
     }
 
-    static fromArray(arrayData) {
-        let matrix = new Matrix(new MatrixDimensions(
-            arrayData.length, arrayData[0].length
-        ))
-
-        for (let i = 0; i < arrayData.length; i++) {
-            for (let j = 0; j < arrayData[i].length; j++) {
-                matrix.setValue(i, j, new MatrixCell(arrayData[i][j]))
-            }
-        }
-
-        return matrix
+    static fromArray(arr) {
+        const dimensions = new MatrixDimensions(arr.length, arr[0].length)
+        return new Matrix(dimensions, arr)
     }
 
-    setValue(rowIndex, columnIndex, cell) {
+    get nRows() {
+        return this.dimensions.rows
+    }
+
+    get nCols() {
+        return this.dimensions.columns
+    }
+
+    get(rowIndex, columnIndex) {
+        return this._data[rowIndex][columnIndex].value
+    }
+
+    set(rowIndex, columnIndex, value) {
+        this._data[rowIndex][columnIndex].value = value
+    }
+
+    setCell(rowIndex, columnIndex, cell) {
         if (!(cell instanceof MatrixCell)) {
             throw new Error("cell must be instance of MatrixCell")
         }
 
         this._data[rowIndex][columnIndex] = cell
+    }
+
+    setCellValue(rowIndex, columnIndex, value) {
+        this._data[rowIndex][columnIndex].value = value
     }
 
     getCell(rowIndex, columnIndex) {
@@ -268,11 +280,18 @@ class Matrix {
         const getColumnWidth = ci => Math.max(...stringArray.map(row => row[ci].length))
         const columnWidths = Array.from({length: this.dimensions.columns}, (_, ci) => getColumnWidth(ci))
 
+        const padMiddle = (str, length) => {
+            if (str.length >= length) return str
+            let padLength = length - str.length
+            let half = Math.floor(padLength / 2)
+            return " ".repeat(half) + str + " ".repeat(padLength - half)
+        }
+
         let outString = ""
         for (let ri = 0; ri < this.dimensions.rows; ri++) {
             outString += "[ "
             for (let ci = 0; ci < this.dimensions.columns; ci++) {
-                outString += stringArray[ri][ci].padEnd(columnWidths[ci], " ")
+                outString += padMiddle(stringArray[ri][ci], columnWidths[ci])
                 outString += " "
             }
             outString = outString.slice(0, -1) + " ]\n"
@@ -291,7 +310,7 @@ class Matrix {
 
                 let dotProduct = row.map((n, i) => n.mul(column[i]))
                     .reduce((p, c) => p.add(c))
-                result.setValue(ri, ci, dotProduct)
+                result.setCell(ri, ci, dotProduct)
             }
         }
         return result
@@ -430,6 +449,48 @@ class Matrix {
         })
     }
 
+    // row operations (inplace)
+
+    swapRows(r1, r2) {
+        const temp = this._data[r1]
+        this._data[r1] = this._data[r2]
+        this._data[r2] = temp
+    }
+
+    scaleRow(rowIndex, scalar) {
+        const scalarCell = MatrixCell.toMatrixCell(scalar)
+        for (let columnIndex = 0; columnIndex < this.nCols; columnIndex++) {
+            const newCell = this.getCell(rowIndex, columnIndex).mul(scalarCell)
+            this.setCell(rowIndex, columnIndex, newCell)
+        }
+    }
+
+    addScalarRow(r1, r2, scalar) {
+        const scalarCell = MatrixCell.toMatrixCell(scalar)
+        for (let columnIndex = 0; columnIndex < this.nCols; columnIndex++) {
+            const newCell = this.getCell(r2, columnIndex).add(this.getCell(r1, columnIndex).mul(scalarCell))
+            this.setCell(r2, columnIndex, newCell)
+        }
+    }
+
+    isZeroColumn(columnIndex) {
+        for (let i = 0; i < this.nRows; i++) {
+            if (this.get(i, columnIndex) != 0) {
+                return false
+            }
+        }
+        return true
+    }
+
+    isZeroMatrix() {
+        for (let i = 0; i < this.nCols; i++) {
+            if (!this.isZeroColumn(i)) {
+                return false
+            }
+        }
+        return true
+    }
+
 }
 
 async function inputMatrixDimensions({
@@ -526,14 +587,14 @@ async function inputMatrix(dimensions) {
                 if (input.value.match(/^\-?[0-9]+\/[0-9]+$/)) {
                     const parts = input.value.split("/")
                     let numericValue = parseInt(parts[0]) / parseInt(parts[1])
-                    matrix.setValue(ri, ci, new MatrixCell(numericValue))
+                    matrix.setCell(ri, ci, new MatrixCell(numericValue))
                     setGood()
                 } else if (input.value.toString().match(/^\-?[0-9]+(?:\.[0-9]+)?$/)) {
                     let numericValue = parseFloat(input.value)
-                    matrix.setValue(ri, ci, new MatrixCell(numericValue))
+                    matrix.setCell(ri, ci, new MatrixCell(numericValue))
                     setGood()
                 } else if (input.value.toString().match(/^[a-z]$/)) {
-                    matrix.setValue(ri, ci, new MatrixCell(input.value.toString()))
+                    matrix.setCell(ri, ci, new MatrixCell(input.value.toString()))
                     setGood()
                 } else {
                     setBad()
