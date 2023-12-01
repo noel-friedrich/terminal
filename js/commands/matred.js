@@ -2,20 +2,25 @@ terminal.addCommand("matred", async function() {
     await terminal.modules.import("matrix", window)
 
     const matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A"}))
-    terminal.addLineBreak()
+
+    let stepNum = 1
 
     const swapRows = (r1, r2) => {
         terminal.addLineBreak()
         matrix.swapRows(r1, r2)
+        terminal.print(`#${stepNum}: `)
         terminal.printLine(`r${r1 + 1} <-> r${r2 + 1}`, Color.COLOR_1)
         terminal.printLine(matrix)
+        stepNum++
     }
 
     const scaleRow = (row, scalar) => {
         terminal.addLineBreak()
         matrix.scaleRow(row, scalar)
+        terminal.print(`#${stepNum}: `)
         terminal.printLine(`r${row + 1} * ${scalar.toSimplifiedString()}`, Color.COLOR_1)
         terminal.printLine(matrix)
+        stepNum++
     }
 
     const addScalarRow = (r1, r2, scalar) => {
@@ -32,27 +37,32 @@ terminal.addCommand("matred", async function() {
         if (scalarText == "1") {
             scalarText = ""
         } else {
-            scalarText += "*"
+            scalarText += "("
         }
 
-        terminal.printLine(`r${r2 + 1} ${operation} ${scalarText}r${r1 + 1}`, Color.COLOR_1)
-        
+        terminal.print(`#${stepNum}: `)
+        terminal.printLine(`r${r2 + 1} ${operation} ${scalarText}r${r1 + 1}${scalarText.endsWith("(") ? ")" : ""}`, Color.COLOR_1)
         terminal.printLine(matrix)
-    }
 
-    terminal.printLine(matrix.toString())
+        stepNum++
+    }
 
     if (matrix.isZeroMatrix()) {
         throw new Error("Cannot row reduce matrix with no nonzero entry.")
     }
 
-    function isReducedColumn(columnIndex) {
+    function isReducedColumn(columnIndex, pivotRow) {
         const values = matrix.getColumn(columnIndex).map(c => c.value)
 
         let zeroEntries = 0
         let foundOne = false
-        for (let value of values) {
+        for (let i = 0; i < values.length; i++) {
+            const value = values[i]
             if (value == 1) {
+                if (i > pivotRow) {
+                    return false
+                }
+
                 if (foundOne) {
                     return false
                 } else {
@@ -82,10 +92,11 @@ terminal.addCommand("matred", async function() {
         let currColumn = 0
         let pivotRow = 0
 
-        while (matrix.isZeroColumn(currColumn) || isReducedColumn(currColumn) || isZeroColumnFromRow(currColumn, pivotRow)) {
-            if (isReducedColumn(currColumn)) {
+        while (matrix.isZeroColumn(currColumn) || isReducedColumn(currColumn, pivotRow) || isZeroColumnFromRow(currColumn, pivotRow)) {
+            if (isReducedColumn(currColumn, pivotRow)) {
                 pivotRow++
             }
+
             currColumn++
 
             if (pivotRow >= matrix.nRows || currColumn >= matrix.nCols) {
@@ -123,29 +134,11 @@ terminal.addCommand("matred", async function() {
         }
 
         break
-
-        /* outer:
-        for (let i = 0; i < matrix.nRows; i++) {
-            if (matrix.get(i, i) == 1) {
-                for (let j = 0; j < matrix.nRows; j++) {
-                    if (i == j) continue
-                    
-                    if (matrix.get(j, i) != 0) {
-                        addScalarRow(i, j, matrix.getCell(j, i).mul(-1))
-                        finished = false
-                        break outer
-                    }
-                }
-            } else if (matrix.getCellValue(i, i) != 0) {
-                scaleRow(i, new MatrixCell(1).div(matrix.getCell(i, i)))
-                finished = false
-                break
-            }
-        } */
     }
 
-    terminal.addLineBreak()
-    terminal.printLine(matrix)
+    if (stepNum == 1) {
+        terminal.printError("Matrix is already in reduced row echelon form.")
+    }
 }, {
     description: "reduce a given matrix to reduced row echelon form",
 })
