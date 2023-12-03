@@ -1,4 +1,4 @@
-terminal.addCommand("matdet", async function() {
+terminal.addCommand("matdet", async function(args) {
     await terminal.modules.import("matrix", window)
 
     let matrix = null
