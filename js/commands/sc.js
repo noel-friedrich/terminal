@@ -1,5 +1,5 @@
 terminal.addCommand("sc", async function(args) {
-    if (args.command) {
+    if (args.command && args.mode == "add") {
         let tokens = TerminalParser.tokenize(args.command)
         if (tokens.length == 0)
             throw new Error("Command cannot be empty")
@@ -23,6 +23,15 @@ terminal.addCommand("sc", async function(args) {
             if (!args.command)
                 throw new Error("Must specify a command to remove")
             let commands = terminal.data.startupCommands
+
+            if (/^[0-9]+$/.test(args.command)) {
+                let index = parseInt(args.command)
+                if (index < 1 || index > commands.length) {
+                    throw new Error("Invalid Index: command not found")
+                }
+                args.command = commands[index - 1]
+            }
+
             if (!commands.includes(args.command))
                 throw new Error(`Command '${args.command}' is not in the startup commands`)
             commands.splice(commands.indexOf(args.command), 1)
@@ -41,8 +50,8 @@ terminal.addCommand("sc", async function(args) {
                 terminal.printLine("No startup commands found")
             else {
                 terminal.printLine("Startup Commands:")
-                for (let command of commands) {
-                    terminal.printLine(`- ${command}`)
+                for (let i = 0; i < commands.length; i++) {
+                    terminal.printLine(`(${i + 1}): ${commands[i]}`)
                 }
             }
 
@@ -50,7 +59,7 @@ terminal.addCommand("sc", async function(args) {
             terminal.print("To add a command, use ")
             terminal.printLine("sc add <command>", Color.COLOR_1)
             terminal.print("To remove a command, use ")
-            terminal.printLine("sc remove <command>", Color.COLOR_1)
+            terminal.printLine("sc remove <index>", Color.COLOR_1)
         }
     }
 
@@ -63,7 +72,7 @@ terminal.addCommand("sc", async function(args) {
     description: "manage the startup commands",
     args: {
         "?mode": "'add', 'remove', 'reset' or 'list'",
-        "?command": "the command to add or remove"
+        "?command": "the command to add or remove (or index)"
     },
     defaultValues: {
         mode: "list"
