@@ -1,7 +1,14 @@
-terminal.addCommand("matred", async function() {
+terminal.addCommand("matred", async function(args) {
     await terminal.modules.import("matrix", window)
 
-    const matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A"}))
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+        terminal.printLine(matrix)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
 
     let stepNum = 1
 
@@ -141,4 +148,7 @@ terminal.addCommand("matred", async function() {
     }
 }, {
     description: "reduce a given matrix to reduced row echelon form",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
 })

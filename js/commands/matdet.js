@@ -1,11 +1,19 @@
 terminal.addCommand("matdet", async function() {
     await terminal.modules.import("matrix", window)
 
-    const matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
-    terminal.addLineBreak()
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
 
     terminal.printLine(matrix.determinant().simplify().toSimplifiedString())
 
 }, {
     description: "find the determinant of a matrix",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
 })

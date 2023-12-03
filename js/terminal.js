@@ -317,6 +317,10 @@ class TerminalParser {
                 argOptions.type = "file"
             } else if (type == "c") {
                 argOptions.type = "command"
+            } else if (type == "sm") {
+                argOptions.type = "square-matrix"
+            } else if (type == "m") {
+                argOptions.type = "matrix"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
@@ -488,6 +492,36 @@ class TerminalParser {
                 error(`Command not found: "${value}"`)
             }
             addVal(value)
+        } else if (argOption.type == "matrix" || argOption.type == "square-matrix") {
+            // please consider me a regex god for this:
+            // (matches any valid matrices)
+            if (!/^\[((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*(\/((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*)*\]$/.test(value)) {
+                error(`Invalid matrix. Use syntax: [1,2/a,4]`)
+                return
+            }
+
+            let str = value.slice(1, value.length - 1)
+            let rows = str.split("/").map(rowStr => {
+                let values = rowStr.split(",")
+                for (let i = 0; i < values.length; i++) {
+                    if (/^(-?[0-9]+(\.[0-9]+)?)$/.test(values[i])) {
+                        values[i] = parseFloat(values[i])
+                    }
+                }
+                return values
+            })
+
+            if (rows.some(row => row.length != rows[0].length)) {
+                error(`Matrix must have equal sized rows.`)
+            }
+
+            if (argOption.type == "square-matrix") {
+                if (rows.length != rows[0].length) {
+                    error(`Matrix must be square.`)
+                }
+            }
+
+            addVal(rows)
         } else {
             addVal(value)
         }
