@@ -916,8 +916,6 @@ class Terminal {
     parser = TerminalParser
 
     parentNode = document.getElementById("terminal")
-    loadingOverlayContainer = document.getElementById("loading-overlay")
-    loadingOverlayOutput = document.getElementById("loading-output")
     containerNode = document.querySelector(".terminal-container")
     commandListURL = "js/load-commands.js"
     mobileKeyboardURL = "js/keyboard.js"
@@ -984,16 +982,15 @@ class Terminal {
         if (this.loadingKey != randomKey)
             return
 
-        if (this.loadingOverlayContainer && this.loadingOverlayOutput) {
-            this.loadingOverlayContainer.style.display = "block"
-            this.loadingOverlayOutput.textContent = file
-        }
+        this.unsetLoading()
+        this.loadingElement = terminal.printLine(`\nLoading ${file}`, undefined, {forceElement: true})
     }
 
     async unsetLoading() {
         this.loadingKey = null
-        if (this.loadingOverlayContainer) {
-            this.loadingOverlayContainer.style.display = "none"
+        if (this.loadingElement) {
+            this.loadingElement.remove()
+            this.loadingElement = null
         }
     }
 
@@ -2031,6 +2028,7 @@ class Terminal {
         if (!asyncMode) {
             this.setLoading(url)
         }
+
         // make a new iframe to load the script in
         // to prevent the script from accessing the global scope
         // instead, it will access the iframe's global scope
@@ -2223,9 +2221,6 @@ class Terminal {
         } else {
             if (runStartupCommands) {
                 for (let startupCommand of this.data.startupCommands) {
-                    if (startupCommand.startsWith("turtlo") && terminal.mobileKeyboard) {
-                        continue
-                    }
                     await this.input(startupCommand, true)
                 }
             }
