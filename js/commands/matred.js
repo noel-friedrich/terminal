@@ -10,6 +10,10 @@ terminal.addCommand("matred", async function(args) {
         terminal.addLineBreak()
     }
 
+    if (!matrix.containsOnlyNumbers()) {
+        throw new Error("Matrix to reduce may not include variables")
+    }
+
     let stepNum = 1
 
     const swapRows = (r1, r2) => {

@@ -491,6 +491,10 @@ class Matrix {
         return true
     }
 
+    containsOnlyNumbers() {
+        return !this._data.flat().some(cell => cell.type != MatrixCellType.Numeric)
+    }
+
 }
 
 async function inputMatrixDimensions({

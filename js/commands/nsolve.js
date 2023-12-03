@@ -6,7 +6,27 @@ terminal.addCommand("nsolve", async function(args) {
     function newtonSolve(f, df, startX, n) {
         let x = startX
         for (let i = 0; i < n; i++) {
-            x -= f(x) / df(x)
+            const slope = df(x)
+            const value = f(x)
+
+            if (slope == 0) {
+                throw new Error(`slope is zero (at x=${x})`)
+            }
+
+            if (Math.abs(value) == Infinity) {
+                throw new Error(`value is infinite (at x=${x})`)
+            }
+
+            if (args.list) {
+                terminal.printLine(`n(${i}) = ${x}`)
+            }
+
+            let prevX = x
+            x -= f(x) / slope
+
+            if (prevX == x) {
+                break
+            }
         }
         return x
     }
@@ -28,20 +48,23 @@ terminal.addCommand("nsolve", async function(args) {
     const result = newtonSolve(f, df, args.startn, args.iterations)
 
     const error = Math.abs(f(result) - 0)
-    if (error > 0.1) {
-        terminal.printError("Couldn't find a solution")
+    if (error > 0.01) {
+        terminal.printError("Method did not converge.", "Warning")
+        terminal.printLine(`(wrong) result: ${result}`)
+        terminal.printLine(`error: ${error}`)
     } else {
-        terminal.printLine(result)
+        terminal.printLine(result, Color.COLOR_1)
     }
 }, {
     description: "solve an equation using the newton-raphson method",
     args: {
         "*e=equation:s": "the equation to solve",
         "?s=startn:n": "Starting number",
-        "?i=iterations:i:1~99999": "number of iterations to perform",
+        "?i=iterations:i:1~999999": "number of iterations to perform",
+        "?l=list:b": "list all intermediate values"
     },
     defaultValues: {
-        startn: 0,
-        iterations: 100
+        startn: 0.71,
+        iterations: 1000
     }
 })

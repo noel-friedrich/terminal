@@ -367,7 +367,7 @@ class TerminalData {
         "history": "[]",
         "storageSize": 300000,
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
-        "mobile": "0",
+        "mobile": "2",
         "easterEggs": "[]",
         "sidepanel": "true",
         "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
