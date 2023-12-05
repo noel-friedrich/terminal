@@ -1426,6 +1426,11 @@ class Terminal {
         }
 
         let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+
+        if (commandText == undefined) {
+            return ""
+        }
+
         if (!this.commandExists(commandText)) { 
             return underlinePart(prompt.indexOf(commandText), commandText.length, `command not found`)
         }
