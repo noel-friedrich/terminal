@@ -272,6 +272,7 @@ class TerminalParser {
         let argOptions = {
             name: null,
             type: "string",
+            typeName: "string",
             optional: false,
             min: null,
             max: null,
@@ -305,22 +306,23 @@ class TerminalParser {
             name = parts[0]
             let type = parts[1]
             if (type == "n") {
-                argOptions.type = "number"
+                argOptions.type = argOptions.typeName = "number"
             } else if (type == "i") {
                 argOptions.type = "number"
+                argOptions.typeName = "integer"
                 argOptions.numtype = "integer"
             } else if (type == "b") {
-                argOptions.type = "boolean"
+                argOptions.type = argOptions.typeName = "boolean"
             } else if (type == "s") {
-                argOptions.type = "string"
+                argOptions.type = argOptions.typeName = "string"
             } else if (type == "f") {
-                argOptions.type = "file"
+                argOptions.type = argOptions.typeName = "file"
             } else if (type == "c") {
-                argOptions.type = "command"
+                argOptions.type = argOptions.typeName = "command"
             } else if (type == "sm") {
-                argOptions.type = "square-matrix"
+                argOptions.type = argOptions.typeName = "square-matrix"
             } else if (type == "m") {
-                argOptions.type = "matrix"
+                argOptions.type = argOptions.typeName = "matrix"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
@@ -349,7 +351,7 @@ class TerminalParser {
 
         if (argOptions.name.includes("=")) {
             argOptions.forms = argOptions.name.split("=")
-            argOptions.name = argOptions.forms[0]
+            argOptions.name = argOptions.forms[1]
         }
 
         if (argOptions.name == "help" || argOptions.name == "h") {
@@ -392,7 +394,7 @@ class TerminalParser {
                         argOption.tokenSpan = 1
                         this._parseArgumentValue(argOption, nextToken, parsingError)
                     } else {
-                        parsingError.message = `property "${name}" (${argOption.type}) expects a value`
+                        parsingError.message = `property "${name}" (${argOption.typeName}) expects a value`
                         parsingError.tokenIndex = i + 1
                     }
                 }
@@ -1357,15 +1359,15 @@ class Terminal {
         }
     }
 
-    updateCorrectnessText(prompt, element) {
-        const {text, color} = this.getCorrectnessText(prompt)
+    updateCorrectnessText(prompt, element, inputElement) {
+        const {text, color} = this.getCorrectnessText(prompt, inputElement)
         element.textContent = text ? "\n" + text : ""
         if (color) {
             element.style.color = color
         }
     }
 
-    getCorrectnessText(prompt) {
+    getCorrectnessText(prompt, inputElement) {
         if (prompt.length == 0)
             return ""
 
@@ -1388,6 +1390,22 @@ class Terminal {
             return {text: out, color}
         }
 
+        const positionFromToken = tokenIndex => {
+            let startPosition = 0
+            let tempPrompt = prompt
+            for (let i = 0; i < tokens.length; i++) {
+                const token = tokens[i]
+                let firstIndex = tempPrompt.indexOf(token)
+                tempPrompt = tempPrompt.slice(firstIndex + token.length)
+                startPosition = prompt.length - (tempPrompt.length + token.length) + 1
+
+                if (i == tokenIndex) {
+                    break
+                }
+            }
+            return startPosition
+        }
+
         const underLineToken = (tokenIndex, tokenSpan, message, color=Color.ERROR) => {
             if (tokenIndex >= tokens.length) {
                 let offset = prompt.length + 1
@@ -1396,22 +1414,6 @@ class Terminal {
             }
 
             tokenSpan = Math.min(tokenSpan, tokens.length - 1 - tokenIndex)
-
-            const positionFromToken = tokenIndex => {
-                let startPosition = 0
-                let tempPrompt = prompt
-                for (let i = 0; i < tokens.length; i++) {
-                    const token = tokens[i]
-                    let firstIndex = tempPrompt.indexOf(token)
-                    tempPrompt = tempPrompt.slice(firstIndex + token.length)
-                    startPosition = prompt.length - (tempPrompt.length + token.length) + 1
-
-                    if (i == tokenIndex) {
-                        break
-                    }
-                }
-                return startPosition
-            }
 
             let startPosition = positionFromToken(tokenIndex)
             let endPosition = startPosition + tokens[tokenIndex].length
@@ -1440,31 +1442,67 @@ class Terminal {
             return underLineToken(parsingError.tokenIndex, parsingError.tokenSpan, parsingError.message)
         }
 
+        const makeArgumentInfo = argOption => {
+            let out = ""
+            if (argOption.name.length == 1) {
+                out += `-`
+            } else {
+                out += `--`
+            }
+            out += `${argOption.name} (`
+            if (argOption.optional) {
+                out += "optional, "
+            }
+            out += `${argOption.typeName}) ${argOption.description}`
+            return out
+        }
+
         const makeCommandInfoString = () => {
             let out = ""
 
             let filteredOptions = argOptions.filter(o => !o.isManuallySetValue)
             for (let argOption of filteredOptions) {
-                if (argOption.name.length == 1) {
-                    out += `-`
-                } else {
-                    out += `--`
-                }
-                out += `${argOption.name} (`
-                if (argOption.optional) {
-                    out += "optional, "
-                }
-                out += `${argOption.type}) ${argOption.description}\n`
+                out += `${makeArgumentInfo(argOption)}\n`
             }
             
             return out
         }
 
-        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0) {
-            return underLineToken(0, 0, `"${commandData.description}"`, Color.COLOR_2)
+        let currTokenIndex = 0
+        for (let i = 0; i < tokens.length; i++) {
+            let position = positionFromToken(i)
+            if (inputElement.selectionStart >= position - 1) {
+                currTokenIndex = i
+            }
         }
 
-        return underLineToken(9999, 1, makeCommandInfoString(), Color.COLOR_2)
+        let currArgOption = undefined
+        for (let argOption of argOptions) {
+            if (argOption.tokenIndex == undefined) {
+                continue
+            }
+
+            if (currTokenIndex >= argOption.tokenIndex && currTokenIndex <= argOption.tokenIndex + argOption.tokenSpan) {
+                currArgOption = argOption
+                break
+            }
+        }
+
+        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0 || currTokenIndex == 0) {
+            return underLineToken(0, 0, `"${commandData.description}"`, Color.fromHex("#9d64ff"))
+        }
+
+        // user is at end of selection and wants more info about arguments
+        if (prompt.slice(-1) == " " && prompt.length == inputElement.selectionStart) {
+            return underLineToken(9999, 1, makeCommandInfoString(), Color.fromHex("#9d64ff"))
+        }
+
+        if (currArgOption) {
+            return underLineToken(currArgOption.tokenIndex, currArgOption.tokenSpan,
+                makeArgumentInfo(currArgOption), Color.fromHex("#9d64ff"))
+        }
+
+        return ""
     }
 
     createStyledInput() {
@@ -1660,7 +1698,17 @@ class Terminal {
                     let cleanedInput = this.sanetizeInput(inputElement.value)
                     this.updateInputCorrectness(cleanedInput)
                     if (correctnessOutput) {
-                        this.updateCorrectnessText(inputElement.value, correctnessOutput)
+                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                    }
+                }
+            }
+
+            inputElement.onselectionchange = () => {
+                if (affectCorrectness) {
+                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    this.updateInputCorrectness(cleanedInput)
+                    if (correctnessOutput) {
+                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
                     }
                 }
             }
@@ -1691,6 +1739,9 @@ class Terminal {
                 // (textLength + 1) to leave room for the next character
                 let inputWidth = (textLength + 1) * this.charWidth
                 inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
+
+                // call async to let selection be updated before event is fired
+                setTimeout(inputElement.onselectionchange, 0)
             }
 
             addEventListener("resize", event => {
