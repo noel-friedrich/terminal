@@ -38,12 +38,6 @@ terminal.addCommand("tictactoe", async function(args) {
     }
 
     function isWon() {
-        function any(l) {
-            for (let e of l)
-                if (e)
-                    return true
-            return false
-        }
         const possibleWins = [
             [1, 2, 3], [4, 5, 6], [7, 8, 9],
             [1, 4, 7], [2, 5, 8], [3, 6, 9],
@@ -79,33 +73,106 @@ terminal.addCommand("tictactoe", async function(args) {
     }
 
     function getComputerInputNormal() {
-        const possibleWins = [
-            [1, 2, 3], [4, 5, 6], [7, 8, 9],
-            [1, 4, 7], [2, 5, 8], [3, 6, 9],
-            [1, 5, 9], [3, 5, 7]
-        ]
+        const f = Array.from({length: 9}).map((v, i) => getField(i + 1)).map(f => f == " " ? "_" : f)
+        const originalF = f.slice()
 
-        for (let player of [X, O]) {
-            for (let possibleWin of possibleWins) {
-                let count = 0
-                for (let num of possibleWin) {
-                    if (getField(num) == player)
-                        count++
-                }
-                if (count == 2) {
-                    for (let num of possibleWin) {
-                        if (getField(num) == N)
-                            return num
-                    }
-                }
-            } 
+        function randomChoice(lst) {
+            const index = Math.floor(Math.random() * lst.length)
+            if (originalF[index] != "_") {
+                return randomChoice(lst)
+            }
+            return lst[index]
+        }
+
+        function seite() {
+            return randomChoice([2, 4, 6, 8])
+        }
+
+        function ecke() {
+            return randomChoice([1, 3, 7, 9])
+        }
+
+        function zufall() {
+            return getComputerInputRandom()
+        }
+
+        ueberpruefung = 0;
+        if(f[4]=="_") {f[4]="O";} else {//3 in der Reihe für O:
+        if(f[0]=="O"&&f[1]=="O"&&f[2]=="_") {f[2]="O";} else { //012
+        if(f[1]=="O"&&f[2]=="O"&&f[0]=="_") {f[0]="O";} else {
+        if(f[0]=="O"&&f[2]=="O"&&f[1]=="_") {f[1]="O";} else {
+        if(f[3]=="O"&&f[4]=="O"&&f[5]=="_") {f[5]="O";} else { //345
+        if(f[4]=="O"&&f[5]=="O"&&f[3]=="_") {f[3]="O";} else {
+        if(f[5]=="O"&&f[3]=="O"&&f[4]=="_") {f[4]="O";} else {
+        if(f[6]=="O"&&f[7]=="O"&&f[8]=="_") {f[8]="O";} else { //678
+        if(f[7]=="O"&&f[8]=="O"&&f[6]=="_") {f[6]="O";} else {
+        if(f[6]=="O"&&f[8]=="O"&&f[7]=="_") {f[7]="O";} else {
+        if(f[0]=="O"&&f[3]=="O"&&f[6]=="_") {f[6]="O";} else { //036
+        if(f[6]=="O"&&f[0]=="O"&&f[3]=="_") {f[3]="O";} else {
+        if(f[6]=="O"&&f[3]=="O"&&f[0]=="_") {f[0]="O";} else {
+        if(f[1]=="O"&&f[4]=="O"&&f[7]=="_") {f[7]="O";} else { //147
+        if(f[4]=="O"&&f[7]=="O"&&f[1]=="_") {f[1]="O";} else {
+        if(f[7]=="O"&&f[1]=="O"&&f[4]=="_") {f[4]="O";} else {
+        if(f[8]=="O"&&f[5]=="O"&&f[2]=="_") {f[2]="O";} else { //258
+        if(f[2]=="O"&&f[8]=="O"&&f[5]=="_") {f[5]="O";} else {
+        if(f[2]=="O"&&f[5]=="O"&&f[8]=="_") {f[8]="O";} else {
+        if(f[0]=="O"&&f[8]=="O"&&f[4]=="_") {f[4]="O";} else { //048
+        if(f[4]=="O"&&f[8]=="O"&&f[0]=="_") {f[0]="O";} else {
+        if(f[4]=="O"&&f[0]=="O"&&f[8]=="_") {f[8]="O";} else {
+        if(f[4]=="O"&&f[2]=="O"&&f[6]=="_") {f[6]="O";} else { //246
+        if(f[2]=="O"&&f[6]=="O"&&f[4]=="_") {f[4]="O";} else {
+        if(f[6]=="O"&&f[4]=="O"&&f[2]=="_") {f[2]="O";} else {    //X aufhalten:
+        if(f[0]=="X"&&f[1]=="X"&&f[2]=="_") {f[2]="O";} else { //012
+        if(f[1]=="X"&&f[2]=="X"&&f[0]=="_") {f[0]="O";} else {
+        if(f[0]=="X"&&f[2]=="X"&&f[1]=="_") {f[1]="O";} else {
+        if(f[3]=="X"&&f[4]=="X"&&f[5]=="_") {f[5]="O";} else { //345
+        if(f[4]=="X"&&f[5]=="X"&&f[3]=="_") {f[3]="O";} else {
+        if(f[5]=="X"&&f[3]=="X"&&f[4]=="_") {f[4]="O";} else {
+        if(f[6]=="X"&&f[7]=="X"&&f[8]=="_") {f[8]="O";} else { //678
+        if(f[7]=="X"&&f[8]=="X"&&f[6]=="_") {f[6]="O";} else {
+        if(f[6]=="X"&&f[8]=="X"&&f[7]=="_") {f[7]="O";} else {
+        if(f[0]=="X"&&f[3]=="X"&&f[6]=="_") {f[6]="O";} else { //036
+        if(f[6]=="X"&&f[0]=="X"&&f[3]=="_") {f[3]="O";} else {
+        if(f[6]=="X"&&f[3]=="X"&&f[0]=="_") {f[0]="O";} else {
+        if(f[1]=="X"&&f[4]=="X"&&f[7]=="_") {f[7]="O";} else { //147
+        if(f[4]=="X"&&f[7]=="X"&&f[1]=="_") {f[1]="O";} else {
+        if(f[7]=="X"&&f[1]=="X"&&f[4]=="_") {f[4]="O";} else {
+        if(f[8]=="X"&&f[5]=="X"&&f[2]=="_") {f[2]="O";} else { //258
+        if(f[2]=="X"&&f[8]=="X"&&f[5]=="_") {f[5]="O";} else {
+        if(f[2]=="X"&&f[5]=="X"&&f[8]=="_") {f[8]="O";} else {
+        if(f[0]=="X"&&f[8]=="X"&&f[4]=="_") {f[4]="O";} else { //048
+        if(f[4]=="X"&&f[8]=="X"&&f[0]=="_") {f[0]="O";} else {
+        if(f[4]=="X"&&f[0]=="X"&&f[8]=="_") {f[8]="O";} else {
+        if(f[4]=="X"&&f[2]=="X"&&f[6]=="_") {f[6]="O";} else { //246
+        if(f[2]=="X"&&f[6]=="X"&&f[4]=="_") {f[4]="O";} else {
+        if(f[6]=="X"&&f[4]=="X"&&f[2]=="_") {f[2]="O";} else {    //Zwickmühlenverhinderung felder 0, 1 und 3 etc. (vorrausschauend):
+        if(f[1]=="X"&&f[3]=="X"&&f[0]=="_"&&f[2]=="_"&&f[6]=="_") {f[0]="O";} else { //0
+        if(f[1]=="X"&&f[6]=="X"&&f[0]=="_"&&f[2]=="_"&&f[3]=="_") {f[0]="O";} else {
+        if(f[2]=="X"&&f[3]=="X"&&f[0]=="_"&&f[1]=="_"&&f[6]=="_") {f[0]="O";} else {
+        if(f[1]=="X"&&f[5]=="X"&&f[2]=="_"&&f[0]=="_"&&f[8]=="_") {f[2]="O";} else { //2
+        if(f[1]=="X"&&f[8]=="X"&&f[2]=="_"&&f[0]=="_"&&f[5]=="_") {f[2]="O";} else {
+        if(f[0]=="X"&&f[5]=="X"&&f[2]=="_"&&f[8]=="_"&&f[1]=="_") {f[2]="O";} else {
+        if(f[5]=="X"&&f[7]=="X"&&f[8]=="_"&&f[2]=="_"&&f[6]=="_") {f[8]="O";} else { //8
+        if(f[2]=="X"&&f[7]=="X"&&f[8]=="_"&&f[6]=="_"&&f[5]=="_") {f[8]="O";} else {
+        if(f[5]=="X"&&f[6]=="X"&&f[8]=="_"&&f[2]=="_"&&f[7]=="_") {f[8]="O";} else {
+        if(f[3]=="X"&&f[7]=="X"&&f[6]=="_"&&f[0]=="_"&&f[8]=="_") {f[6]="O";} else { //6
+        if(f[0]=="X"&&f[7]=="X"&&f[6]=="_"&&f[8]=="_"&&f[3]=="_") {f[6]="O";} else {
+        if(f[3]=="X"&&f[8]=="X"&&f[6]=="_"&&f[0]=="_"&&f[7]=="_") {f[6]="O";} else {
+        if(f[2]=="_"&&f[4]=="X"||f[6]=="_"&&f[4]=="X"||f[8]=="_"&&f[4]=="X"||f[0]=="_"&&f[4]=="X") {ecke(); ueberpruefung++;}
+        if(f[4]!="_"&&ueberpruefung==0) {if(f[1]=="_"||f[5]=="_"||f[3]=="_"||f[7]=="_") {seite();}} else if(ueberpruefung==0) {zufall();}
+        }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+
+        for (let i = 0; i < 9; i++) {
+            if (originalF[i] != f[i]) {
+                return i + 1
+            }
         }
 
         return getComputerInputRandom()
     }
 
     const bots = {
-        "normal": getComputerInputNormal,
+        "impossible": getComputerInputNormal,
         "easy": getComputerInputRandom
     }
 
@@ -150,7 +217,7 @@ terminal.addCommand("tictactoe", async function(args) {
         "?d=difficulty": "play against an unbeatable computer."
     },
     standardVals: {
-        d: "normal"
+        d: "impossible"
     },
     isGame: true
 })

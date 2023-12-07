@@ -189,6 +189,6 @@ terminal.addCommand("code", async function(args) {
 }, {
     description: "show the source code of a command",
     args: {
-        "command": "the command to show the source code of"
+        "command:c": "the command to show the source code of"
     }
 })
