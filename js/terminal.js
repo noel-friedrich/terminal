@@ -2993,14 +2993,21 @@ class Terminal {
         }
     }
 
+    currFontSizeIndex = 8
+
+    changeTextSize(increment) {
+        const options = [3, 5, 7.5, 10, 12.5, 14, 15, 16, 17, 18, 19, 20, 22, 25, 30, 35, 40, 45, 50, 60, 80, 100]
+        this.currFontSizeIndex = (this.currFontSizeIndex + increment) % options.length
+        while (this.currFontSizeIndex < 0) this.currFontSizeIndex += options.length
+        this.parentNode.style.setProperty("--font-size", `${options[this.currFontSizeIndex]}px`)
+    }
+
     enlargeText() {
-        let currFontSize = parseFloat(getComputedStyle(this.parentNode).fontSize)
-        this.parentNode.style.fontSize = `${currFontSize + 1}px`
+        this.changeTextSize(1)
     }
 
     shrinkText() {
-        let currFontSize = parseFloat(getComputedStyle(this.parentNode).fontSize)
-        this.parentNode.style.fontSize = `${currFontSize - 1}px`
+        this.changeTextSize(-1)
     }
 
     _onkeydownShortcut(event) {

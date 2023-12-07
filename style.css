@@ -30,7 +30,7 @@ body {
     padding: var(--padding);
     box-sizing: border-box;
 
-    --font-size: 1em;
+    --font-size: 16px;
     line-height: 1.3em;
 
     overflow-y: auto;
@@ -64,6 +64,7 @@ body {
 .terminal-input {
     width: 100%;
     z-index: 4;
+    font-size: var(--font-size);
     word-wrap: break-word;
     word-break: break-all;
     transition: unset;
@@ -93,10 +94,6 @@ body {
     white-space: pre-wrap;
     tab-size: 4;
     word-break: break-word;
-}
-
-#terminal .terminalbutton {
-    
 }
 
 #terminal a:hover {
