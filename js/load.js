@@ -11,7 +11,6 @@ async function initalLoadScripts() {
     }
 
     for (let file of [
-        "js/filesystem.js",
         "js/terminal.js",
     ]) {
         await loadFile(file)
