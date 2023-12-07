@@ -20,6 +20,6 @@ terminal.addCommand("cat", async function(args) {
 }, {
     description: "print file content",
     args: {
-        "file": "file to display the content of"
+        "file:f": "file to display the content of"
     }
 })
