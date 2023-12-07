@@ -11,8 +11,12 @@ terminal.addCommand("upload", async function() {
     }
     if (terminal.fileExists(fileName))
         throw new Error("file already exists in folder")
-    terminal.currFolder.content[fileName] = new (construct)(fileContent, {})
-    terminal.printLine("upload finished.")
+    const file = new (construct)(fileContent)
+
+    const fileSize = file.computeSize()
+
+    terminal.currFolder.content[fileName] = file
+    terminal.printLine(`upload finished (${fileSize / 1000}kb)`)
     await terminal.fileSystem.reload()
 }, {
     description: "upload a file from your computer"

@@ -17,11 +17,14 @@ let uniqueFileIdCount = 0
 
 class File {
 
-    constructor(type, content) {
+    constructor(type, content, {
+        isTemp = false
+    }={}) {
         this.type = type || "file"
         this.content = content
         this.parent = null
         this.name = null
+        this.isTemp = isTemp
         this.id = uniqueFileIdCount++
     }
 
@@ -159,7 +162,9 @@ class Directory extends File {
     toJSON() {
         return {
             type: this.type,
-            content: Object.fromEntries(Object.entries(this.content).map(([key, value]) => [key, value.toJSON()]))
+            content: Object.fromEntries(Object.entries(this.content)
+                .filter(([fileName, file]) => !file.isTemp)
+                .map(([fileName, file]) => [fileName, file.toJSON()]))
         }
     }
 
@@ -1747,9 +1752,9 @@ class Terminal {
 
     getAutoCompleteOptions(text) {
         let lastWord = text.split(/\s/g).pop()
-        const allRelativeFiles = terminal.fileSystem.allFiles()
+        const allRelativeFiles = this.fileSystem.allFiles()
             .map(file => file.path)
-            .concat(terminal.fileSystem.currFolder.relativeChildPaths)
+            .concat(this.fileSystem.currFolder.relativeChildPaths)
 
         const configMatches = ms => ms.filter(f => f.startsWith(lastWord))
             .sort().sort((a, b) => a.length - b.length)
@@ -1776,23 +1781,46 @@ class Terminal {
             return m
         })
 
-        let commandMatches = configMatches(terminal.visibleFunctions.map(f => f.name)
-            .concat(Object.keys(terminal.data.aliases)))
-        let fileMatches = configMatches(addApostrophes(allRelativeFiles))
-        let allMatches = configMatches(commandMatches.concat(fileMatches))
+        let commandMatches = configMatches(this.visibleFunctions.map(f => f.name)
+            .concat(Object.keys(this.data.aliases)))
 
-        let cleanText = this.sanetizeInput(text)
-        let tokens = TerminalParser.tokenize(cleanText)
-        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
-
-        let matchingFirstWord = lastWord === text.trim()
-        if (matchingFirstWord) {
-            // ignore fileMatches when dealing with the first word
-            // as all prompts must start with a command name
+        // if is first word
+        if (lastWord === text.trim()) {
             return exportMatches(commandMatches)
         }
 
-        return exportMatches(allMatches)
+        let fileMatches = configMatches(addApostrophes(allRelativeFiles))
+        let allMatches = configMatches(commandMatches.concat(fileMatches))
+
+        const {argOptions, parsingError} = this.parse(text)
+
+        let currArgOption = {}
+        if (text.slice(-1) == " ") {
+            const nextArgOption = argOptions.filter(o => !o.isManuallySetValue)[0]
+            if (nextArgOption !== undefined) {
+                currArgOption = nextArgOption
+            }
+        } else {
+            currArgOption = argOptions.reduce((p, c) => c.tokenIndex ? (c.tokenIndex > p.tokenIndex ? c : p) : p, {tokenIndex: 0})
+        }
+
+        // if an argOption is currently being edited
+        if (currArgOption.name) {
+            if (currArgOption.type == "boolean") {
+                let numTicks = currArgOption.name.length > 1 ? 2 : 1
+                return exportMatches([`${"-".repeat(numTicks)}${currArgOption.name}`])
+            }
+
+            if (currArgOption.type == "file") {
+                return exportMatches(fileMatches)
+            }
+
+            if (currArgOption.type == "command") {
+                return exportMatches(commandMatches)
+            }
+        }
+
+        return []
     }
 
     sanetizeInput(text) {
@@ -1927,6 +1955,31 @@ class Terminal {
         if (color) {
             element.style.color = color
         }
+    }
+
+    parse(prompt) {
+        const tokens = TerminalParser.tokenize(prompt)
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+
+        if (commandText == undefined) {
+            return {argOptions: [], parsingError: {
+                message: undefined, tokenIndex: undefined, tokenSpan: 0
+            }}
+        }
+
+        if (!this.commandExists(commandText)) { 
+            return {argOptions: [], parsingError: {
+                message: "command not found", tokenIndex: 0, tokenSpan: 0
+            }}
+        }
+
+        let commandData = this.commandData[commandText]
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+
+        return TerminalParser.parseArguments(tokens, tempCommand)
     }
 
     getCorrectnessText(prompt, inputElement) {
