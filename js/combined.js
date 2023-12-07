@@ -1111,19 +1111,309 @@ terminal.addCommand("avoida", async function(args) {
     await terminal.modules.load("window", terminal)
 
     let terminalWindow = terminal.modules.window.make({
-        name: "Avoida Game", fullscreen: args.fullscreen
+        name: "Avoida Game", fullscreen: true, removeBar: true
     })
 
     const canvas = terminalWindow.CANVAS
     const context = terminalWindow.CONTEXT
+    const xResolution = 200
+    const objectScaleFactor = 1
+    let displayAngle = 0.1
 
-    let bitmap = Array.from({length: 10}, 
-        () => Array.from({length: 10}, () => Math.random() < 0.2 ? 1 : 0))
+    canvas.style.userSelect = "none"
+    canvas.style.webkitUserSelect = "none"
+    canvas.style.mozUserSelect = "none"
 
-    console.log(bitmap)
+    function makeTileMap({
+        width=21,
+        length=300,
+        transitionHeight=15,
+        copyFrom=null,
+        copyOverlapHeight=10
+    }={}) {
+        let tileMap = Array.from({length}, 
+            () => Array.from({length: width}, () => Math.random() < 0.2 ? true : false))
+        
+        const middleX = Math.floor(width / 2)
+        let currX = middleX
+        for (let i = 0; i < tileMap.length; i++) {
+            tileMap[i][currX] = false
+            if (currX < tileMap[0].length - 1) {
+                tileMap[i][currX + 1] = false
+            }
+
+            let middleDirection = (middleX - currX) > 0 ? 1 : -1
+            if (Math.random() < 0.8) {
+                currX += middleDirection
+            } else {
+                currX -= middleDirection
+            }
+
+            currX = Math.min(tileMap[0].length - 1, Math.max(0, currX))
+        }
+
+        let offsetHeight = copyFrom == null ? 0 : copyOverlapHeight
+        for (let i = offsetHeight; (i < transitionHeight + offsetHeight) && i < length; i++) {
+            for (let j = 0; j < width; j++) {
+                tileMap[i][j] = false
+            }
+
+            tileMap[i][Math.max(middleX - 2, 0)] = true
+            tileMap[i][Math.min(middleX + 2, width - 1)] = true
+        }
+
+        for (let i = 0; i < offsetHeight; i++) {
+            for (let j = 0; j < width; j++) {
+                tileMap[i][j] = copyFrom[copyFrom.length - offsetHeight - 1 + i][j]
+            }
+        }
+
+        return tileMap
+    }
+
+    let bitmap = makeTileMap({height: 1000})
+
+    class Player {
+        constructor() {
+            this.pos = new Vector2d(bitmap[0].length / 2, 0)
+            this.originalAngle = Math.PI / 2
+            this.angle = this.originalAngle
+            this.sideMovement = 0
+            this.fov = Math.PI / 1.5
+            this.viewDistance = 10
+            this.speed = 1
+            this.hearts = 5
+        }
+
+        move(distance) {
+            this.pos.y += distance * this.speed
+            this.pos.x += this.sideMovement * this.speed
+
+            let x = Math.floor(this.pos.x)
+            let y = Math.floor(this.pos.y)
+            let row = bitmap[y]
+            if (row) {
+                let value = row[x]
+                if (value === true) {
+                    bitmap[y][x] = false
+                    this.hearts--
+                }
+            }
+
+            this.pos.x = Math.max(0, Math.min(bitmap[0].length - 1, this.pos.x))
+
+            let distanceToEnd = bitmap.length - this.pos.y
+            if (distanceToEnd < 11) {
+                bitmap = makeTileMap({copyFrom: bitmap})
+                this.pos.y = 0
+            }
+
+            this.speed += 0.001
+        }
+
+        get score() {
+            return Math.floor(this.speed * 71) - 71
+        }
+
+        resetPos() {
+            this.pos = new Vector2d(bitmap[0].length / 2, 0)
+        }
+    }
+
+    let player = new Player()
+
+    function drawHeart(startX, startY, size=10) {
+        context.fillStyle = "red"
+        context.fillRect(startX, startY, size, size)
+    }
+
+    function drawScore(score, textSize) {
+        context.font = `${textSize}px monospace`
+        context.fillText(score.toString(), 10, textSize)
+    }
+
+    function render() {
+        player.fov = (canvas.width / canvas.height) * (Math.PI / 3.5)
+
+        function raycast(start, angle, {
+            maxDistance = 10,
+            precision = 0.01
+        }={}) {
+            const delta = Vector2d.fromAngle(angle).scale(precision)
+            let currPos = start.copy()
+            while (currPos.distance(start) < maxDistance) {
+                currPos.iadd(delta)
+                const row = bitmap[Math.floor(currPos.y)]
+                if (row === undefined) {
+                    return Infinity
+                }
+                const value = row[Math.floor(currPos.x)]
+                if (value) {
+                    return currPos.distance(start)
+                } else if (value === undefined) {
+                    return Infinity
+                }
+            }
+            return Infinity
+        }
+
+        context.clearRect(0, 0, canvas.width, canvas.height)
+        context.fillStyle = "white"
+
+        const yResolution = Math.round((canvas.height / canvas.width) * xResolution)
+        const startAngle = player.angle - player.fov / 2
+        let heights = []
+        for (let x = 0; x < xResolution; x++) {
+            let angle = startAngle + player.fov * (x / (xResolution - 1))
+            let result = raycast(player.pos, angle, {maxDistance: player.viewDistance})
+            let height = Math.min(yResolution - 1, Math.round(yResolution / (result * objectScaleFactor)))
+            heights.push(height)
+        }
+
+        const xStep = canvas.width / xResolution
+        const yStep = canvas.height / yResolution
+
+        context.save()
+        context.translate(canvas.width / 2, canvas.height / 2)
+        context.rotate(displayAngle)
+
+        for (let x = 0; x < xResolution; x++) {
+            const height = heights[x]
+            let offset = Math.round((yResolution - height) / 2)
+            const lum = Math.round(height / yResolution * 255)
+            context.fillStyle = `rgb(${lum}, ${lum}, ${lum})`
+            context.fillRect(xStep * x - canvas.width / 2, yStep * offset - canvas.height / 2, xStep + 1, height * yStep)
+        }
+
+        context.restore()
+
+        let heartSize = Math.min(canvas.width, canvas.height) / 10
+        for (let i = 0; i < player.hearts; i++) {
+            drawHeart(canvas.width - ((i + 1) * heartSize * 1.2), heartSize * 0.2, heartSize)
+        }
+
+        drawScore(player.score, heartSize)
+    }
+
+    let gameRunning = true
+    
+    let keyDown = {
+        "UP": false,
+        "DOWN": false,
+        "LEFT": false,
+        "RIGHT": false
+    }
+
+    function parseKeyCode(keycode, up) {
+        if (keycode == "ArrowUp" || keycode == "w") {
+            keyDown.UP = !up
+            return true
+        } else if (keycode == "ArrowDown" || keycode == "s") {
+            keyDown.DOWN = !up
+            return true
+        } else if (keycode == "ArrowLeft" || keycode == "a") {
+            keyDown.LEFT = !up
+            return true
+        } else if (keycode == "ArrowRight" || keycode == "d") {
+            keyDown.RIGHT = !up
+            return true
+        }
+    }
+
+    let upListener = addEventListener("keyup", function(event) {
+        if (!gameRunning) return
+
+        if (parseKeyCode(event.key, true)) event.preventDefault()
+    })
+
+    let downListener = addEventListener("keydown", function(event) {
+        if (!gameRunning) return
+
+        if (event.key == "c" && event.ctrlKey) {
+            gameRunning = false
+            removeEventListener("keydown", downListener)
+            removeEventListener("keyup", upListener)
+        }
+
+        if (parseKeyCode(event.key, false)) event.preventDefault()
+    })
+
+    function updateTouchX(pageX) {
+        let rect = canvas.getBoundingClientRect()
+        let x = (pageX - rect.left) / canvas.clientWidth
+        if (x > 0.6) {
+            keyDown.RIGHT = true
+            keyDown.LEFT = false
+        } else if (x < 0.4) {
+            keyDown.LEFT = true
+            keyDown.RIGHT = false
+        } else {
+            keyDown.LEFT = false
+            keyDown.RIGHT = false
+        }
+    }
+
+    addEventListener("touchstart", event => {
+        updateTouchX(event.touches[0].pageX)
+    })
+
+    addEventListener("touchmove", event => {
+        updateTouchX(event.touches[0].pageX)
+    })
+
+    addEventListener("touchend", event => {
+        keyDown.LEFT = false
+        keyDown.RIGHT = false
+    })
+
+    canvas.addEventListener("contextmenu", event => {
+        event.preventDefault()
+    })
+
+    function processInput() {
+        if (keyDown.LEFT) {
+            player.sideMovement += 0.03
+        } else if (keyDown.RIGHT) {
+            player.sideMovement -= 0.03
+        } else {
+            player.sideMovement -= player.sideMovement * 0.5
+        }
+
+        player.sideMovement = Math.min(player.sideMovement, 0.1)
+        player.sideMovement = Math.max(player.sideMovement, -0.1)
+
+        player.desiredAngle = player.originalAngle - player.sideMovement * 3
+        player.angle += (player.desiredAngle - player.angle) * 0.1
+        displayAngle = player.sideMovement * 1
+    }
+
+    terminal.onInterrupt(() => {
+        gameRunning = false
+        terminalWindow.close()
+    })
+
+    while (gameRunning) {
+        player.move(0.2)
+        render()
+        processInput()
+
+        if (player.hearts <= 0) {
+            gameRunning = false
+        }
+
+        await sleep(40)
+    }
+
+    await sleep(1000)
+
+    terminalWindow.close()
+    terminal.printLine("Your score: " + player.score)
+
+    await HighscoreApi.registerProcess("avoida")
+    await HighscoreApi.uploadScore(player.score)
 }, {
     description: "play a game of avoida",
-    isGame: true
+    isGame: true,
 })
 // ------------------- background.js --------------------
 const OG_BACKGROUND_COLOR = Color.rgb(3, 3, 6)
@@ -1954,7 +2244,7 @@ terminal.addCommand("cat", async function(args) {
 }, {
     description: "print file content",
     args: {
-        "file": "file to display the content of"
+        "file:f": "file to display the content of"
     }
 })
 // ------------------- cd.js --------------------
@@ -5763,6 +6053,64 @@ terminal.addCommand("foreground", function(args) {
     description: "change the foreground color of the terminal",
     args: {
         "color": "the color to change the foreground to"
+    }
+})
+// ------------------- fraction.js --------------------
+terminal.addCommand("fraction", function(args) {
+    let n = args.n
+
+    let bestFraction = null
+    let bestError = Infinity
+    for (let denominator = 1; denominator < args.d; denominator++) {
+        let numerator = Math.round(n * denominator)
+        const newValue = numerator / denominator
+        
+        const error = Math.abs(n - newValue)
+
+        if (error == 0) {
+            bestFraction = [numerator, denominator]
+            break
+        }
+
+        if (error < bestError) {
+            bestError = error
+            bestFraction = [numerator, denominator]
+        }
+    }
+
+    const fractionN = bestFraction[0] / bestFraction[1]
+
+    const error = fractionN - n
+    terminal.print("Best result: ")
+    terminal.printLine(`${bestFraction[0]}/${bestFraction[1]}`, Color.COLOR_1)
+
+    // print comparison
+
+    const strFractionN = fractionN.toString()
+    const strN = n.toString()
+    terminal.print("           = ")
+    for (let i = 0; i < strFractionN.length; i++) {
+        let isCorrect = false
+        if (i < strN.length) {
+            isCorrect = strFractionN[i] == strN[i]
+        }
+
+        const color = isCorrect ? Color.fromHex("#00ff00") : Color.ERROR
+        terminal.print(strFractionN[i], Color.BLACK, {background: color})
+    }
+    terminal.addLineBreak()
+
+    if (error != 0) {
+        terminal.printLine(`approximate error: ${error}`)
+    }
+}, {
+    description: "find a fraction from a decimal number",
+    args: {
+        "n=number:n": "number (decimal)",
+        "?d=max-denominator:i:1~999999999": "maximum denominator",
+    },
+    defaultValues: {
+        d: 1000
     }
 })
 // ------------------- games.js --------------------
@@ -9873,6 +10221,262 @@ terminal.addCommand("mandelbrot", async function(args) {
 })
 
 
+// ------------------- matdet.js --------------------
+terminal.addCommand("matdet", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
+
+    terminal.printLine(matrix.determinant().simplify().toSimplifiedString())
+
+}, {
+    description: "find the determinant of a matrix",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
+})
+// ------------------- matinv.js --------------------
+terminal.addCommand("matinv", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
+
+    terminal.printLine(matrix.inverse().simplify())
+}, {
+    description: "find the inverse of a matrix",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
+})
+// ------------------- matmin.js --------------------
+terminal.addCommand("matmin", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
+
+    terminal.printLine(matrix.minors().simplify())
+}, {
+    description: "find the matrix of minors of a given matrix",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
+})
+// ------------------- matmul.js --------------------
+terminal.addCommand("matmul", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrixA = null
+    let matrixB = null
+
+    if (args.A) {
+        matrixA = Matrix.fromArray(args.A)
+    } else {
+        matrixA = await inputMatrix(await inputMatrixDimensions({matrixName: "A"}))
+        terminal.addLineBreak()
+    }
+
+    if (args.B) {
+        matrixB = Matrix.fromArray(args.B)
+    } else {
+        matrixB = await inputMatrix(await inputMatrixDimensions({
+            matrixName: "B", forcedRows: matrixA.dimensions.columns
+        }))
+        terminal.addLineBreak()
+    }
+
+    if (matrixA.nCols != matrixB.nRows) {
+        throw new Error("Matrix dimensions are not compatible.")
+    }
+
+    const matrixC = matrixA.multiply(matrixB)
+
+    terminal.printLine(`Resulting Matrix [${matrixC.dimensions}]:`)
+    terminal.printLine(matrixC.toString())
+
+}, {
+    description: "multiply two matrices with each other",
+    args: {
+        "?A:m": "matrix A",
+        "?B:m": "matrix B",
+    }
+})
+// ------------------- matred.js --------------------
+terminal.addCommand("matred", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+        terminal.printLine(matrix)
+    } else {
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        terminal.addLineBreak()
+    }
+
+    if (!matrix.containsOnlyNumbers()) {
+        throw new Error("Matrix to reduce may not include variables")
+    }
+
+    let stepNum = 1
+
+    const swapRows = (r1, r2) => {
+        terminal.addLineBreak()
+        matrix.swapRows(r1, r2)
+        terminal.print(`#${stepNum}: `)
+        terminal.printLine(`r${r1 + 1} <-> r${r2 + 1}`, Color.COLOR_1)
+        terminal.printLine(matrix)
+        stepNum++
+    }
+
+    const scaleRow = (row, scalar) => {
+        terminal.addLineBreak()
+        matrix.scaleRow(row, scalar)
+        terminal.print(`#${stepNum}: `)
+        terminal.printLine(`r${row + 1} * ${scalar.toSimplifiedString()}`, Color.COLOR_1)
+        terminal.printLine(matrix)
+        stepNum++
+    }
+
+    const addScalarRow = (r1, r2, scalar) => {
+        terminal.addLineBreak()
+        matrix.addScalarRow(r1, r2, scalar)
+
+        let operation = "+"
+        if (scalar.value < 0) {
+            scalar = scalar.mul(-1)
+            operation = "-"    
+        }
+
+        let scalarText = scalar.toSimplifiedString()
+        if (scalarText == "1") {
+            scalarText = ""
+        } else {
+            scalarText += "("
+        }
+
+        terminal.print(`#${stepNum}: `)
+        terminal.printLine(`r${r2 + 1} ${operation} ${scalarText}r${r1 + 1}${scalarText.endsWith("(") ? ")" : ""}`, Color.COLOR_1)
+        terminal.printLine(matrix)
+
+        stepNum++
+    }
+
+    if (matrix.isZeroMatrix()) {
+        throw new Error("Cannot row reduce matrix with no nonzero entry.")
+    }
+
+    function isReducedColumn(columnIndex, pivotRow) {
+        const values = matrix.getColumn(columnIndex).map(c => c.value)
+
+        let zeroEntries = 0
+        let foundOne = false
+        for (let i = 0; i < values.length; i++) {
+            const value = values[i]
+            if (value == 1) {
+                if (i > pivotRow) {
+                    return false
+                }
+
+                if (foundOne) {
+                    return false
+                } else {
+                    foundOne = true
+                }
+            } else if (value == 0) {
+                zeroEntries++
+            } else {
+                return false
+            }
+        }
+
+        return zeroEntries == values.length - 1
+    }
+
+    function isZeroColumnFromRow(columnIndex, rowIndex) {
+        for (let i = rowIndex; i < matrix.nRows; i++) {
+            if (matrix.get(i, columnIndex) != 0) {
+                return false
+            }
+        }
+        return true
+    }
+
+    reduction_loop:
+    for (let it = 0; it < 1000; it++) {
+        let currColumn = 0
+        let pivotRow = 0
+
+        while (matrix.isZeroColumn(currColumn) || isReducedColumn(currColumn, pivotRow) || isZeroColumnFromRow(currColumn, pivotRow)) {
+            if (isReducedColumn(currColumn, pivotRow)) {
+                pivotRow++
+            }
+
+            currColumn++
+
+            if (pivotRow >= matrix.nRows || currColumn >= matrix.nCols) {
+                break reduction_loop
+            }
+        }
+
+        // get first non-zero-row
+        let beforePivot = pivotRow
+        while (matrix.get(pivotRow, currColumn) == 0) {
+            pivotRow++
+
+            if (pivotRow >= matrix.nRows) {
+                break reduction_loop
+            }
+        }
+
+        if (pivotRow != beforePivot) {
+            swapRows(beforePivot, pivotRow)
+            continue
+        }
+
+        if (matrix.get(pivotRow, currColumn) != 1) {
+            scaleRow(pivotRow, new MatrixCell(1).div(matrix.getCell(pivotRow, currColumn)))
+            continue
+        }
+
+        for (let otherRow = 0; otherRow < matrix.nRows; otherRow++) {
+            if (otherRow == pivotRow) continue
+
+            if (matrix.get(otherRow, currColumn) != 0) {
+                addScalarRow(pivotRow, otherRow, matrix.getCell(otherRow, currColumn).mul(-1))
+                continue reduction_loop
+            }
+        }
+
+        break
+    }
+
+    if (stepNum == 1) {
+        terminal.printError("Matrix is already in reduced row echelon form.")
+    }
+}, {
+    description: "reduce a given matrix to reduced row echelon form",
+    args: {
+        "?A:sm": "matrix to invert",
+    }
+})
 // ------------------- mill2player.js --------------------
 terminal.addCommand("mill2player", async function() {
 
@@ -13371,6 +13975,77 @@ terminal.addCommand("neural-rocket", async function(args) {
     isSecret: true
 })
 
+// ------------------- nsolve.js --------------------
+terminal.addCommand("nsolve", async function(args) {
+    function makeDerivative(f, h=0.0001) {
+        return x => (f(x + h) - f(x)) / h
+    }
+
+    function newtonSolve(f, df, startX, n) {
+        let x = startX
+        for (let i = 0; i < n; i++) {
+            const slope = df(x)
+            const value = f(x)
+
+            if (slope == 0) {
+                throw new Error(`slope is zero (at x=${x})`)
+            }
+
+            if (Math.abs(value) == Infinity) {
+                throw new Error(`value is infinite (at x=${x})`)
+            }
+
+            if (args.list) {
+                terminal.printLine(`n(${i}) = ${x}`)
+            }
+
+            let prevX = x
+            x -= f(x) / slope
+
+            if (prevX == x) {
+                break
+            }
+        }
+        return x
+    }
+
+    if (!/^[0-9x\s\\\*\.a-z+-\^\(\)]+=[0-9x\s\\\*\.a-z+-\^\(\)]+$/.test(args.equation)) {
+        terminal.printError("Invalid equation.")
+        terminal.printLine("Only numbers, letters, *, +, -, ^, (, ), \\ and spaces are allowed")
+        return
+    }
+
+    if (args.equation.split("=").length != 2) {
+        throw new Error("More than one equation found.")
+    }
+
+    const [lhs, rhs] = args.equation.split("=")
+    const f = Function("x", `return (${lhs})-(${rhs})`)
+    const df = makeDerivative(f)
+
+    const result = newtonSolve(f, df, args.startn, args.iterations)
+
+    const error = Math.abs(f(result) - 0)
+    if (error > 0.01) {
+        terminal.printError("Method did not converge.", "Warning")
+        terminal.printLine(`(wrong) result: ${result}`)
+        terminal.printLine(`error: ${error}`)
+    } else {
+        terminal.printLine(result, Color.COLOR_1)
+    }
+}, {
+    description: "solve an equation using the newton-raphson method",
+    args: {
+        "*e=equation:s": "the equation to solve",
+        "?s=startn:n": "Starting number",
+        "?i=iterations:i:1~999999": "number of iterations to perform",
+        "?l=list:b": "list all intermediate values"
+    },
+    defaultValues: {
+        startn: 0.71,
+        iterations: 1000
+    }
+})
 // ------------------- number-guess.js --------------------
 terminal.addCommand("number-guess", async function(args) {
     await terminal.modules.import("game", window)
@@ -14856,7 +15531,7 @@ terminal.addCommand("rndm", async function(args) {
 
 // ------------------- sc.js --------------------
 terminal.addCommand("sc", async function(args) {
-    if (args.command) {
+    if (args.command && args.mode == "add") {
         let tokens = TerminalParser.tokenize(args.command)
         if (tokens.length == 0)
             throw new Error("Command cannot be empty")
@@ -14880,6 +15555,15 @@ terminal.addCommand("sc", async function(args) {
             if (!args.command)
                 throw new Error("Must specify a command to remove")
             let commands = terminal.data.startupCommands
+
+            if (/^[0-9]+$/.test(args.command)) {
+                let index = parseInt(args.command)
+                if (index < 1 || index > commands.length) {
+                    throw new Error("Invalid Index: command not found")
+                }
+                args.command = commands[index - 1]
+            }
+
             if (!commands.includes(args.command))
                 throw new Error(`Command '${args.command}' is not in the startup commands`)
             commands.splice(commands.indexOf(args.command), 1)
@@ -14898,8 +15582,8 @@ terminal.addCommand("sc", async function(args) {
                 terminal.printLine("No startup commands found")
             else {
                 terminal.printLine("Startup Commands:")
-                for (let command of commands) {
-                    terminal.printLine(`- ${command}`)
+                for (let i = 0; i < commands.length; i++) {
+                    terminal.printLine(`(${i + 1}): ${commands[i]}`)
                 }
             }
 
@@ -14907,7 +15591,7 @@ terminal.addCommand("sc", async function(args) {
             terminal.print("To add a command, use ")
             terminal.printLine("sc add <command>", Color.COLOR_1)
             terminal.print("To remove a command, use ")
-            terminal.printLine("sc remove <command>", Color.COLOR_1)
+            terminal.printLine("sc remove <index>", Color.COLOR_1)
         }
     }
 
@@ -14920,10 +15604,76 @@ terminal.addCommand("sc", async function(args) {
     description: "manage the startup commands",
     args: {
         "?mode": "'add', 'remove', 'reset' or 'list'",
-        "?command": "the command to add or remove"
+        "?command": "the command to add or remove (or index)"
     },
     defaultValues: {
         mode: "list"
+    }
+})
+// ------------------- scarpet.js --------------------
+terminal.addCommand("scarpet", async function(args) {
+	await terminal.modules.import("game", window)
+
+	function initDisplay() {
+        let canvas = document.createElement("canvas")
+        let context = canvas.getContext("2d")
+        let widthPx = Math.floor(terminal.charWidth * args.size)
+        let heightPx = widthPx
+        canvas.width = widthPx
+        canvas.height = heightPx
+        canvas.style.width = widthPx + "px"
+        canvas.style.height = heightPx + "px"
+        terminal.parentNode.appendChild(canvas)
+        context.fillStyle = "white"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        terminal.addLineBreak()
+        return [context, canvas]
+	}
+
+	const [context2d, canvas] = initDisplay()
+
+    const possibleGoals = [
+        new Vector2d(0, 0),
+        new Vector2d(0.5, 0),
+        new Vector2d(1, 0),
+        new Vector2d(1, 0.5),
+        new Vector2d(1, 1),
+        new Vector2d(0.5, 1),
+        new Vector2d(0, 1),
+        new Vector2d(0, 0.5)
+    ]
+
+    function drawDot(position) {
+        context2d.fillStyle = "black"
+        context2d.fillRect(
+            position.x * canvas.width,
+            position.y * canvas.height,
+            1, 1
+        )
+    }
+
+    let currPosition = Vector2d.fromFunc(Math.random)
+    for (let i = 0; true; i++) {
+        const randomGoal = possibleGoals[Math.floor(Math.random() * 8)]
+        const delta = randomGoal.sub(currPosition)
+        currPosition.iadd(delta.scale(2 / 3))
+
+        drawDot(currPosition)
+
+        if (i % args.speed == 0) {
+            await sleep(0)
+        }
+    }
+
+}, {
+	description: "draws the Sierpinski carpet using the chaos game",
+    args: {
+        "?s=speed:i:1~99999": "the speed of dots placed. The higher the faster.",
+        "?size:i:10~1000": "size of output canvas in characters",
+    },
+    defaultValues: {
+        speed: 30,
+        size: 50
     }
 })
 // ------------------- search.js --------------------
@@ -20204,8 +20954,12 @@ terminal.addCommand("upload", async function() {
     }
     if (terminal.fileExists(fileName))
         throw new Error("file already exists in folder")
-    terminal.currFolder.content[fileName] = new (construct)(fileContent, {})
-    terminal.printLine("upload finished.")
+    const file = new (construct)(fileContent)
+
+    const fileSize = file.computeSize()
+
+    terminal.currFolder.content[fileName] = file
+    terminal.printLine(`upload finished (${fileSize / 1000}kb)`)
     await terminal.fileSystem.reload()
 }, {
     description: "upload a file from your computer"

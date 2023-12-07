@@ -2478,18 +2478,18 @@ class Terminal {
         return img
     }
 
-    _styleImgElement(img, invertSetting=false, {maxWidth=400, maxHeight=400}={}) {
+    _styleImgElement(img, invertSetting=false, {maxWidth=40, maxHeight=40}={}) {
         img.style.aspectRatio = img.naturalWidth / img.naturalHeight
         let changeCondition = img.clientHeight < img.clientWidth
         if (invertSetting) changeCondition = !changeCondition
         if (changeCondition) {
             img.style.width = "auto"
             let height = Math.min(img.naturalHeight, maxHeight)
-            img.style.height = `${height}px`
+            img.style.height = `calc(var(--font-size) * ${height})`
         } else {
             img.style.height = "auto"
             let width = Math.min(img.naturalWidth, maxWidth)
-            img.style.width = `${width}px`
+            img.style.width = `calc(var(--font-size) * ${width})`
         }
     }
 
