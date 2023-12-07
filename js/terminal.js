@@ -1795,7 +1795,10 @@ class Terminal {
         const {argOptions, parsingError} = this.parse(text)
 
         let currArgOption = {}
-        if (text.slice(-1) == " ") {
+        if (text.slice(-1) == "-") {
+            return exportMatches(argOptions.filter(o => !o.isManuallySetValue)
+                .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`))
+        } else if (text.slice(-1) == " ") {
             const nextArgOption = argOptions.filter(o => !o.isManuallySetValue)[0]
             if (nextArgOption !== undefined) {
                 currArgOption = nextArgOption
