@@ -2055,7 +2055,7 @@ class Terminal {
             }
         }
 
-        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0 || currTokenIndex == 0) {
+        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0 || (currTokenIndex == 0 && tokens.length > 1)) {
             return underLineToken(0, 0, `"${commandData.description}"`, Color.fromHex("#9d64ff"))
         }
 
