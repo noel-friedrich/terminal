@@ -6,7 +6,7 @@ terminal.addCommand("matred", async function(args) {
         matrix = Matrix.fromArray(args.A)
         terminal.printLine(matrix)
     } else {
-        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A"}))
         terminal.addLineBreak()
     }
 
@@ -153,6 +153,6 @@ terminal.addCommand("matred", async function(args) {
 }, {
     description: "reduce a given matrix to reduced row echelon form",
     args: {
-        "?A:sm": "matrix to invert",
+        "?A:m": "matrix to reduce",
     }
 })

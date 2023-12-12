@@ -14,6 +14,6 @@ terminal.addCommand("matdet", async function(args) {
 }, {
     description: "find the determinant of a matrix",
     args: {
-        "?A:sm": "matrix to invert",
+        "?A:sm": "square matrix",
     }
 })
