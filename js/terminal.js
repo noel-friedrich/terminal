@@ -211,6 +211,14 @@ class FileSystem {
         return this._pathToString(this.currPath)
     }
 
+    filesizeStr(numBytes) {
+        if (numBytes < 1e3 ) return `${numBytes} Bytes`
+        if (numBytes < 1e6 ) return `${Math.round(numBytes / 1e3 * 10) / 10} KB`
+        if (numBytes < 1e9 ) return `${Math.floor(numBytes / 1e6 * 10) / 10} MB`
+        if (numBytes < 1e12) return `${Math.floor(numBytes / 1e9 * 10) / 10} GB`
+        return `${Math.floor(numBytes / 1e12 * 10 / 10)} TB`
+    }
+
     _parsePath(path) {
         let parts = path.split(/[\\\/]/g).filter(part => part !== "")
         if (parts[0] === "root") {
@@ -236,7 +244,7 @@ class FileSystem {
 
     dumpTooLargeFiles(file, fileSizeLimit) {
         if (file.computeSize() < fileSizeLimit) {
-            return 
+            return
         }
 
         let allFiles = []
@@ -267,15 +275,16 @@ class FileSystem {
             for (let file of allFiles) {
                 if (file.isDirectory)
                     continue
-                if (file.computeSize() > largestSize) {
+                const size = file.computeSize()
+                if (size > largestSize) {
                     largestFile = file
-                    largestSize = file.computeSize()
+                    largestSize = size
                 }
             }
             if (largestFile && largestFile.parent) {
                 largestFile.parent.deleteChild(largestFile)
                 introduceDumping()
-                terminal.printLine(`- ${largestFile.path} (${largestFile.computeSize()} bytes)`)
+                terminal.printLine(`- ${largestFile.path} (${terminal.fileSystem.filesizeStr(largestFile.computeSize())})`)
                 allFiles = allFiles.filter(file => file.id !== largestFile.id)
             } else if (largestFile) {
                 return "not ready yet"
@@ -370,7 +379,7 @@ class TerminalData {
         "accentColor1": "#ffff00",
         "accentColor2": "#8bc34a",
         "history": "[]",
-        "storageSize": 300000,
+        "storageSize": "300000",
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "2",
         "easterEggs": "[]",
@@ -516,7 +525,7 @@ class TerminalData {
     }
 
     get storageSize() {
-        return this.get("storageSize")
+        return parseInt(this.get("storageSize"))
     }
 
     set storageSize(size) {
