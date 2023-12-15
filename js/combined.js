@@ -1,4 +1,3343 @@
-// ------------------- 2048.js --------------------
+
+// ------------------- js/terminal.js --------------------
+function classFromType(type) {
+    switch (type) {
+        case "directory":
+            return Directory
+        case "text":
+            return TextFile
+        case "executable":
+            return ExecutableFile
+        case "dataurl":
+            return DataURLFile
+        default:
+            throw new Error("Unknown type: " + type);
+    }
+}
+
+let uniqueFileIdCount = 0
+
+class File {
+
+    constructor(type, content, {
+        isTemp = false
+    }={}) {
+        this.type = type || "file"
+        this.content = content
+        this.parent = null
+        this.name = null
+        this.isTemp = isTemp
+        this.id = uniqueFileIdCount++
+    }
+
+    setName(name) {
+        this.name = name
+        return this
+    }
+
+    computeSize() {
+        return JSON.stringify(this.toJSON()).length
+    }
+
+    copy() {
+        return File.fromObject(this.toJSON())
+    }
+
+    get path() {
+        let tempPath = this.name ?? "root"
+        let tempParent = this.parent
+        while (tempParent) {
+            let parentName = tempParent.name ?? "root"
+            tempPath = parentName + "/" + tempPath
+            tempParent = tempParent.parent
+        }
+        return tempPath
+    }
+
+    get pathArray() {
+        let path = this.path.split("/")
+        path.shift()
+        return path
+    }
+
+    get relativeChildPaths() {
+        let paths = []
+        
+        function getPaths(file, currPath) {
+            paths.push(currPath)
+            if (file.isDirectory) {
+                for (let [key, value] of Object.entries(file.content)) {
+                    getPaths(value, currPath + "/" + key)
+                }
+            }
+        }
+
+        getPaths(this, "")
+
+        return paths.filter(path => path !== "").map(path => path.slice(1))
+    }
+
+    get isDirectory() {
+        return false
+    }
+
+    toJSON() {
+        return {
+            type: this.type,
+            content: this.content
+        }
+    }
+
+    static fromObject(obj) {
+        let children = []
+        let content = obj.content
+        if (obj.type === "directory") {
+            for (let [key, value] of Object.entries(obj.content)) {
+                content[key] = File.fromObject(value)
+                children.push(content[key])
+                content[key].name = key
+            }
+        }
+        let file = new (classFromType(obj.type))(content)
+        for (let child of children) {
+            child.parent = file
+        }
+        return file
+    }
+
+    append() {
+        throw new Error("Cannot append to uninitialized file")
+    }
+
+    write() {
+        throw new Error("Cannot write to uninitialized file")
+    }
+
+}
+
+class TextFile extends File {
+
+    constructor(content) {
+        super("text", content)
+    }
+
+    append(text) {
+        this.content += text
+    }
+
+    write(text) {
+        this.content = text
+    }
+
+}
+
+class ExecutableFile extends File {
+
+    constructor(content) {
+        super("executable", content)
+    }
+
+}
+
+class DataURLFile extends File {
+
+    constructor(content) {
+        super("dataurl", content)
+    }
+
+}
+
+class MelodyFile extends File {
+
+    constructor(content) {
+        super("melody", content)
+    }
+
+}
+
+class Directory extends File {
+
+    constructor(content) {
+        super("directory", content)
+    }
+
+    toJSON() {
+        return {
+            type: this.type,
+            content: Object.fromEntries(Object.entries(this.content)
+                .filter(([fileName, file]) => !file.isTemp)
+                .map(([fileName, file]) => [fileName, file.toJSON()]))
+        }
+    }
+
+    addFile(file) {
+        this.content[file.name] = file
+        file.parent = this
+    }
+
+    deleteChild(child) {
+        delete this.content[child.name]
+    }
+
+    fileExists(name) {
+        return name in this.content
+    }
+
+    getFile(name) {
+        return this.content[name]
+    }
+
+    get isDirectory() {
+        return true
+    }
+
+}
+
+class FileSystem {
+
+    constructor() {
+        this.root = new Directory("root", {})
+        this.currPath = []
+        this.tempSave = undefined
+    }
+
+    get currFolder() {
+        return this.getFile(this.pathStr)
+    }
+
+    _pathToString(path) {
+        return "root/" + path.join("/")
+    }
+
+    get pathStr() {
+        return this._pathToString(this.currPath)
+    }
+
+    _parsePath(path) {
+        let parts = path.split(/[\\\/]/g).filter(part => part !== "")
+        if (parts[0] === "root") {
+            parts.shift()
+        } else {
+            parts = this.currPath.concat(parts)
+        }
+        return parts
+    }
+
+    getFile(path) {
+        let parsedPath = this._parsePath(path)
+        let temp = this.root
+        for (let part of parsedPath) {
+            if (temp.isDirectory && part in temp.content) {
+                temp = temp.content[part]
+            } else {
+                return null
+            }
+        }
+        return temp
+    }
+
+    dumpTooLargeFiles(file, fileSizeLimit) {
+        if (file.computeSize() < fileSizeLimit) {
+            return 
+        }
+
+        let allFiles = []
+        function getAllFiles(file) {
+            allFiles.push(file)
+            if (file.isDirectory) {
+                for (let [key, value] of Object.entries(file.content)) {
+                    getAllFiles(value)
+                }
+            }
+        }
+
+        getAllFiles(file)
+
+        let introducedDumping = false
+        function introduceDumping() {
+            if (introducedDumping)
+                return
+            introducedDumping = true
+
+            terminal.printError("Storage limit exceeded!")
+            terminal.printLine("I will now delete the largest files to free up space:")
+        }
+
+        function dumpLargestFile() {
+            let largestFile = null
+            let largestSize = 0
+            for (let file of allFiles) {
+                if (file.isDirectory)
+                    continue
+                if (file.computeSize() > largestSize) {
+                    largestFile = file
+                    largestSize = file.computeSize()
+                }
+            }
+            if (largestFile && largestFile.parent) {
+                largestFile.parent.deleteChild(largestFile)
+                introduceDumping()
+                terminal.printLine(`- ${largestFile.path} (${largestFile.computeSize()} bytes)`)
+                allFiles = allFiles.filter(file => file.id !== largestFile.id)
+            } else if (largestFile) {
+                return "not ready yet"
+            }
+        }
+
+        let totalSize = file.computeSize()
+        while (totalSize > fileSizeLimit) {
+            if (dumpLargestFile() === "not ready yet")
+                break
+            totalSize = file.computeSize()
+        }
+
+        if (introducedDumping)
+            terminal.printLine("")
+    }
+
+    toJSON() {
+        let fileSizeLimit = terminal.data.storageSize
+        this.dumpTooLargeFiles(this.root, fileSizeLimit)
+        return JSON.stringify(this.root.toJSON())
+    }
+
+    loadJSON(jsonString) {
+        let parsed = JSON.parse(jsonString)
+        this.root = File.fromObject(parsed)
+    }
+
+    reset() {
+        localStorage.removeItem("terminal-filesystem")
+        this.root = new Directory({})
+        this.root.name = "root"
+        this.currPath = []
+    }
+
+    save() {
+        localStorage.setItem("terminal-filesystem", this.toJSON())
+    }
+
+    async load(jsonVal=undefined) {
+        let json = jsonVal ?? localStorage.getItem("terminal-filesystem")
+        if (json) {
+            this.loadJSON(json)
+        } else {
+            await terminal._loadScript(terminal.defaultFileystemURL)
+            this.save()
+            this.loadJSON(this.toJSON())
+        }
+    }
+
+    reloadSync() {
+        this.loadJSON(this.toJSON())
+    }
+
+    async reload() {
+        this.save()
+        await this.load()
+    }
+
+    allFiles(startPoint=this.root) {
+        let files = []
+        let stack = [startPoint]
+        while (stack.length > 0) {
+            let file = stack.pop()
+            files.push(file)
+            if (file.isDirectory) {
+                stack.push(...Object.values(file.content))
+            }
+        }
+        return files
+    }
+
+    saveTemp() {
+        this.tempSave = this.toJSON()
+    }
+
+    async restoreTemp() {
+        if (!this.tempSave) {
+            throw new Error("no save to restore found")
+        }
+        await this.load(this.tempSave)
+    }
+
+}
+
+class TerminalData {
+
+    defaultValues = {
+        "background": "#030306",
+        "foreground": "#ffffff",
+        "font": "\"Cascadia Code\", monospace",
+        "accentColor1": "#ffff00",
+        "accentColor2": "#8bc34a",
+        "history": "[]",
+        "storageSize": 300000,
+        "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
+        "mobile": "2",
+        "easterEggs": "[]",
+        "sidepanel": "true",
+        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
+    }
+
+    localStoragePrepend = "terminal-"
+
+    getDefault(key) {
+        return this.defaultValues[key]
+    }
+
+    get(key, defaultValue) {
+        if (!defaultValue) defaultValue = this.getDefault(key)
+        return localStorage.getItem(this.localStoragePrepend + key) ?? defaultValue
+    }
+
+    set(key, value) {
+        localStorage.setItem(this.localStoragePrepend + key, value)
+    }
+
+    getCSSProperty(key) {
+        let value = document.documentElement.style.getPropertyValue(key)
+        if (!value) value = this.get(key)
+        return value
+    }
+
+    setCSSProperty(key, value) {
+        document.documentElement.style.setProperty(key, value)
+    }
+
+    get background() {
+        return Color.fromHex(this.get("background"))
+    }
+
+    set background(color) {
+        this.set("background", color.string.hex)
+        this.setCSSProperty("--background", color.string.hex)
+    }
+
+    get foreground() {
+        return Color.fromHex(this.get("foreground"))
+    }
+
+    set foreground(color) {
+        this.set("foreground", color.string.hex)
+        this.setCSSProperty("--foreground", color.string.hex)
+    }
+
+    get font() {
+        return this.get("font")
+    }
+
+    set font(font) {
+        this.set("font", font)
+        this.setCSSProperty("--font", font)
+    }
+
+    get accentColor1() {
+        return Color.fromHex(this.get("accentColor1"))
+    }
+
+    set accentColor1(color) {
+        this.set("accentColor1", color.string.hex)
+        this.setCSSProperty("--accent-color-1", color.string.hex)
+    }
+
+    get accentColor2() {
+        return Color.fromHex(this.get("accentColor2"))
+    }
+
+    set accentColor2(color) {
+        this.set("accentColor2", color.string.hex)
+        this.setCSSProperty("--accent-color-2", color.string.hex)
+    }
+
+    get history() {
+        return JSON.parse(this.get("history"))
+    }
+
+    set history(history) {
+        this.set("history", JSON.stringify(history))
+    }
+
+    get easterEggs() {
+        let arr = JSON.parse(this.get("easterEggs"))
+        return new Set(arr)
+    }
+
+    set easterEggs(newEasterEggs) {
+        let arr = Array.from(newEasterEggs)
+        this.set("easterEggs", JSON.stringify(arr))
+    }
+
+    get aliases() {
+        return JSON.parse(this.get("aliases"))
+    }
+
+    set aliases(newAliases) {
+        this.set("aliases", JSON.stringify(newAliases))
+    }
+
+    addAlias(alias, command) {
+        let aliases = this.aliases
+        aliases[alias] = command
+        this.aliases = aliases
+    }
+
+    removeAlias(alias) {
+        let aliases = this.aliases
+        delete aliases[alias]
+        this.aliases = aliases
+    }
+
+    addEasterEgg(easterEggID) {
+        let foundEggs = this.easterEggs
+        foundEggs.add(easterEggID)
+        this.easterEggs = foundEggs
+    }
+    
+    get mobile() {
+        let value = this.get("mobile")
+        if (value === "0") return undefined
+        if (value === "1") return true
+        if (value === "2") return false
+        return null
+    }
+
+    set mobile(mobile) {
+        if (mobile === undefined) mobile = "0"
+        if (mobile === true) mobile = "1"
+        if (mobile === false) mobile = "2"
+        this.set("mobile", mobile)
+    }
+
+    get sidepanel() {
+        return this.get("sidepanel") === "true"
+    }
+
+    set sidepanel(sidepanel) {
+        this.set("sidepanel", sidepanel.toString())
+    }
+
+    get storageSize() {
+        return this.get("storageSize")
+    }
+
+    set storageSize(size) {
+        this.set("storageSize", size)
+    }
+
+    get lastItemOfHistory() {
+        return this.history[this.history.length - 1]
+    }
+
+    get startupCommands() {
+        return JSON.parse(this.get("startupCommands"))
+    }
+
+    set startupCommands(commands) {
+        this.set("startupCommands", JSON.stringify(commands))
+    }
+
+    addToHistory(command) {
+        let history = this.history
+        let lastItem = history[history.length - 1]
+        if (lastItem == command) return
+        history.push(command)
+        this.history = history
+    }
+
+    constructor() {
+        this.background = this.background
+        this.foreground = this.foreground
+        this.font = this.font
+        this.accentColor1 = this.accentColor1
+        this.accentColor2 = this.accentColor2
+        this.mobile = this.mobile
+    }
+
+    resetProperty(key) {
+        this.set(key, this.getDefault(key))
+        this[key] = this[key]
+    }
+
+    resetAll() {
+        for (let key in this.defaultValues) {
+            this.set(key, this.defaultValues[key])
+        }
+    }
+
+}
+
+class Color {
+
+    constructor(r, g, b, a) {
+        this.r = r
+        this.g = g
+        this.b = b
+        this.a = a ?? 1
+    }
+
+    static fromHex(hex) {
+        if (!hex.startsWith("#"))
+            hex = "#" + hex
+        let r = parseInt(hex.substring(1, 3), 16)
+        let g = parseInt(hex.substring(3, 5), 16)
+        let b = parseInt(hex.substring(5, 7), 16)
+        return new Color(r, g, b)
+    }
+
+    static fromHSL(h, s, l) {
+        let r, g, b
+        if (s == 0) {
+            r = g = b = l
+        } else {
+            let hue2rgb = function hue2rgb(p, q, t) {
+                if (t < 0) t += 1
+                if (t > 1) t -= 1
+                if (t < 1/6) return p + (q - p) * 6 * t
+                if (t < 1/2) return q
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
+                return p
+            }
+            let q = l < 0.5 ? l * (1 + s) : l + s - l * s
+            let p = 2 * l - q
+            r = hue2rgb(p, q, h + 1/3)
+            g = hue2rgb(p, q, h)
+            b = hue2rgb(p, q, h - 1/3)
+        }
+        return new Color(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255))
+    }
+
+    static hsl(h, s, l) {
+        return Color.fromHSL(h, s, l)
+    }
+
+    static hsla(h, s, l, a) {
+        let color = Color.fromHSL(h, s, l)
+        color.a = a
+        return color
+    }
+
+    static hex(hex) {
+        return Color.fromHex(hex)
+    }
+
+    static rgb(r, g, b) {
+        return new Color(r, g, b)
+    }
+
+    static niceRandom() {
+        const f = () => Math.floor(Math.random() * 100) + 150
+        return new Color(f(), f(), f())
+    }
+
+    static random() {
+        const f = () => Math.floor(Math.random() * 255)
+        return new Color(f(), f(), f())
+    }
+
+    eq(color) {
+        return this.r == color.r && this.g == color.g && this.b == color.b && this.a == color.a
+    }
+
+    equals(color) {
+        return this.eq(color)
+    }
+
+    distanceTo(color) {
+        let r = this.r - color.r
+        let g = this.g - color.g
+        let b = this.b - color.b
+        let a = this.a - color.a
+        return Math.sqrt(r * r + g * g + b * b + a * a)
+    }
+
+    get hsl() {
+
+        let h = 0
+        let s = 0
+        let l = 0
+
+        let r = this.r / 255
+        let g = this.g / 255
+        let b = this.b / 255
+
+        let max = Math.max(r, g, b)
+        let min = Math.min(r, g, b)
+
+        if (max == min) h = 0
+        else if (max == r) h = 60 * ((g - b) / (max - min))
+        else if (max == g) h = 60 * (2 + (b - r) / (max - min))
+        else if (max == b) h = 60 * (4 + (r - g) / (max - min))
+
+        if (h < 0) h += 360
+
+        l = (max + min) / 2
+        
+        if (max == min) s = 0
+        else if (l <= 0.5) s = (max - min) / (max + min)
+        else if (l > 0.5) s = (max - min) / (2 - max - min)
+
+        return {
+            h: h,
+            s: s,
+            l: l
+        }
+
+    }
+
+    get string() {
+        let self = this
+        return {
+            get rgb() {
+                return `rgb(${self.r}, ${self.g}, ${self.b})`
+            },
+
+            get rgba() {
+                return `rgba(${self.r}, ${self.g}, ${self.b}, ${self.a})`
+            },
+
+            get hex() {
+                let r = self.r.toString(16).padStart(2, "0")
+                let g = self.g.toString(16).padStart(2, "0")
+                let b = self.b.toString(16).padStart(2, "0")
+                return `#${r}${g}${b}`
+            },
+
+            get hsl() {
+                let h = self.hsl.h
+                let s = self.hsl.s * 100
+                let l = self.hsl.l * 100
+                return `hsl(${h}, ${s}%, ${l}%)`
+            }
+
+        }
+    }
+
+    toString() {
+        return this.string.rgba
+    }
+
+    static get COLOR_1() {
+        return terminal.data.accentColor1
+    }
+
+    static get COLOR_2() {
+        return terminal.data.accentColor2
+    }
+
+    static get WHITE() {return new Color(255, 255, 255)}
+    static get BLACK() {return new Color(0, 0, 0)}
+    static get LIGHT_GREEN() {return new Color(0, 255, 0)}
+    static get PURPLE() {return new Color(79, 79, 192)}
+    static get ERROR() {return new Color(255, 128, 128)}
+
+}
+
+class IntendedError extends Error {
+    constructor(message) {
+        super(message)
+        this.name = "IntendedError"
+    }
+}
+
+class DeveloperError extends Error {
+    constructor(message) {
+        super(message)
+        this.name = "DeveloperError"
+    }
+}
+
+class ParserError extends Error {
+    constructor(message) {
+        super(message)
+        this.name = "ParserError"
+    }
+}
+
+class TerminalParser {
+
+    static isVariable = (token) => /^\$[a-zA-Z][a-zA-Z0-9]*$/.test(token)
+    static commandIsAssignment = (command) => /^\$[a-zA-Z][a-zA-Z0-9]*\s*=/.test(command)
+    static extractVariableName = (command) => command.match(/^\$([a-zA-Z][a-zA-Z0-9]*)\s*=/)[1]
+
+    static replaceVariables(tokens, variables) {
+        return tokens.map(token => {
+            if (this.isVariable(token)) {
+                let name = this.extractVariableName(token + "=")
+                if (name in variables) return variables[name]
+            }
+            return token
+        })
+    }
+    
+    static extractAssignment(command) {
+        if (!TerminalParser.commandIsAssignment(command)) return null
+
+        let variableName = TerminalParser.extractVariableName(command)
+        let variableValue = command.split("=", 2)[1]
+        return {
+            name: variableName,
+            value: variableValue
+        }
+    }
+
+    static tokenize(input) {
+        let tokens = []
+        let tempToken = ""
+
+        let apostropheCharacters = ["'", '"']
+        let spaceCharacters = [" ", "\t", "\n"]
+
+        let activeApostrophe = null
+
+        for (let char of input) {
+            if (activeApostrophe) {
+                if (char == activeApostrophe) {
+                    tokens.push(tempToken)
+                    tempToken = ""
+                    activeApostrophe = null
+                } else {
+                    tempToken += char
+                }
+            } else if (apostropheCharacters.includes(char)) {
+                activeApostrophe = char
+            } else if (spaceCharacters.includes(char)) {
+                if (tempToken != "") {
+                    tokens.push(tempToken)
+                    tempToken = ""
+                }
+            } else {
+                tempToken += char
+            }
+        }
+
+        if (tempToken != "")
+            tokens.push(tempToken)
+
+        return tokens
+    }
+
+    static extractCommandAndArgs(tokens) {
+        let args = [...tokens]
+        let command = args[0]
+        args.shift()
+        return [command, args]
+    }
+
+    static parseArgOptions(argString) {
+        // ?a is an optional argument
+        // a is a required argument
+        // abc is a required argument
+        // ?abc is an optional argument
+        // a:n is a required argument that is a number
+        // ?a:n is an optional argument that is a number
+        // a:n:1~100 is a required argument that is a number between 1 and 100
+        // ?a:n:1~100 is an optional argument that is a number between 1 and 100
+        // *a is a required argument that is a string and expands to the rest of the arguments
+        // ?*a is an optional argument that is a string and expands to the rest of the arguments
+        // a:b is a required argument that is a boolean
+
+        let argOptions = {
+            name: null,
+            type: "string",
+            typeName: "string",
+            optional: false,
+            min: null,
+            max: null,
+            expanding: false,
+            numtype: undefined,
+            default: undefined,
+            forms: [],
+            get fullName() {
+                if (this.forms.length > 0)
+                    return this.forms.join("|")
+                return this.name
+            },
+            isHelp: false,
+            description: ""
+        }
+
+        let name = argString
+
+        if (name.startsWith("?")) {
+            argOptions.optional = true
+            name = name.substring(1)
+        }
+
+        if (name.startsWith("*")) {
+            argOptions.expanding = true
+            name = name.substring(1)
+        }
+
+        if (name.includes(":")) {
+            let parts = name.split(":")
+            name = parts[0]
+            let type = parts[1]
+            if (type == "n") {
+                argOptions.type = argOptions.typeName = "number"
+            } else if (type == "i") {
+                argOptions.type = "number"
+                argOptions.typeName = "integer"
+                argOptions.numtype = "integer"
+            } else if (type == "b") {
+                argOptions.type = argOptions.typeName = "boolean"
+            } else if (type == "s") {
+                argOptions.type = argOptions.typeName = "string"
+            } else if (type == "f") {
+                argOptions.type = argOptions.typeName = "file"
+            } else if (type == "c") {
+                argOptions.type = argOptions.typeName = "command"
+            } else if (type == "sm") {
+                argOptions.type = argOptions.typeName = "square-matrix"
+            } else if (type == "m") {
+                argOptions.type = argOptions.typeName = "matrix"
+            } else {
+                throw new DeveloperError(`Invalid argument type: ${type}`)
+            }
+
+            if (parts.length > 2) {
+                let range = parts[2]
+                if (range.includes("~")) {
+                    let rangeParts = range.split("~")
+                    argOptions.min = parseFloat(rangeParts[0])
+                    argOptions.max = parseFloat(rangeParts[1])
+                } else {
+                    argOptions.min = parseFloat(range)
+                    argOptions.max = parseFloat(range)
+                }
+            }
+        }
+
+        argOptions.name = name
+        argOptions.forms = [name]
+        argOptions.description = ""
+        argOptions.error = undefined
+        argOptions.tokenIndex = undefined
+        argOptions.tokenSpan = 0
+        argOptions.value = undefined
+        argOptions.isManuallySetValue = false
+
+        if (argOptions.name.includes("=")) {
+            argOptions.forms = argOptions.name.split("=")
+            argOptions.name = argOptions.forms[1]
+        }
+
+        if (argOptions.name == "help" || argOptions.name == "h") {
+            argOptions.isHelp = true
+        }
+
+        return argOptions
+    }
+
+    static getArgOption(argOptions, argName) {
+        return argOptions.find(arg => arg.name == argName || arg.forms.includes(argName))
+    }
+
+    static parseNamedArgs(tokens, argOptions, parsingError) {
+        let deleteIndeces = []
+
+        for (let i = 0; i < tokens.length; i++) {
+            let currToken = tokens[i]
+            let nextToken = tokens[i + 1]
+            let deleteNext = true
+
+            const handleArg = name => {
+                let argOption = this.getArgOption(argOptions, name)
+
+                if (!argOption) {
+                    parsingError.message = `Unexpected property "${name}"`
+                    parsingError.tokenIndex = i
+                } else if (!argOption.optional) {
+                    argOption.tokenIndex = i
+                    parsingError.message = `Property "${name}" is not optional, must be passed directly`
+                    parsingError.tokenIndex = i
+                    parsingError.tokenSpan = 1
+                } else if (argOption.type == "boolean") {
+                    argOption.tokenIndex = i
+                    this._parseArgumentValue(argOption, true, parsingError)
+                    deleteNext = false
+                } else {
+                    if (nextToken) {
+                        argOption.tokenIndex = i
+                        argOption.tokenSpan = 1
+                        this._parseArgumentValue(argOption, nextToken, parsingError)
+                    } else {
+                        parsingError.message = `property "${name}" (${argOption.typeName}) expects a value`
+                        parsingError.tokenIndex = i + 1
+                    }
+                }
+            }
+
+            if (currToken.match(/^--?[a-zA-Z][a-zA-Z0-9:_\-:.]*$/g)) {
+                if (currToken.startsWith("--")) {
+                    let name = currToken.slice(2)
+                    handleArg(name)
+                } else if (currToken.length == 2) {
+                    let name = currToken.slice(1)
+                    handleArg(name)
+                } else {
+                    for (let j = 0; j < currToken.length; j++) {
+                        let char = currToken[j]
+                        let argOption = this.getArgOption(argOptions, char)
+                        if (char == "-") continue
+                        if (argOption) {
+                            argOption.tokenIndex = i
+                            this._parseArgumentValue(argOption, true, parsingError)
+                        }
+                        if (j == currToken.length - 1) {
+                            handleArg(char)
+                        } else {
+                            if (!argOption) {
+                                parsingError.message = `Unexpected property "${char}"`
+                                parsingError.tokenIndex = i
+                            } else if (argOption.type != "boolean") {
+                                parsingError.message = `Property "${char}" is not a boolean and must be assigned a value`
+                                parsingError.tokenIndex = i
+                            }
+                        }
+
+                        if (parsingError.message) return null
+                    }
+                }
+
+                deleteIndeces.push(i)
+                if (deleteNext)
+                    deleteIndeces.push(i + 1)
+            }
+
+            if (parsingError.message) return null
+        }
+
+        return deleteIndeces
+    }
+
+    static _parseArgumentValue(argOption, value, parsingError) {
+        function addVal(value) {
+            if (argOption.expanding && argOption.value) {
+                value = argOption.value + " " + value
+            }
+            argOption.value = value
+            argOption.isManuallySetValue = true
+        }
+
+        const error = msg => {
+            parsingError.message = msg
+            parsingError.tokenIndex = argOption.tokenIndex
+            parsingError.tokenSpan = argOption.tokenSpan
+        }
+
+        if (argOption.type == "number") {
+            let num = parseFloat(value)
+            if (argOption.numtype == "integer") {
+                if (!Number.isInteger(num)) {
+                    error(`At property "${argOption.name}": Expected an integer`)
+                }
+            }
+
+            if (isNaN(num) || isNaN(value)) {
+                error(`At property "${argOption.name}": Expected a number`)
+            }
+
+            if (argOption.min != null && num < argOption.min) {
+                error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
+            }
+
+            if (argOption.max != null && num > argOption.max) {
+                error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
+            }
+
+            addVal(num)
+        } else if (argOption.type == "boolean") {
+            if (value != "true" && value != "false" && value !== true && value !== false) {
+                error(`At property "${argOption.name}": Expected a boolean`)
+            }
+            addVal(value == "true" || value === true)
+        } else if (argOption.type == "file") {
+            if (!terminal.fileExists(value)) {
+                error(`File not found: "${value}"`)
+            }
+            addVal(value)
+        } else if (argOption.type == "command") {
+            if (!terminal.commandExists(value)) {
+                error(`Command not found: "${value}"`)
+            }
+            addVal(value)
+        } else if (argOption.type == "matrix" || argOption.type == "square-matrix") {
+            // please consider me a regex god for this:
+            // (matches any valid matrices)
+            if (!/^\[((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*(\/((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*)*\]$/.test(value)) {
+                error(`Invalid matrix. Use syntax: [1,2/a,4]`)
+                return
+            }
+
+            let str = value.slice(1, value.length - 1)
+            let rows = str.split("/").map(rowStr => {
+                let values = rowStr.split(",")
+                for (let i = 0; i < values.length; i++) {
+                    if (/^(-?[0-9]+(\.[0-9]+)?)$/.test(values[i])) {
+                        values[i] = parseFloat(values[i])
+                    }
+                }
+                return values
+            })
+
+            if (rows.some(row => row.length != rows[0].length)) {
+                error(`Matrix must have equal sized rows.`)
+            }
+
+            if (argOption.type == "square-matrix") {
+                if (rows.length != rows[0].length) {
+                    error(`Matrix must be square.`)
+                }
+            }
+
+            addVal(rows)
+        } else {
+            addVal(value)
+        }
+    }
+
+    static parseArguments(tempTokens, command={
+        defaultValues: {},
+        args: {},
+        name: "",
+        helpFunc: null,
+        info: {}
+    }) {
+        let args = command.args, defaultValues = command.defaultValues ?? {}
+
+        let argsArray = (args.toString() == "[object Object]") ? Object.keys(args) : args
+        let argOptions = argsArray.map(this.parseArgOptions).flat()
+
+        const parsingError = {
+            message: undefined,
+            tokenIndex: undefined,
+            tokenSpan: 0
+        }
+
+        Object.entries(defaultValues).forEach(([name, value]) => {
+            this.getArgOption(argOptions, name).default = value
+            this.getArgOption(argOptions, name).value = value
+        })
+
+        if (args.toString() == "[object Object]")
+            Object.entries(args).map(([arg, description], i) => {
+                argOptions[i].description = description
+            })
+        
+        const ignoreIndeces = this.parseNamedArgs(tempTokens, argOptions, parsingError)
+        
+        if (parsingError.message) {
+            return {argOptions, parsingError}
+        }
+
+        ignoreIndeces.push(0)
+
+        let argOptionIndex = 0
+        for (let i = 0; i < tempTokens.length; i++) {
+            if (ignoreIndeces.includes(i))
+                continue
+            
+            const token = tempTokens[i]
+            const argOption = argOptions[argOptionIndex]
+
+            if (!argOption) {
+                parsingError.message = "Too many arguments"
+                parsingError.tokenIndex = i
+                parsingError.tokenSpan = 99999
+                return {argOptions, parsingError}
+            }
+
+            argOptionIndex++
+            if (argOption.expanding) {
+                if (!argOption._hasExpanded) {
+                    argOption.tokenIndex = i
+                    argOption.tokenSpan = 0
+                    argOption._hasExpanded = true
+                } else {
+                    argOption.tokenSpan++
+                }
+
+                argOptionIndex--
+            } else {
+                argOption.tokenIndex = i
+            }
+
+            this._parseArgumentValue(argOption, token, parsingError)
+
+            if (parsingError.message) {
+                return {argOptions, parsingError}
+            }
+        }
+
+        const requiredCount = argOptions.filter(arg => !arg.optional).length
+        if (tempTokens.length - 1 < requiredCount) {
+            const missingArgOption = argOptions[Math.max(tempTokens.length - 1, 0)]
+            parsingError.message = `argument "${missingArgOption.name}" (${missingArgOption.type}) is missing`
+            parsingError.tokenIndex = 99999
+            return {argOptions, parsingError}
+        }
+
+        return {argOptions, parsingError}
+    }
+
+    static _printParserError(command, argOptions, errMessage, {isHelp=false}={}) {
+        let tempArgOptions = argOptions.filter(arg => !arg.isHelp)
+
+        terminal.print("$ ", terminal.data.accentColor2)
+        terminal.print(command.name + " ")
+        if (tempArgOptions.length == 0)
+            terminal.print("doesn't accept any arguments")
+        terminal.printLine(tempArgOptions.map(arg => {
+            let name = arg.name
+            if (arg.optional) name = "?" + name
+            return `<${name}>`
+        }).join(" "), terminal.data.accentColor1)
+        
+        let maxArgNameLength = Math.max(...tempArgOptions.map(arg => arg.fullName.length))
+
+        for (let argOption of tempArgOptions) {
+            let autoDescription = ""
+
+            if (argOption.default) {
+                autoDescription += ` [default: ${argOption.default}]`
+            } else if (argOption.optional) {
+                autoDescription += " [optional]"
+            }
+
+            if (argOption.type == "number") {
+                autoDescription += " [numeric"
+                if (argOption.min != null) {
+                    autoDescription += `: ${argOption.min}`
+                    autoDescription += ` to ${argOption.max}`
+                }
+                autoDescription += "]"
+            }
+
+            let combinedDescription = autoDescription + " " + argOption.description
+
+            if (combinedDescription.trim().length == 0)
+                continue
+
+            terminal.print(" > ")
+
+            let argName = argOption.fullName
+            if (argName.length > 1) argName = "--" + argName
+            else argName = "-" + argName
+            
+            terminal.print(argName.padEnd(maxArgNameLength + 3), terminal.data.accentColor1)
+
+            if (combinedDescription.length > 50) {
+                terminal.printLine(autoDescription)
+                terminal.print(" ".repeat(maxArgNameLength + 7))
+                terminal.printLine(argOption.description)
+            } else if (combinedDescription.length > 0) {
+                terminal.printLine(combinedDescription)
+            }
+        }
+
+        if (isHelp && command.helpFunc) {
+            command.helpFunc()
+        }
+
+        if (errMessage)
+            terminal.printError(errMessage, "ParseError")
+    }
+
+}
+
+class Command {
+
+    constructor(name, callback, info) {
+        this.name = name
+        this.callback = callback
+        this.info = info
+        this.args = info.args ?? {}
+        this.helpFunc = info.helpFunc ?? null
+        this.description = info.description ?? ""
+        this.defaultValues = info.defaultValues ?? info.standardVals ?? {}
+        this.author = info.author ?? "Noel Friedrich"
+        this.windowScope = null
+    }
+
+    get terminal() {
+        return this.windowScope.terminal
+    }
+
+    set terminal(newTerminal) {
+        this.windowScope.terminal = newTerminal
+    }
+
+    checkArgs(tokens) {
+        if (this.info.rawArgMode)
+            return true
+        try {
+            const {parsingError} = TerminalParser.parseArguments(tokens, this)
+            return !parsingError.message
+        } catch (error) {
+            return false
+        }
+    }
+
+    processArgs(tokens, rawArgs) {
+        if (this.info.rawArgMode)
+            return rawArgs
+
+        let {argOptions, parsingError} = TerminalParser.parseArguments(tokens, this)
+        if (parsingError.message) {
+            TerminalParser._printParserError(this, argOptions, parsingError.message)
+            throw new IntendedError()
+        }
+
+        let valueObject = {}
+        for (let argOption of argOptions) {
+            for (let form of argOption.forms) {
+                valueObject[form] = argOption.value
+            }
+        }
+
+        return valueObject
+    }
+
+    async run(tokens, rawArgs, {callFinishFunc=true, terminalObj=undefined, processArgs=true}={}) {
+        if (terminalObj)
+            this.terminal = terminalObj
+        if (callFinishFunc)
+            this.terminal.expectingFinishCommand = true
+
+        try {
+            let argObject = this.processArgs(tokens, rawArgs)
+
+            if (this.callback.constructor.name === 'AsyncFunction') {
+                await this.callback(processArgs ? argObject : rawArgs)
+            } else {
+                this.callback(processArgs ? argObject : rawArgs)
+            }
+
+            if (callFinishFunc)
+                this.terminal.finishCommand()
+            return true
+        } catch (error) {
+            if (!(error instanceof IntendedError)) {
+                this.terminal.printError(error.message, error.name)
+                console.error(error)
+            }
+            if (callFinishFunc)
+                this.terminal.finishCommand()
+
+            // if the sleep command was called a max number
+            // of times, it's considered to be a success
+            return this.terminal.tempActivityCallCount === this.terminal.tempMaxActivityCallCount
+        }
+    }
+
+}
+
+const UtilityFunctions = {
+
+    mulberry32(a) {
+        return function() {
+          var t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ t >>> 15, t | 1);
+          t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+    },
+
+    levenshteinDistance(str1, str2) {
+        const track = Array(str2.length + 1).fill(null).map(
+            () => Array(str1.length + 1).fill(null))
+
+        for (let i = 0; i <= str1.length; i += 1) track[0][i] = i
+        for (let j = 0; j <= str2.length; j += 1) track[j][0] = j
+
+        for (let j = 1; j <= str2.length; j += 1) {
+            for (let i = 1; i <= str1.length; i += 1) {
+                const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1
+                track[j][i] = Math.min(
+                    track[j][i - 1] + 1,
+                    track[j - 1][i] + 1,
+                    track[j - 1][i - 1] + indicator,
+                )
+            }
+        }
+
+        return track[str2.length][str1.length]
+    },
+
+    stringPad(string, length, char=" ") {
+        return string.toString().padStart(length, char)
+    },
+
+    stringPadBack(string, length, char=" ") {
+        return string.toString().padEnd(length, char)
+    },
+
+    stringPadMiddle(string, length, char=" ") {
+        string = string.toString()
+        while (string.length < length) {
+            string = char + string + char
+        }
+        while (string.length > length) {
+            string = string.slice(1)
+        }
+        return string
+    },
+
+    stringMul(string, count) {
+        return string.toString().repeat(count)
+    },
+
+    strRepeat(string, count) {
+        return string.toString().repeat(count)
+    },
+
+    Color: Color,
+
+    FileType: {
+        FOLDER: "directory",
+        READABLE: "text",
+        PROGRAM: "executable",
+        MELODY: "melody",
+        DATA_URL: "dataurl"
+    },
+
+    async playFrequency(f, ms, volume=0.5, destination=null, returnSleep=true) {
+        if (!terminal.audioContext) {
+            terminal.audioContext = new(window.AudioContext || window.webkitAudioContext)()
+            if (!terminal.audioContext)
+                throw new Error("Browser doesn't support Audio")
+        }
+    
+        let oscillator = terminal.audioContext.createOscillator()
+        oscillator.type = "square"
+        oscillator.frequency.value = f
+    
+        let gain = terminal.audioContext.createGain()
+        gain.connect(destination || terminal.audioContext.destination)
+        gain.gain.value = volume
+    
+        oscillator.connect(gain)
+        oscillator.start(terminal.audioContext.currentTime)
+        oscillator.stop(terminal.audioContext.currentTime + ms / 1000)
+    
+        if (returnSleep)
+            return terminal.sleep(ms)
+    },
+
+    parseColor(input) {
+        // very slow but works
+        // (creates a canvas element and draws the color to it
+        //  then reads the color back as RGB)
+
+        let canvas = document.createElement("canvas")
+        canvas.width = 1
+        canvas.height = 1
+        let ctx = canvas.getContext("2d")
+        ctx.fillStyle = input
+        ctx.fillRect(0, 0, 1, 1)
+        let data = ctx.getImageData(0, 0, 1, 1).data
+        return new Color(data[0], data[1], data[2])
+    },
+
+    TerminalParser: TerminalParser,
+    File: File,
+    TextFile: TextFile,
+    Directory: Directory,
+    ExecutableFile: ExecutableFile,
+    DataURLFile: DataURLFile,
+    Command: Command,
+    IntendedError: IntendedError,
+
+    addAlias(alias, command) {
+        if (terminal.inTestMode) return
+        terminal.data.addAlias(alias, command)
+        terminal.log(`Added alias "${alias}" for command "${command}"`)
+    }
+
+}
+
+class TerminalModules {
+
+    modulePath = "js/modules"
+
+    constructor() {}
+
+    async load(name, terminalObj) {
+        if (terminalObj.inTestMode) {
+            terminalObj.tempActivityCallCount = terminalObj.tempMaxActivityCallCount
+            throw new IntendedError()
+        }
+
+        if (this[name])
+            return this[name]
+
+        let url = `${this.modulePath}/${name}.js`
+        await terminalObj._loadScript(url)
+        return this[name]
+    }
+
+    async import(name, window) {
+        await this.load(name, window.terminal)
+        for (let [key, value] of Object.entries(this[name])) {
+            window[key] = value
+        }
+    }
+
+}
+
+let ALL_TERMINALS = {}
+let CORRECTNESS_CACHE = {}
+
+const OutputChannel = {
+    USER: "user",
+    NONE: "none",
+    CACHE_AND_USER: "cache_and_user",
+}
+
+class KeyboardShortcut {
+
+    constructor(key, callback, {
+        ctrl=undefined,
+        alt=undefined,
+        shift=undefined
+    }={}) {
+        this.key = key
+        this.callback = callback
+        this.ctrl = ctrl
+        this.alt = alt
+        this.shift = shift
+    }
+
+    run(event) {
+        this.callback(event)
+    }
+
+}
+
+class Terminal {
+
+    parser = TerminalParser
+
+    parentNode = document.getElementById("terminal")
+    containerNode = document.querySelector(".terminal-container")
+    commandListURL = "js/load-commands.js"
+    mobileKeyboardURL = "js/keyboard.js"
+    defaultFileystemURL = "js/defaultFilesystem.js"
+    sidePanelURL = "js/html/side-panel.js"
+
+    mobileKeyboard = null
+    currInputElement = null
+    currSuggestionElement = null
+    currInputContainer = null
+    correctIndicator = null
+    expectingFinishCommand = false
+    commandCache = {}
+    testProcessID = 0
+    tempActivityCallCount = 0
+    tempMaxActivityCallCount = Infinity
+    debugMode = false
+    tempCommandInputHistory = []
+
+    guiMode = false
+
+    keyboardShortcuts = []
+
+    name = ""
+    data = new TerminalData()
+    fileSystem = new FileSystem()
+    modules = new TerminalModules()
+
+    outputChannel = OutputChannel.USER
+    outputCacheVarName = null
+
+    variableCache = {}
+
+    loadingKey = null
+    baseUrl = ""
+
+    getOutputCache(key) {
+        if (this.variableCache[key] === undefined)
+            return ""
+        return this.variableCache[key]
+    }
+
+    writeToOutputCache(value) {
+        if (this.outputChannel == OutputChannel.NONE)
+            throw new Error("Cannot write to output cache when output channel is set to none")
+        if (this.outputCacheVarName === null)
+            throw new Error("Cannot write to output cache when output cache var name is not set")
+
+        let currCache = this.getOutputCache(this.outputCacheVarName)
+        this.variableCache[this.outputCacheVarName] = currCache + value
+    }
+
+    getVariableValue(name) {
+        return this.variableCache[name]
+    }
+
+    async setLoading(file) {
+        let randomKey = Math.random().toString()
+        this.loadingKey = randomKey
+
+        // wait a bit before showing the loading overlay
+        await this.sleep(150)
+
+        if (this.loadingKey != randomKey)
+            return
+
+        this.unsetLoading()
+        this.loadingElement = terminal.printLine(`\nLoading ${file}`, undefined, {forceElement: true})
+    }
+
+    async unsetLoading() {
+        this.loadingKey = null
+        if (this.loadingElement) {
+            this.loadingElement.remove()
+            this.loadingElement = null
+        }
+    }
+
+    scroll(behavior="smooth", toLeft=true) {
+        let opts = {
+            top: 10 ** 9, // sufficiently large number
+            // (number must be lower than 10**10, as firefox doesn't allow those values)
+            behavior
+        }
+        if (toLeft)
+            opts.left = 0
+        this.parentNode.scrollTo(opts)
+        this.containerNode.scrollTo(opts)
+    }
+
+    isUrlParamSet(param) {
+        return new URLSearchParams(window.location.search).has(param)
+    }
+
+    get inTestMode() {
+        return this.outputChannel == OutputChannel.NONE
+    }
+
+    addKeyboardShortcut(shortcut) {
+        this.keyboardShortcuts.push(shortcut)
+    }
+
+    removeCurrInput() {
+        if (this.currInputContainer)
+            this.currInputContainer.remove()
+        this.currInputContainer = null
+        this.currInputElement = null
+        this.currSuggestionElement = null
+    }
+
+    _interruptSTRGC() {
+        if (this.inTestMode)
+            return
+        
+        terminal.printError("Pressed [^c]", "\nInterrupt")
+        terminal.expectingFinishCommand = true
+        for (let callback of this._interruptCallbackQueue)
+            callback()
+        this._interruptCallbackQueue = []
+        terminal.finishCommand()
+    }
+
+    getFile(path, fileType=undefined) {
+        // throws error if file not found
+        if (path == ".") path = ""
+        let file = this.fileSystem.getFile(path)
+        if (file == null) {
+            throw new Error(`File "${path}" not found`)
+        }
+        if (fileType && file.type != fileType)
+            throw new Error(`File "${path}" is not a ${fileType}`)
+        return file
+    }
+
+    async createFile(fileName, fileType, data) {
+        if (!terminal.isValidFileName(fileName))
+            throw new Error("Invalid filename")
+        if (terminal.fileExists(fileName))
+            throw new Error("File already exists")
+        let newFile = new (fileType)(data)
+        if (!terminal.inTestMode) {
+            terminal.currFolder.content[fileName] = newFile
+            await terminal.fileSystem.reload()
+        }
+        return newFile
+    }
+
+    fileExists(path) {
+        if (path == ".") path = ""
+        return this.fileSystem.getFile(path) != null
+    }
+
+    updatePath() {
+        // legacy
+    }
+
+    isValidFileName(name) {
+        return name.match(/^[a-zA-Z0-9_\-\.]{1,30}$/)
+    }
+
+    async copy(text, {printMessage=false}={}) {
+        if (terminal.inTestMode)
+            return
+        
+        await navigator.clipboard.writeText(text)
+
+        if (printMessage)
+            terminal.printLine("Copied to Clipboard ✓")
+    }
+
+    async sleep(ms) {
+        terminal.tempActivityCallCount++
+        if (terminal.tempActivityCallCount === terminal.tempMaxActivityCallCount)
+            throw new IntendedError()
+
+        if (terminal.outputChannel == OutputChannel.NONE)
+            return
+
+        let running = true
+        let aborted = false
+        const intervalFunc = () => {
+            if (!running) return
+            if (terminal.pressed.Control && terminal.pressed.c || terminal._interruptSignal) {
+                terminal._interruptSignal = false
+                running = false
+                clearInterval(interval)
+                aborted = true
+                terminal._interruptSTRGC()
+            }
+        }
+
+        let interval = setInterval(intervalFunc, 50)
+        intervalFunc()
+
+        return new Promise(resolve => {
+            setTimeout(() => {
+                running = false
+                clearInterval(interval)
+                if (!aborted) resolve()
+            }, ms)
+        })
+    }
+
+    interrupt() {
+        this._interruptSignal = true
+    }
+
+    onInterrupt(callback) {
+        this._interruptCallbackQueue.push(callback)
+    }
+
+    reload() {
+        location.reload()
+    }
+
+    href(url) {
+        if (terminal.inTestMode)
+            return
+        window.location.href = url
+    }
+
+    setInputCorrectness(correct) {
+        if (!this.correctIndicator)
+            return
+        if (correct) {
+            this.correctIndicator.style.color = Color.LIGHT_GREEN.toString()
+        } else {
+            this.correctIndicator.style.color = Color.ERROR.toString()
+        }
+    }
+
+    getAutoCompleteOptions(text) {
+        let lastWord = text.split(/\s/g).pop()
+        const allRelativeFiles = this.fileSystem.allFiles()
+            .map(file => file.path)
+            .concat(this.fileSystem.currFolder.relativeChildPaths)
+
+        const configMatches = ms => ms.filter(f => f.startsWith(lastWord))
+            .sort().sort((a, b) => a.length - b.length)
+
+        const exportMatches = ms => ms.map(match => {
+            let words = text.split(" ")
+            words.pop()
+            words.push(match)
+            return words.join(" ")
+        }).filter(s => s != text)
+
+        const addApostrophes = ms => ms.map(m => {
+            if (m.includes(" ")) {
+                let apostrphe = '"'
+                if (m.includes(apostrphe)) {
+                    apostrphe = "'"
+                    if (m.includes(apostrphe)) {
+                        apostrphe = ""
+                        // TODO: add more apostrophe types to prevent this
+                    }
+                } 
+                return `${apostrphe}${m}${apostrphe}`
+            }
+            return m
+        })
+
+        let commandMatches = configMatches(this.visibleFunctions.map(f => f.name)
+            .concat(Object.keys(this.data.aliases)))
+
+        // if is first word
+        if (lastWord === text.trim()) {
+            return exportMatches(commandMatches)
+        }
+
+        let fileMatches = configMatches(addApostrophes(allRelativeFiles))
+        let allMatches = configMatches(commandMatches.concat(fileMatches))
+
+        const {argOptions, parsingError} = this.parse(text)
+
+        let currArgOption = {}
+        if (text.slice(-1) == "-") {
+            return exportMatches(argOptions.filter(o => !o.isManuallySetValue)
+                .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`))
+        } else if (text.slice(-1) == " ") {
+            const nextArgOption = argOptions.filter(o => !o.isManuallySetValue)[0]
+            if (nextArgOption !== undefined) {
+                currArgOption = nextArgOption
+            }
+        } else {
+            currArgOption = argOptions.reduce((p, c) => c.tokenIndex ? (c.tokenIndex > p.tokenIndex ? c : p) : p, {tokenIndex: 0})
+        }
+
+        // if an argOption is currently being edited
+        if (currArgOption.name) {
+            if (currArgOption.type == "boolean") {
+                let numTicks = currArgOption.name.length > 1 ? 2 : 1
+                return exportMatches([`${"-".repeat(numTicks)}${currArgOption.name}`])
+            }
+
+            if (currArgOption.type == "file") {
+                return exportMatches(fileMatches)
+            }
+
+            if (currArgOption.type == "command") {
+                return exportMatches(commandMatches)
+            }
+        }
+
+        return []
+    }
+
+    sanetizeInput(text) {
+        text = text.replaceAll(/![0-9]+/g, match => {
+            let index = parseInt(match.slice(1)) - 1
+            if (terminal.data.history[index])
+                return terminal.data.history[index]
+            return match
+        })
+        text = text.replaceAll(/!!/g, () => {
+            return terminal.data.history[terminal.data.history.length - 1] ?? ""
+        }) 
+        text = text.trim()
+        for (let [alias, command] of Object.entries(terminal.data.aliases)) {
+            text = text.replaceAll(RegExp(`^${alias}`, "g"), command)
+        }
+        return text
+    }
+
+    turnToTestMode() {
+        this.outputChannel = OutputChannel.NONE
+    }
+
+    async updateInputCorrectnessDebug(text) {
+        // experimental feature
+        // this is a very hacky way to do this
+        // and produces a lot of side effects and bugs
+        // (for now hidden in debug mode)
+
+        this.testProcessID++
+
+        let virtualTerminal = new Terminal(`v${this.testProcessID}`)
+        await virtualTerminal.initFrom(this)
+        virtualTerminal.turnToTestMode()
+        virtualTerminal.testProcessID = this.testProcessID
+
+        virtualTerminal.tempActivityCallCount = 0
+        virtualTerminal.tempMaxActivityCallCount = 1
+        
+        let wentWell = true
+
+        try {
+            wentWell = await virtualTerminal.input(text, true)
+        } catch {
+            wentWell = false
+        }
+
+        if (!wentWell) {
+            wentWell = virtualTerminal.tempActivityCallCount === virtualTerminal.tempMaxActivityCallCount
+        }
+
+        if (virtualTerminal.testProcessID == this.testProcessID) {
+            this.setInputCorrectness(wentWell)
+        }
+
+        CORRECTNESS_CACHE[text] = wentWell
+    }
+
+    async updateInputCorrectness(text) {
+        if (text.trim().length == 0) {
+            this.setInputCorrectness(true)
+            return
+        }
+
+        if (this.debugMode)
+            return await this.updateInputCorrectnessDebug(text)
+
+        if (text in CORRECTNESS_CACHE) {
+            this.setInputCorrectness(CORRECTNESS_CACHE[text])
+            return
+        }
+
+        if (TerminalParser.isVariable(text)) {
+            let name = TerminalParser.extractVariableName(text + "=")
+            this.setInputCorrectness(name in this.variableCache)
+            return
+        }
+
+        let assignmentInfo = TerminalParser.extractAssignment(text)
+        if (assignmentInfo) {
+            text = assignmentInfo.value
+        }
+
+        let tokens = TerminalParser.tokenize(text)
+        tokens = TerminalParser.replaceVariables(tokens, this.variableCache)
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+        if (!this.commandExists(commandText)) { 
+            this.setInputCorrectness(false)
+            return
+        }
+
+        let commandData = this.commandData[commandText] 
+        this.setInputCorrectness(true)
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+        this.setInputCorrectness(tempCommand.checkArgs(tokens))
+    }
+
+    _createDefaultGetHistoryFunc() {
+        if (this.commandIsExecuting) {
+            return () => this.tempCommandInputHistory
+        } else {
+            return () => this.data.history
+        }
+    }
+
+    _createDefaultAddToHistoryFunc() {
+        if (this.commandIsExecuting) {
+            return data => this.tempCommandInputHistory.push(data)
+        } else {
+            return data => this.data.addToHistory(data)
+        }
+    }
+
+    focusInput({element=null, options={}}={}) {
+        if (this.mobileKeyboard) {
+            this.mobileKeyboard.show()
+            return
+        }
+
+        let input = element ?? this.currInputElement
+        if (input) {
+            input.focus(options)
+        }
+    }
+
+    updateCorrectnessText(prompt, element, inputElement) {
+        const {text, color} = this.getCorrectnessText(prompt, inputElement)
+        element.textContent = text ? "\n" + text : ""
+        if (color) {
+            element.style.color = color
+        }
+    }
+
+    parse(prompt) {
+        const tokens = TerminalParser.tokenize(prompt)
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+
+        if (commandText == undefined) {
+            return {argOptions: [], parsingError: {
+                message: undefined, tokenIndex: undefined, tokenSpan: 0
+            }}
+        }
+
+        if (!this.commandExists(commandText)) { 
+            return {argOptions: [], parsingError: {
+                message: "command not found", tokenIndex: 0, tokenSpan: 0
+            }}
+        }
+
+        let commandData = this.commandData[commandText]
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+
+        return TerminalParser.parseArguments(tokens, tempCommand)
+    }
+
+    getCorrectnessText(prompt, inputElement) {
+        if (prompt.length == 0)
+            return ""
+
+        let tokens = TerminalParser.tokenize(prompt)
+
+        const underlinePart = (startIndex, length, message, color=Color.ERROR) => {
+            if (message == "") return {text: ""}
+
+            const inputOffset = this.fileSystem.pathStr.length
+            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(length - 1) + "\n"
+            out += " ".repeat(inputOffset + startIndex) + "|\n"
+            
+            let lines = message.split("\n").filter(l => !!l)
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i]
+                let beforeChar = i == lines.length - 1 ? "└" : "├"
+                out += " ".repeat(inputOffset + startIndex) + beforeChar + " " + line + "\n"
+            }
+
+            return {text: out, color}
+        }
+
+        const positionFromToken = tokenIndex => {
+            let startPosition = 0
+            let tempPrompt = prompt
+            for (let i = 0; i < tokens.length; i++) {
+                const token = tokens[i]
+                let firstIndex = tempPrompt.indexOf(token)
+                tempPrompt = tempPrompt.slice(firstIndex + token.length)
+                startPosition = prompt.length - (tempPrompt.length + token.length) + 1
+
+                if (i == tokenIndex) {
+                    break
+                }
+            }
+            return startPosition
+        }
+
+        const underLineToken = (tokenIndex, tokenSpan, message, color=Color.ERROR) => {
+            if (tokenIndex >= tokens.length) {
+                let offset = prompt.length + 1
+                if (prompt.slice(-1) == " ") offset--
+                return underlinePart(offset, 3, message, color)
+            }
+
+            tokenSpan = Math.min(tokenSpan, tokens.length - 1 - tokenIndex)
+
+            let startPosition = positionFromToken(tokenIndex)
+            let endPosition = startPosition + tokens[tokenIndex].length
+            for (let i = 0; i < tokenSpan; i++) {
+                endPosition = positionFromToken(tokenIndex + i + 1)
+                endPosition += tokens[tokenIndex + i + 1].length
+            }
+
+            return underlinePart(startPosition - 1, endPosition - startPosition, message, color)
+        }
+
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+
+        if (commandText == undefined) {
+            return ""
+        }
+
+        if (!this.commandExists(commandText)) { 
+            return underlinePart(prompt.indexOf(commandText), commandText.length, `command not found`)
+        }
+
+        let commandData = this.commandData[commandText]
+
+        let tempCommand = new Command(commandText, () => undefined, commandData)
+        tempCommand.windowScope = this.window
+        tempCommand.terminal = this
+
+        let {argOptions, parsingError} = TerminalParser.parseArguments(tokens, tempCommand)
+
+        if (parsingError.message && tokens.length > 1 && !commandData.rawArgMode) {
+            return underLineToken(parsingError.tokenIndex, parsingError.tokenSpan, parsingError.message)
+        }
+
+        const makeArgumentInfo = argOption => {
+            let out = ""
+            if (argOption.name.length == 1) {
+                out += `-`
+            } else {
+                out += `--`
+            }
+            out += `${argOption.name} (`
+            if (argOption.optional) {
+                out += "optional, "
+            }
+            out += `${argOption.typeName}) ${argOption.description}`
+            return out
+        }
+
+        const makeCommandInfoString = () => {
+            let out = ""
+
+            let filteredOptions = argOptions.filter(o => !o.isManuallySetValue)
+            for (let argOption of filteredOptions) {
+                out += `${makeArgumentInfo(argOption)}\n`
+            }
+            
+            return out
+        }
+
+        let currTokenIndex = 0
+        for (let i = 0; i < tokens.length; i++) {
+            let position = positionFromToken(i)
+            if (inputElement.selectionStart >= position - 1) {
+                currTokenIndex = i
+            }
+        }
+
+        let currArgOption = undefined
+        for (let argOption of argOptions) {
+            if (argOption.tokenIndex == undefined) {
+                continue
+            }
+
+            if (currTokenIndex >= argOption.tokenIndex && currTokenIndex <= argOption.tokenIndex + argOption.tokenSpan) {
+                currArgOption = argOption
+                break
+            }
+        }
+
+        if ((tokens.length == 1 && prompt.slice(-1) != " ") || argOptions.length == 0 || (currTokenIndex == 0 && tokens.length > 1)) {
+            return underLineToken(0, 0, `"${commandData.description}"`, Color.fromHex("#9d64ff"))
+        }
+
+        // user is at end of selection and wants more info about arguments
+        if (prompt.slice(-1) == " " && prompt.length == inputElement.selectionStart) {
+            return underLineToken(9999, 1, makeCommandInfoString(), Color.fromHex("#9d64ff"))
+        }
+
+        if (currArgOption) {
+            return underLineToken(currArgOption.tokenIndex, currArgOption.tokenSpan,
+                makeArgumentInfo(currArgOption), Color.fromHex("#9d64ff"))
+        }
+
+        return ""
+    }
+
+    createStyledInput() {
+        let input = document.createElement("input")
+        input.type = "text"
+        input.className = "terminal-input"
+        input.autocomplete = "off"
+        input.autocorrect = "off"
+        input.autocapitalize = "off"
+        input.spellcheck = "false"
+        input.name = "terminal-input"
+        return input
+    }
+
+    createTerminalButton({
+        text="Press here!",
+        charWidth=8,
+        onPress=undefined
+    }={}) {
+        let button = this.document.createElement("button")
+
+        button.textContent = text
+        button.onclick = onPress
+        
+        button.style.width = `${this.charWidth * charWidth}px`
+        button.style.backgroundColor = terminal.data.foreground.toString()
+        button.style.color = terminal.data.background.toString()
+        button.style.cursor = "pointer"
+
+        return button
+    }
+
+    async prompt(msg, {password=false, affectCorrectness=false,
+        getHistory = this._createDefaultGetHistoryFunc(),
+        addToHistory = this._createDefaultAddToHistoryFunc(),
+        inputCleaning=!this.commandIsExecuting,
+        inputSuggestions=!this.commandIsExecuting,
+        mobileLayout=undefined,
+        printInputAfter=true
+    }={}) {
+        if (this.inTestMode) {
+            this.tempActivityCallCount++
+            return ""
+        }
+
+        function lastItemOfHistory() {
+            let history = getHistory()
+            return history[history.length - 1]
+        }
+
+        if (msg) terminal.print(msg)
+
+        const createInput = () => {
+            let inputContainer = document.createElement("div")
+            inputContainer.className = "terminal-input-container"
+
+            let input = this.createStyledInput()
+
+            if (this.mobileKeyboard) {
+                input.addEventListener("focus", () => {
+                    this.mobileKeyboard.show()
+                })
+                input.readOnly = true
+                input.inputMode = "none"
+            }
+
+            // for screen readers (bots) only
+            let label = document.createElement("label")
+            label.className = "terminal-input-label"
+            label.textContent = "Input a terminal command"
+            label.style.display = "none"
+            label.htmlFor = "terminal-input"
+            inputContainer.appendChild(label)
+
+            let suggestion = document.createElement("div")
+            suggestion.className = "terminal-suggestion"
+            
+            inputContainer.appendChild(input)
+            inputContainer.appendChild(suggestion)
+
+            if (password) input.type = "password"
+            return [input, suggestion, inputContainer]
+        }
+
+        let [inputElement, suggestionElement, inputContainer] = createInput()
+        this.parentNode.appendChild(inputContainer)
+        const inputMinWidth = () => {
+            let rect = inputElement.getBoundingClientRect()
+            return this.window.innerWidth - rect.left * 2
+        }
+        inputContainer.style.width = `${inputMinWidth()}px`
+
+        let correctnessOutput = null
+
+        if (affectCorrectness) {
+            correctnessOutput = terminal.print("", Color.ERROR, {forceElement: true})
+        }
+
+        this.scroll("smooth", false)
+        this.currInputElement = inputElement
+        this.currSuggestionElement = suggestionElement
+        this.currInputContainer = inputContainer
+        this.focusInput({options: {preventScroll: true}})
+
+        return new Promise(resolve => {
+            let inputValue = ""
+            let keyListeners = {}
+
+            keyListeners["Enter"] = event => {
+                let text = inputElement.value
+                if (printInputAfter)
+                    this.printLine(password ? "•".repeat(text.length) : text)
+                if (inputCleaning) {
+                    text = this.sanetizeInput(inputElement.value)
+                }
+                if (text !== lastItemOfHistory() && text.length > 0)
+                    addToHistory(text)
+                this.removeCurrInput()
+                if (correctnessOutput) {
+                    correctnessOutput.remove()
+                }
+                resolve(text)
+            }
+
+            let tabIndex = 0
+            let suggestions = []
+            keyListeners["Tab"] = event => {
+                event.preventDefault()
+                if (!inputSuggestions) {
+                    inputElement.value += "    "
+                    inputElement.oninput()
+                    return
+                }
+                if (suggestions.length == 0)
+                    suggestions = this.getAutoCompleteOptions(inputValue)
+                if (suggestions.length > 0) {
+                    inputElement.value = suggestions[tabIndex]
+                    tabIndex = (tabIndex + 1) % suggestions.length
+                    inputValue = ""
+                }
+                inputElement.oninput()
+            }
+
+            let historyIndex = getHistory().length
+            keyListeners["ArrowUp"] = event => {
+                event.preventDefault()
+                let history = getHistory()
+                if (historyIndex > 0) {
+                    historyIndex--
+                    inputElement.value = history[historyIndex]
+                }
+                inputElement.oninput()
+            }
+
+            keyListeners["ArrowDown"] = event => {
+                event.preventDefault()
+                let history = getHistory()
+                historyIndex++
+                if (historyIndex > history.length - 1) {
+                    historyIndex = history.length
+                    inputElement.value = ""
+                } else {
+                    inputElement.value = history[historyIndex]
+                }
+                inputElement.oninput()
+            }
+
+            inputElement.oninput = async event => {
+                if (!inputSuggestions) {
+                    suggestionElement.textContent = ""
+                    return
+                }
+
+                const replaceAlreadywritten = (oldText, replacement=" ") => {
+                    let newText = ""
+                    for (let i = 0; i < oldText.length; i++) {
+                        if (inputElement.value[i]) {
+                            newText += replacement
+                        } else {
+                            newText += oldText[i]
+                        }
+                    }
+                    return newText
+                }
+
+                if (suggestions.length > 0 && inputElement.value.trim().length > 0) {
+                    suggestionElement.textContent = replaceAlreadywritten(suggestions[0])
+                } else {
+                    suggestionElement.textContent = ""
+                }
+
+                if (affectCorrectness) {
+                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    this.updateInputCorrectness(cleanedInput)
+                    if (correctnessOutput) {
+                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                    }
+                }
+            }
+
+            inputElement.onselectionchange = () => {
+                if (affectCorrectness) {
+                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    this.updateInputCorrectness(cleanedInput)
+                    if (correctnessOutput) {
+                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                    }
+                }
+            }
+
+            inputElement.onkeydown = async (event, addToVal=true) => {
+                if (addToVal) {
+                    if (event.key.length == 1) // a, b, c, " "
+                        inputValue = inputElement.value + event.key
+                    else if (event.key == "Backspace")
+                        inputValue = inputElement.value.slice(0, -1)
+                    else // Tab, Enter, etc.
+                        inputValue = inputElement.value
+                }
+
+                if (keyListeners[event.key])
+                    keyListeners[event.key](event)
+                else {
+                    tabIndex = 0
+                    suggestions = this.getAutoCompleteOptions(inputValue)
+                }
+
+                if (event.key == "c" && event.ctrlKey) {
+                    this.removeCurrInput()
+                    this._interruptSTRGC()
+                }
+
+                let textLength = inputElement.value.length
+                // (textLength + 1) to leave room for the next character
+                let inputWidth = (textLength + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
+
+                // call async to let selection be updated before event is fired
+                setTimeout(inputElement.onselectionchange, 0)
+            }
+
+            addEventListener("resize", event => {
+                let inputWidth = (inputElement.value.length + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
+            })
+
+            if (this.mobileKeyboard) {
+                if (mobileLayout === undefined)
+                    this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.DEFAULT)
+                else
+                    this.mobileKeyboard.updateLayout(mobileLayout)
+
+                this.mobileKeyboard.show()
+                this.mobileKeyboard.oninput = event => {
+                    if (event.key == "Backspace")
+                        inputElement.value = inputElement.value.slice(0, -1)
+
+                    if (!event.isFunctionKey) {
+                        inputElement.value += event.keyValue
+                    }
+
+                    inputValue = inputElement.value
+
+                    inputElement.onkeydown(event, false)
+                    inputElement.oninput(event)
+
+                    this.scroll("smooth", false)
+                }
+            }
+
+        })
+
+    }
+
+    async acceptPrompt(msg, standardYes=true) {
+        const nope = () => {throw new IntendedError("Nope")}
+        let extraText = ` [${standardYes ? "Y/n" : "y/N"}] `
+        let text = await this.prompt(msg + extraText, {mobileLayout: [["y", "n"], ["<", "Enter"]]})
+
+        if (text == "" && standardYes) return true
+        if (text.toLowerCase().startsWith("y")) return true
+
+        nope()
+    }
+
+    async promptNum(msg=null, {min=null, max=null, integer=false}={}) {
+        min = min ?? -Infinity
+        max = max ?? Infinity
+        while (true) {
+            let inp = await this.prompt(msg)
+            if (isNaN(inp) || inp.length == 0) {
+                this.printError("You must supply a valid number")
+                continue
+            }
+            let num = parseFloat(inp)
+            if (min > num) {
+                this.printError(`The number must be larger/equal than ${min}`)
+            } else if (max < num) {
+                this.printError(`The number must be smaller/equal than ${max}`)
+            } else if (integer && !Number.isInteger(num)) {
+                this.printError(`The number must be an integer`)
+            } else {
+                return num
+            }
+        }
+    }
+
+    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined, addToCache=true}={}) {
+        if (this.outputChannel == OutputChannel.CACHE_AND_USER && addToCache) {
+            this.writeToOutputCache(text)
+        }
+
+        text ??= ""
+        let output = undefined
+        if (color === undefined && !forceElement && fontStyle === undefined && background === undefined) {
+            let textNode = document.createTextNode(text)
+            if (!this.inTestMode)
+                this.parentNode.appendChild(textNode)
+            output = textNode
+        } else {
+            let span = document.createElement(element)
+            span.textContent = text
+            if (color !== undefined) span.style.color = color.string.hex
+            if (fontStyle !== undefined) span.style.fontStyle = fontStyle
+            if (background !== undefined) {
+                span.style.backgroundColor = background.string.hex
+            }
+
+            if (!this.inTestMode) {
+                this.parentNode.appendChild(span)
+            }
+            output = span
+        }
+        return output
+    }
+
+    printItalic(text, color=undefined, opts) {
+        return this.printLine(text, color, {...opts, fontStyle: "italic"})
+    }
+
+    printImg(src, altText="") {
+        if (this.inTestMode)
+            return
+
+        let img = this.parentNode.appendChild(document.createElement("img"))
+        img.src = src
+        img.alt = altText
+        img.classList.add("terminal-img")
+        img.onload = this._styleImgElement.bind(this, img)
+        return img
+    }
+
+    _styleImgElement(img, invertSetting=false, {maxWidth=40, maxHeight=40}={}) {
+        img.style.aspectRatio = img.naturalWidth / img.naturalHeight
+        let changeCondition = img.clientHeight < img.clientWidth
+        if (invertSetting) changeCondition = !changeCondition
+        if (changeCondition) {
+            img.style.width = "auto"
+            let height = Math.min(img.naturalHeight, maxHeight)
+            img.style.height = `calc(var(--font-size) * ${height})`
+        } else {
+            img.style.height = "auto"
+            let width = Math.min(img.naturalWidth, maxWidth)
+            img.style.width = `calc(var(--font-size) * ${width})`
+        }
+    }
+
+    printTable(inRows, headerRow=null) {
+        let rows = inRows.map(r => r.map(c => (c == undefined) ? " " : c))
+        if (headerRow != null) rows.unshift(headerRow)
+        const column = i => rows.map(row => row[i])
+        const columnWidth = i => Math.max(...column(i)
+            .map(e => String((e == undefined) ? " " : e).length))
+        for (let rowIndex = 0; rowIndex <= rows.length; rowIndex++) {
+            if (rowIndex == 0
+                || (rowIndex == 1 && headerRow != null)
+                || (rowIndex == rows.length)) {
+                let line = ""
+                for (let columnIndex = 0; columnIndex < rows[0].length; columnIndex++) {
+                    let item = UtilityFunctions.stringMul("-", columnWidth(columnIndex))
+                    line += `+-${item}-`
+                }
+                line += "+"
+                this.printLine(line)
+            }
+            if (rowIndex == rows.length) break
+            let line = ""
+            for (let columnIndex = 0; columnIndex < rows[0].length; columnIndex++) {
+                let itemVal = rows[rowIndex][columnIndex]
+                if (itemVal == undefined) itemVal = " "
+                let padFunc = (rowIndex == 0 && headerRow != null) ? UtilityFunctions.stringPadMiddle : UtilityFunctions.stringPadBack
+                let item = padFunc(itemVal, columnWidth(columnIndex))
+                line += `| ${item} `
+            }
+            line += "|  "
+            this.printLine(line)
+        }
+    }
+
+    async animatePrint(text, interval=50, {newLine=true}={}) {
+        if (interval == 0) {
+            this.print(text)
+        } else {
+            for (let char of text) {
+                this.print(char)
+                await this.sleep(interval)
+            }
+        }
+        if (newLine) this.printLine()
+    }
+
+    printLine(text, color, opts) {
+        text ??= ""
+        return this.print(text + "\n", color, opts)
+    }
+
+    printError(text, name="Error") {
+        this.print(name, new Color(255, 0, 0))
+        this.printLine(": " + text)
+        this.log(text, {type: "error"})
+    }
+
+    printSuccess(text) {
+        this.printLine(text, new Color(0, 255, 0))
+    }
+
+    addLineBreak(n=1) {
+        for (let i = 0; i < n; i++)
+            this.printLine()
+    }
+
+    printCommand(commandText, command, color, endLine=true) {
+        let element = this.print(commandText, color, {forceElement: true})
+        element.onclick = this.makeInputFunc(command ?? commandText)
+        element.classList.add("clickable")
+        if (color) element.style.color = color.string.hex
+        if (endLine) this.addLineBreak()
+    }
+
+    printEasterEgg(eggName, {endLine=true}={}) {
+        if (!terminal.currInputElement)
+            terminal.printEasterEggRaw(eggName, endLine)
+        else {
+            terminal.removeCurrInput()
+            terminal.printEasterEggRaw(eggName, endLine)
+            terminal.standardInputPrompt()
+        }
+    }
+
+    printEasterEggRaw(eggName, endLine=true) {
+        let displayName = ` ${eggName} `
+        let element = this.print(displayName, undefined, {forceElement: true})
+        element.onclick = () => {
+            if (this.data.easterEggs.has(eggName)) {
+                alert("You have already found this one. Enter 'easter-eggs' to see all found ones.")
+            } else {
+                this.data.addEasterEgg(eggName)
+                alert("You found an easter egg! It's added to your basket. Enter 'easter-eggs' to see all found ones.")
+            }
+        }
+
+        // style egg
+        element.classList.add("easter-egg")
+
+        if (endLine) this.addLineBreak()
+    }
+
+    printLink(msg, url, color, endLine=true) {
+        let element = this.print(msg, color, {forceElement: true, element: "a"})
+        element.href = url
+        if (endLine) this.printLine()
+    }
+
+    async standardInputPrompt() {
+        let element = this.print(this.fileSystem.pathStr + " ", undefined, {forceElement: true, addToCache: false})
+        element.style.marginLeft = `-${this.charWidth * 3}px`
+        this.correctIndicator = this.print("$ ", Color.LIGHT_GREEN, {addToCache: false})
+        let text = await this.prompt("", {affectCorrectness: true})
+        await this.input(text)
+    }
+
+    async input(text, testMode=false) {
+        if (!testMode)
+            this.log(`Inputted Text: "${text}"`)
+
+        // clear interrupt signal
+        this._interruptCallbackQueue = []
+        this._interruptSignal = false
+
+        if (this.mobileKeyboard) {
+            this.mobileKeyboard.updateLayout(this.mobileKeyboard.Layout.CMD_RUNNING)
+        }
+
+        if (TerminalParser.isVariable(text)) {
+            let varName = TerminalParser.extractVariableName(text + "=")
+            if (this.variableCache[varName] == undefined) {
+                this.printError(`Variable '${varName}' is not defined\n`)
+            } else {
+                let varValue = this.variableCache[varName]
+                this.printLine(varValue)
+            }
+            this.standardInputPrompt()
+            return
+        }
+
+        let assignmentInfo = TerminalParser.extractAssignment(text)
+        if (assignmentInfo) {
+            this.variableCache[assignmentInfo.name] = ""
+            this.outputCacheVarName = assignmentInfo.name
+            text = assignmentInfo.value
+            this.outputChannel = OutputChannel.CACHE_AND_USER
+        } else {
+            this.outputChannel = OutputChannel.USER
+        }
+
+        let tokens = TerminalParser.tokenize(text)
+        if (tokens.length == 0) {
+            this.standardInputPrompt()
+            return
+        }
+
+        let [commandText, args] = TerminalParser.extractCommandAndArgs(tokens)
+        let rawArgs = text.slice(commandText.length)
+        if (this.commandExists(commandText)) {
+            let command = await this.getCommand(commandText)
+            return await command.run(tokens, rawArgs, {callFinishFunc: !testMode, terminalObj: this})
+        } else {
+            let cmdnotfound = await this.getCommand("cmdnotfound")
+            await cmdnotfound.run(["cmdnotfound", commandText, rawArgs], commandText, {
+                callFinishFunc: !testMode,
+                terminalObj: this,
+                processArgs: false
+            })
+            return false
+        }
+    }
+
+    get allCommands() {
+        return Object.fromEntries(Object.entries(this.commandData).map(([cmd, data]) => {
+            return [cmd, data["description"]]
+        }))
+    }
+
+    commandExists(commandName) {
+        return Object.keys(this.allCommands).includes(commandName)
+    }
+
+    addCommand(name, callback, info) {
+        this.commandCache[name] = new Command(name, callback, info)
+    }
+
+    get functions() {
+        return Object.entries(this.allCommands).map(d => {
+            return {name: d[0], description: d[1]}
+        })
+    }
+
+    get commandIsExecuting() {
+        return this.expectingFinishCommand
+    }
+
+    get visibleFunctions() {
+        return Object.entries(terminal.commandData)
+            .filter(([c, d]) => !d.isSecret)
+            .map(([c, d]) => {
+                d.name = c
+                return d
+            })
+    }
+
+    get currFolder() {
+        return this.fileSystem.currFolder
+    }
+
+    get lastPrintedChar() {
+        return this.parentNode.textContent[this.parentNode.textContent.length - 1]
+    }
+
+    get rootFolder() {
+        return this.fileSystem.root
+    }
+
+    get prevCommands() {
+        return this.data.history
+    }
+
+    get widthPx() {
+        let computedStyle = getComputedStyle(this.parentNode)
+        let elementWidth = this.parentNode.clientWidth
+        elementWidth -= parseFloat(computedStyle.paddingLeft) + parseFloat(computedStyle.paddingRight)
+        return elementWidth
+    }
+
+    get charWidth() {
+        let firstSpan = this.parentNode.querySelector("span")
+        let firstSpanWidth = firstSpan.getBoundingClientRect().width
+        let textWidth = firstSpan.textContent.length
+        return firstSpanWidth / textWidth
+    }
+
+    get approxWidthInChars() {
+        return Math.floor(this.widthPx / this.charWidth) - 5
+    }
+
+    async _loadScript(url, extraData={}, {
+        asyncMode=false
+    }={}) {
+        if (!asyncMode) {
+            this.setLoading(url)
+        }
+
+        // make a new iframe to load the script in
+        // to prevent the script from accessing the global scope
+        // instead, it will access the iframe's global scope
+        // in which i place the terminal object
+        
+        // this way, command scripts each have their own scope
+        // and cannot access each other's variables
+        // which is good because it prevents command scripts
+        // from interfering with each other (name conflicts, etc.)
+
+        let iframe = await new Promise(resolve => {
+            let iframeElement = document.createElement("iframe")
+            iframeElement.addEventListener("load", () => resolve(iframeElement))
+            iframeElement.style.display = "none"
+            document.body.appendChild(iframeElement)
+        })
+
+        // add variables to iframe namespace
+        let iframeDocument = iframe.contentDocument || iframe.contentWindow.document
+        iframe.contentWindow.terminal = this
+        for (let key in extraData)
+            iframe.contentWindow[key] = extraData[key]
+        for (let key in UtilityFunctions)
+            iframe.contentWindow[key] = UtilityFunctions[key]
+        iframe.contentWindow["sleep"] = this.sleep
+        iframe.contentWindow["audioContext"] = this.audioContext
+        iframe.contentWindow["loadIndex"] = loadIndex
+
+        await new Promise(resolve => {    
+            let script = document.createElement("script")
+            script.addEventListener("load", resolve)
+            script.src = `${this.baseUrl}${url}?${loadIndex}`
+            iframeDocument.body.appendChild(script)
+        })
+
+        this.log(`Loaded Script: ${url}`)
+
+        if (!asyncMode) {
+            this.unsetLoading()
+        }
+
+        return iframe.contentWindow
+    }
+
+    async loadCommand(name, {force=false}={}) {
+        if (this.commandCache[name] && !force)
+            return this.commandCache[name]
+        let commandWindow = await this._loadScript(`js/commands/${name}.js`)
+        this.commandCache[name].windowScope = commandWindow
+        for (let terminalInstance of Object.values(ALL_TERMINALS)) {
+            terminalInstance.commandCache[name] = this.commandCache[name]
+        }
+        return this.commandCache[name]
+    }
+
+    async getCommand(name) {
+        if (!this.commandExists(name))
+            throw new Error(`Command not found: ${name}`)
+        if (!this.commandCache[name]) {
+            return await this.loadCommand(name)
+        } else {
+            return this.commandCache[name]
+        }
+    }
+
+    async finishCommand({force=false}={}) {
+        if (this.outputChannel === OutputChannel.CACHE_AND_USER) {
+            this.outputChannel = OutputChannel.USER
+        }
+
+        if ((!this.expectingFinishCommand && !force) || this.currInputElement)
+            return
+        this.expectingFinishCommand = false
+        
+        if (this.lastPrintedChar !== "\n")
+            this.print("\n")
+        this.print("\n")
+
+        this._interruptCallbackQueue = []
+        this._interruptSignal = false
+        this.tempCommandInputHistory = []
+
+        this.fileSystem.save()
+
+        this.standardInputPrompt()
+    }
+
+    getCurrDate() {
+        return new Date().toLocaleDateString().replace(/\//g, "-")
+    }
+
+    getCurrTime() {
+        return new Date().toLocaleTimeString()
+    }
+
+    addToLogBuffer(msg, type, time, date, template) {
+        this.logBuffer.push({msg, type, time, date, template})
+    }
+
+    cleanLogBuffer() {
+        while (this.logBuffer.length > 0) {
+            let logData = this.logBuffer.shift()
+            this.log(logData.msg, logData)
+        }
+    }
+
+    log(msg, {type="info", time="auto", date="auto", timestamp="auto", template="[TYPE] [TIMESTAMP] MSG"}={}) {
+        if (!this.hasInitted) {
+            this.addToLogBuffer(msg, type, time, date, template)
+            return
+        }
+
+        if (time === "auto")
+            time = new Date().toLocaleTimeString()
+        if (date === "auto")
+            date = new Date().toLocaleDateString()
+        if (timestamp === "auto")
+            timestamp = Date.now() + ""
+        let logText = template
+            .replace("TIMESTAMP", timestamp)
+            .replace("TYPE", type)
+            .replace("TIME", time)
+            .replace("DATE", date)
+            .replace("MSG", msg)
+
+
+        let lines = terminal.logFile.content.split("\n")
+                    .filter(line => line.length > 0)
+        while (lines.length > terminal.logFileMaxLines - 1) {
+            lines.shift()
+        }
+        lines.push(logText)
+        terminal.logFile.content = lines.join("\n")
+    }
+
+    get logFile() {
+        if (this.fileExists(this.logFileName)) {
+            return this.getFile("root/" + this.logFileName)
+        } else {
+            let logFile = new TextFile("")
+                            .setName(this.logFileName)
+            this.rootFolder.addFile(logFile)
+            this.fileSystem.reloadSync()
+            return logFile
+        }
+    }
+
+    get logFileName() {
+        return "latest.log"
+    }
+
+    reset() {
+        this.data.resetAll()
+        localStorage.removeItem("terminal-filesystem")
+    }
+
+    makeInputFunc(text) {
+        return async () => {
+            if (this.expectingFinishCommand) {
+                this.interrupt()
+                await new Promise(resolve => setTimeout(resolve, 500))
+            }
+
+            if (this.currInputElement) {
+                this.removeCurrInput()
+            }
+
+            await this.animatePrint(text, 5)
+            this.data.addToHistory(text)
+            this.input(text)
+        }
+    }
+
+    async init({
+        runInput=true,
+        runStartupCommands=true,
+        loadSidePanel=true,
+        ignoreMobile=false
+    }={}) {
+        await this._loadScript(this.commandListURL)
+        await this.fileSystem.load()
+
+        if (this.isMobile && !ignoreMobile) {
+            await this._loadScript(this.mobileKeyboardURL)
+        }
+
+        if (this.isUrlParamSet("404")) {
+            let error404 = await this.getCommand("error404")
+            error404.run()
+        } else {
+            if (runStartupCommands) {
+                for (let startupCommand of this.data.startupCommands) {
+                    await this.input(startupCommand, true)
+                }
+            }
+
+            if (!ignoreMobile) {
+                if (this.isMobile) {
+                    this.print("Mobile keyboard active. ")
+                    this.printCommand("click to disable", "keyboard off")
+                } else if (this.autoIsMobile) {
+                    this.print("Mobile keyboard inactive. ")
+                    this.printCommand("click to enable", "keyboard on")
+                }
+            }
+
+            // TODO: make this into terminal.data option
+            if (loadSidePanel) {
+                this._loadScript(this.sidePanelURL, {}, {asyncMode: true})
+            }
+
+            this.expectingFinishCommand = true
+            if (runInput) {
+                this.finishCommand()
+            }
+        }
+
+        this.hasInitted = true
+        this.cleanLogBuffer()
+    }
+
+    async initFrom(otherTerminal) {
+        this.commandData = otherTerminal.commandData
+        this.fileSystem.loadJSON(otherTerminal.fileSystem.toJSON()) 
+        this.commandCache = otherTerminal.commandCache
+        this.startTime = otherTerminal.startTime 
+        this.hasInitted = true
+        this.cleanLogBuffer()
+    }
+
+    get autoIsMobile() {
+        return /Mobi/i.test(window.navigator.userAgent)
+    }
+
+    get isMobile() {
+        if (terminal.data.mobile === true)
+            return true
+        if (terminal.data.mobile === false)
+            return false
+        return this.autoIsMobile
+    }
+
+    async clear(addPrompt=false) {
+        let newPromptValue = ""
+        if (this.currInputElement)
+            newPromptValue = this.currInputElement.value
+
+        this.removeCurrInput()
+        this.parentNode.innerHTML = ""
+
+        if (addPrompt) {
+            this.standardInputPrompt()
+            this.currInputElement.value = newPromptValue
+        }
+    }
+
+    currFontSizeIndex = 8
+
+    changeTextSize(increment) {
+        const options = [3, 5, 7.5, 10, 12.5, 14, 15, 16, 17, 18, 19, 20, 22, 25, 30, 35, 40, 45, 50, 60, 80, 100]
+        this.currFontSizeIndex = (this.currFontSizeIndex + increment) % options.length
+        while (this.currFontSizeIndex < 0) this.currFontSizeIndex += options.length
+        this.parentNode.style.setProperty("--font-size", `${options[this.currFontSizeIndex]}px`)
+    }
+
+    enlargeText() {
+        this.changeTextSize(1)
+    }
+
+    shrinkText() {
+        this.changeTextSize(-1)
+    }
+
+    _onkeydownShortcut(event) {
+        let key = event.key
+
+        let shortcut = this.keyboardShortcuts.find(shortcut => {
+            if (shortcut.key.toLowerCase() != key.toLowerCase())
+                return false
+            if (shortcut.ctrl !== undefined && shortcut.ctrl !== event.ctrlKey)
+                return false
+            if (shortcut.alt !== undefined && shortcut.alt !== event.altKey)
+                return false
+            if (shortcut.shift !== undefined && shortcut.shift !== event.shiftKey)
+                return false
+            return true
+        })
+
+        if (shortcut) {
+            event.preventDefault()
+            shortcut.run(event)
+        }
+    }
+
+    static makeRandomId(length) {
+        let result = ""
+        let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        for (let i = 0; i < length; i++) {
+            result += characters.charAt(Math.floor(Math.random() * characters.length))
+        }
+        return result
+    }
+
+    constructor(terminalName="none", {
+        parentNode=undefined,
+        baseUrl=undefined,
+        guiMode=false
+    }={}) {
+        if (parentNode) {
+            this.parentNode = parentNode
+        }
+
+        this.guiMode = guiMode
+        this.baseUrl = baseUrl || ""
+
+        this.startTime = Date.now()
+
+        this.name = terminalName
+
+        this.sessionId = `${this.getCurrDate()}-${this.getCurrTime()}`
+        this.hasInitted = false
+        this.logBuffer = []
+        this.logFileMaxLines = 100
+        
+        addEventListener("keydown", this._onkeydownShortcut.bind(this))
+
+        // when the user clicks on the terminal, focus the input element
+        this.parentNode.addEventListener("click", () => {
+            function getSelectedText() {
+                let text = ""
+                if (typeof window.getSelection != "undefined") {
+                    text = window.getSelection().toString()
+                } else if (typeof document.selection != "undefined" && document.selection.type == "Text") {
+                    text = document.selection.createRange().text
+                }
+                return text
+            }
+
+            // if the user has selected text, don't focus the input element
+            if (this.currInputElement && !getSelectedText())
+                this.focusInput()
+        })
+
+        // save the keys pressed by the user
+        // so that they can be used in the keydown event listener
+        // to detect key combinations
+        this.pressed = {}
+
+        document.addEventListener("keydown", event => {
+            this.pressed[event.key] = true
+        })
+
+        document.addEventListener("keyup", event => {
+            this.pressed[event.key] = false
+        })
+
+        this.body = document.body
+        this.document = document
+        this.window = window
+
+        this._interruptSignal = false
+        this._interruptCallbackQueue = []
+
+        ALL_TERMINALS[terminalName] = this
+
+        if (terminalName === "main") {
+            this.log("new terminal initialized", {type: "startup"})
+            this.log(`> hostname: ${this.window.location.href}`, {type: "startup"})
+            this.log(`> timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`, {type: "startup"})
+        }
+    }
+
+}
+
+// ------------------- js/load_async.js --------------------
+const loadIndex = localStorage.getItem("loadIndex") || 0
+
+let terminal = undefined
+
+async function initalLoadScripts() {
+    const loadFile = async (file) => {
+        const script = document.createElement("script")
+        script.src = `${file}?${loadIndex}`
+        document.body.appendChild(script)
+        await new Promise(resolve => script.onload = resolve)
+    }
+
+    await loadFile("js/terminal.js")
+
+    terminal = new Terminal("main")
+    terminal.clear()
+    terminal.init()
+
+    // add shortcuts
+    terminal.addKeyboardShortcut(new KeyboardShortcut(
+        "L", async () => {
+            // wait for any pending commands to be interrupted
+            // sleep to allow the interrupt to finish and print
+            terminal.interrupt()
+            await new Promise(resolve => setTimeout(resolve, 100))
+
+            terminal.clear(true)
+        },
+        {ctrl: true, shift: undefined}
+    ))
+
+    terminal.addKeyboardShortcut(new KeyboardShortcut(
+        "E", async () => {
+            const eggName = "Shortcut Egg"
+            terminal.printEasterEgg(eggName)
+        },
+        {ctrl: true, shift: true, alt: true}
+    ))
+
+    terminal.addKeyboardShortcut(new KeyboardShortcut(
+        "+", async () => {
+            terminal.enlargeText() 
+        },
+        {ctrl: true, shift: undefined}
+    ))
+
+    terminal.addKeyboardShortcut(new KeyboardShortcut(
+        "-", async () => {
+            terminal.shrinkText()
+        },
+        {ctrl: true, shift: undefined}
+    ))
+
+    // count page visits
+    window.addEventListener("load", () => setTimeout(() => fetch("api/count_visit.php"), 0))
+}
+
+initalLoadScripts()
+
+document.querySelector("#loading-terminal-container").style.display = "block"
+
+setTimeout(() => {
+    if (window.terminal && window.terminal.hasInitted) {
+        return
+    }
+
+    let loadingContainer = document.querySelector("#loading-terminal-container")
+
+    if (loadingContainer) {
+        loadingContainer.style.display = "none"
+        document.querySelector("#loading-terminal-failed-container").style.display = "block"
+    }
+
+}, 5000)
+
+// ------------------- js/defaultFilesystem.js --------------------
+const about_txt_content = `<noel-friedrich>
+
+    \\O_   This is me, Noel Friedrich.
+ ,/\\/     I am a student still learning.
+   /      I also really love rainy weather.
+   \\      And command line interfaces.
+   \`      (because i like to feel cool)
+
+</noel-friedrich>`
+
+const projects_readme_content = `Welcome to my projects Page!
+
+In this folder, there are some projects of mine. Most of
+them are websites. You can open a project using the 'run'
+command or by simply executing the .url file inside the 
+projects directory: './<project_name>.url'
+
+I also have a Github. You can open it by executing the
+'github.url' file inside this directory.
+`
+
+const perilious_path_txt = `Perilious Path is a simple html game.
+You are shown a grid of bombs for 3 seconds,
+then you must find a path between two points,
+without hitting a bomb.
+
+The game trains your memory skills and is also
+available to play on mobile devices!`
+
+const teleasy_txt = `Creating Telegram Bots Made Simple with Teleasy!
+It's a python library that makes it easy to create
+Telegram bots. It enables asynchronous handling of
+updates and provides a simple interface to create
+commands and queries.`
+
+const anticookiebox_txt = `This browser extension will delete an 'accept cookie'
+section of a page, by simply removing it from your screen
+This plugin behaves similar to an ad blocker, but for 'Accept Cookies' Boxes. The plugin will
+automatically scan the pages you load and remove the boxes, without accepting any Cookie use!
+
+How does it work?
+Behind the scenes, Lucy is your internet-immune system. She's a detective and
+just really good at finding 'Accept Cookies' popups. She loves eating them :)
+
+Just keep surfing the web as usual, but without wasting precious time clicking away
+useless cookie boxes and giving random web-services access to your personal data.
+
+Get Lucy to be part of your next Web-Journey by installing AntiCookieBox!`
+
+const coville_txt = `Coville is a City-Simulator that allows you to simulate
+a virtual city (coville) and a virtual virus (covid).
+
+It's also my submission to the german 'Jugend Forscht' competetion.
+
+(the website is in german)`
+
+const compli_txt = `Compli, An Android to remind people to give compliments.
+
+The App contains a timer telling you how long it's been since you've given
+someone a compliment. If you give a compliment to someone, you can reset this
+timer. Once this timer reaches a configurable threshold, you get a reminding
+notification to compliment someone.
+
+Download the App on the Google Play Store!`
+
+const contact_txt = `E-Mail: noel.friedrich@outlook.de`
+
+let passwords_json = `{
+    "google.com": "FAKE_PASSWORD",
+    "github.com": "FAKE_PASSWORD",
+    "die-quote.de": "FAKE_PASSWORD",
+    "instagram.com": "FAKE_PASSWORD",
+    "facebook.com": "FAKE_PASSWORD",
+    "steam": "FAKE_PASSWORD"
+}`
+
+while (passwords_json.match(/FAKE_PASSWORD/)) {
+    passwords_json = passwords_json.replace(/FAKE_PASSWORD/, function() {
+        let chars = "zyxwvutsrqponmlkjihgfedcbaABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?@+-#"
+        let tempPw = ""
+        let len = Math.random() * 8 + 8
+        for (let i = 0; i < len; i++) {
+            tempPw += chars[Math.floor(Math.random() * chars.length)]
+        }
+        return tempPw
+    }())
+}
+
+const MELODIES_FOLDER = new Directory({}, {"<": "cd ..", "melody": "melody"})
+
+const melodies_readme_txt = `Welcome to the Melodies Folder!
+In this folder are some .melody files, which contain basic melodys.
+- to list all melody files, use 'ls'
+- to play a file, use 'play <filename>'
+- to make your own melody, use 'melody'
+- to download a melody as a .mp3, use 'exportmelody <filename>'`
+
+MELODIES_FOLDER.content["README.txt"] = new TextFile(melodies_readme_txt)
+
+terminal.fileSystem.root = new Directory({
+    "about.txt": new TextFile(about_txt_content),
+    "projects": new Directory({
+        "README.txt": new TextFile(projects_readme_content),
+        "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
+        "perilious-path": new Directory({
+            "about.txt": new TextFile(perilious_path_txt),
+            "perilious-path.url": new ExecutableFile("https://noel-friedrich.de/perilious-path")
+        }, {"<": "cd ..", "open": "run perilious-path.url"}),
+        "anticookiebox": new Directory({
+            "about.txt": new TextFile(anticookiebox_txt),
+            "anticookiebox-github.url": new ExecutableFile("https://github.com/noel-friedrich/AntiCookieBox"),
+            "anticookiebox.url": new ExecutableFile("https://noel-friedrich.de/anticookiebox")
+        }, {"<": "cd ..", "install": "run anticookiebox.url", "github": "run anticookiebox-github.url"}),
+        "coville": new Directory({
+            "about.txt": new TextFile(coville_txt),
+            "coville-github.url": new ExecutableFile("https://github.com/noel-friedrich/coville"),
+            "coville.url": new ExecutableFile("https://noel-friedrich.de/coville")
+        }, {"<": "cd ..", "open": "run coville.url", "github": "run coville-github.url"}),
+        "teleasy": new Directory({
+            "about.txt": new TextFile(teleasy_txt),
+            "teleasy-github.url": new ExecutableFile("https://github.com/noel-friedrich/teleasy")
+        }, {"<": "cd ..", "github": "run teleasy-github.url"}),
+        "compli": new Directory({
+            "about.txt": new TextFile(compli_txt),
+            "compli.url": new ExecutableFile("https://github.com/noel-friedrich/compli")
+        }, {"<": "cd ..", "open": "run compli.url"}),
+    }, {
+        "<": "cd ..",
+        "ppath": ["cd perilious-path", "cat about.txt"],
+        "coville": ["cd coville", "cat about.txt"],
+        "acb": ["cd anticookiebox", "cat about.txt"],
+        "teleasy": ["cd teleasy", "cat about.txt"],
+        "compli": ["cd compli", "cat about.txt"]
+    }),
+    "noel": new Directory({
+        "secret": new Directory({
+            "passwords.json": new TextFile(passwords_json)
+        }, {"<": "cd ..", "passwords": "cat passwords.json"}),
+        "email.txt": new TextFile(contact_txt),
+        "melodies": MELODIES_FOLDER
+    }, {"<": "cd ..", "secret": "cd secret/", "contact": "cat contact.txt", "melodies": ["cd melodies/", "cat README.txt"]}),
+    "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
+    "blog.url": new ExecutableFile("https://noel-friedrich.de/blobber")
+}, {"projects": ["cd projects/", "cat README.txt"], "about me": "cat about.txt", "help": "help", "my blog": "run blog.url"})
+
+// ------------------- js/load-commands.js --------------------
+terminal.commandData = {"2048": {"description": "play a game of 2048", "isGame": true}, "4inarow": {"description": "play a game of Connect Four against the computer", "args": {"?depth:i:1~100": "The depth of the search tree"}, "standardVals": {"depth": 4}, "isGame": true}, "alias": {"description": "create a new alias for a given function", "args": {"?alias:s": "name of the new alias", "?*command:s": "name of the command to be aliased", "?s=show:b": "show all aliases", "?r=remove:s": "remove a given alias"}}, "ant-opt": {"description": "interactive solution to the travelling salesman problem using ant colony optimization", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "asteroids": {"description": "simulate a bunch of balls jumping around", "args": {"?f=fullscreen:b": "start in fullscreen mode", "?c=chaos:b": "start with chaos mode enabled"}, "isGame": true}, "avoida": {"description": "play a game of avoida", "isGame": true}, "background": {"description": "change the background color of the terminal", "args": ["color"]}, "base64": {"description": "encode/decode a message using base64", "args": {"*message": "the message to encode/decode", "?d=decode:b": "decode the message instead of encoding it", "?c=copy:b": "copy the result to the clipboard"}}, "bc": {"description": "start a bc (basic calculator) session"}, "bezier": {"description": "play with bezier curves"}, "bin": {"description": "convert a number to another base", "args": {"n": "number to convert", "?t=to-base:i:2~36": "base to convert to", "?f=from-base:i:2~36": "base to convert from"}, "standardVals": {"t": 2, "f": 10}}, "binomcdf": {"description": "calculate the binomial cumulative distribution function", "args": {"n:n:1~1000": "the number of trials", "p:n:0~1": "the probability of success", "lower:n:0~1000": "the lower bound", "upper:n:0~1000": "the upper bound"}}, "binompdf": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "p:n:0~1": "the probability of success", "k:n:0~100": "the number of successes"}}, "blocks": {"description": "3d raycasting test", "args": {"?fov:i:1~720": "Field of view in degrees", "?res=resolution:i:1~1000": "Resolution (width) in Pixels", "?x=roomX:i:5~100": "Room size in x direction", "?y=roomY:i:5~100": "Room size in y direction", "?z=roomZ:i:5~100": "Room size in z direction", "?v=viewDistance:i:1~9999": "View distance in blocks"}, "defaultValues": {"fov": 90, "resolution": 90, "roomX": 30, "roomY": 10, "roomZ": 10, "viewDistance": 13}}, "brainfuck": {"description": "parse given brainfuck code", "args": ["*code"]}, "cal": {"description": "print a calendar", "args": {"?month": "the month to print", "?year": "the year to print"}}, "cardoid": {"description": "start a cardoid generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cat": {"description": "print file content", "args": {"file:f": "file to display the content of"}}, "cd": {"helpVisible": true, "args": {"directory": "the directory relative to your current path"}, "description": "change current directory"}, "ceasar": {"description": "shift the letters of a text", "args": {"text": "the text to shift", "?s=shift:i:-26~26": "the shift value"}, "standardVals": {"shift": 1}}, "cheese": {"description": "take a foto with your webcam"}, "chess": {"description": "play a game of chess against the computer", "isGame": true}, "clear": {"description": "clear the terminal"}, "clock": {"description": "display a clock", "args": {"?m=millis:b": "display milliseconds"}}, "cmatrix": {"description": "show the matrix", "args": {"?nf=not-fullscreen:b": "make the window fullscreen"}}, "cmdnotfound": {"description": "display that a command was not found", "rawArgMode": true, "isSecret": true}, "code": {"description": "show the source code of a command", "args": {"command:c": "the command to show the source code of"}}, "collatz": {"description": "Calculate the Collatz Sequence (3x+1) for a given Number", "args": {"n:i": "the starting number of the sequence", "?m=max:i": "max number of steps to print"}, "standardVals": {"m": 999999999999}}, "color-test": {"description": "test the color capabilities of the terminal", "args": {"?size:i:1~999": "the size of the test image"}, "defaultValues": {"size": 60}}, "compliment": {"description": "get info about yourself"}, "contact": {"description": "Open contact form"}, "copy": {"description": "copy the file content to the clipboard", "rawArgMode": true}, "coville": {"description": "interactive virus simulation (in german)", "isSecret": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cowsay": {"description": "let the cow say something", "args": ["*message"]}, "cowthink": {"description": "let the cow say something", "args": ["*thought"]}, "cp": {"description": "copy a file", "args": ["file", "directory"]}, "crossp": {"description": "calculate the cross product of 2 3d vectors", "args": {"x1:n": "the x component of the first vector", "y1:n": "the y component of the first vector", "z1:n": "the z component of the first vector", "x2:n": "the x component of the second vector", "y2:n": "the y component of the second vector", "z2:n": "the z component of the second vector"}}, "curl": {"description": "download a file from the internet", "args": {"url:s": "the url to download the file from"}, "disableEqualsArgNotation": true}, "cw": {"description": "get the calendar week of a date", "args": {"?date": "the date to get the calendar week of"}, "standardVals": {"date": null}}, "debug": {"description": "activate the debug mode to enable untested new features", "isSecret": true}, "donut": {"description": "display a spinning donut"}, "download": {"description": "download a file", "args": {"file": "the file to download"}}, "draw": {"description": "start simple drawing app"}, "du": {"description": "display storage of current directory", "args": {"?folder": "folder to display storage of"}}, "easter-eggs": {"description": "open easter egg hunt", "args": {"?reset:b": "reset easter egg hunt"}}, "echo": {"description": "print a line of text", "rawArgMode": true}, "edit": {"description": "edit a file of the current directory", "args": {"?file": "the file to open"}}, "enigma": {"description": "Simulate an Enigma machine", "args": {"?c=config:b": "Enables config mode", "?t=translate:b": "Enables translation mode", "?r=reset:b": "Resets the machine", "?s=show:b": "Shows the current settings"}}, "error404": {"description": "Display a 404 error", "rawArgMode": true}, "eval": {"description": "evaluate javascript code", "rawArgMode": true}, "exit": {"description": "exit the terminal"}, "f": {"description": "calculate friendship score with a friend", "args": ["*friend"]}, "factor": {"description": "print the prime factors of a number", "args": {"?n:n": "number to factorize"}, "standardVals": {"n": null}}, "fakechat": {"description": "fake a whatsapp chat conversation", "args": {"?f=fast:b": "skip typing animations [fast mode]", "?o=offset:n:-100~100": "offset the chat by a procentage of the screen height", "?s=scale:n:0.1~5": "scale the chat by a factor", "?x=width:n:100~10000": "set the width of the screen in pixels", "?y=height:n:100~10000": "set the height of the screen in pixels"}, "standardVals": {"o": 0, "s": 1, "x": 720, "y": 1560}}, "fibo": {"description": "Prints the Fibonacci sequence", "args": {"?n:i:1~100": "The number of elements to print", "?p=phi:b": "calculate the golden ratio using the last two elements"}, "defaultValues": {"n": 10}}, "fizzbuzz": {"description": "print the fizzbuzz sequence", "args": {"?max:n:1~100000": "the maximum number to print"}, "standardVals": {"max": 15}}, "flaci-to-turing": {"description": "Converts a flaci.com JSON File of a turing machine to a turing machine file", "args": {"file": "file to convert", "?s=save:b": "save the converted file"}, "isSecret": true}, "flappy": {"description": "play a game of flappy turtlo", "args": {"?f=fullscreen:b": "fullscreen", "?s=silent:b": "silent mode"}, "isGame": true}, "font": {"description": "change the font of the terminal", "args": ["*font"]}, "foreground": {"description": "change the foreground color of the terminal", "args": {"color": "the color to change the foreground to"}}, "fraction": {"description": "find a fraction from a decimal number", "args": {"n=number:n": "number (decimal)", "?d=max-denominator:i:1~999999999": "maximum denominator"}, "defaultValues": {"d": 1000}}, "games": {"description": "shows the game menu"}, "get": {"description": "get a value from the server", "args": {"key": "the key to get the value of"}, "disableEqualsArgNotation": true}, "greed": {"description": "play a game of greed", "isGame": true, "args": {"?b": "play the bigger version"}}, "grep": {"description": "search for a pattern in a file", "args": {"pattern": "the pattern to search for", "file": "the file to search in", "?r:b": "search recursively", "?i:b": "ignore case", "?v:b": "invert match", "?x:b": "match whole lines"}}, "hangman": {"description": "play a game of hangman", "isGame": true}, "head": {"description": "display the first lines of a file", "args": ["file", "?l:i:1~1000"], "standardVals": {"l": 10}}, "helloworld": {"description": "display the hello-world text", "rawArgMode": true}, "help": {"description": "shows this help menu"}, "hi": {"description": "say hello to the terminal"}, "highscore-admin": {"description": "Login as Admin", "isSecret": true, "args": {"?d": "Delete password from local storage"}}, "highscore-remove": {"description": "Remove a highscore", "isSecret": true, "args": {"game": "the game to remove the highscore from", "?n": "only show highscores with this name", "?l:n:1~10000": "limit the number of highscores to show", "?uid": "the uid of the highscore to remove"}, "standardVals": {"n": null, "l": Infinity}}, "highscores": {"description": "Show global highscores for a game", "args": {"game:s": "the game to show the highscores for", "?n:s": "only show highscores with this name", "?l:i:1~10000": "limit the number of highscores to show", "?show-all:b": "show all highscores, not just the top ones"}, "standardVals": {"n": null, "l": 10}}, "history": {"description": "print the command history", "args": {"?l=limit:n:1~100000": "the maximum number of commands to print", "?show-full:b": "show the full command instead of the shortened version"}, "standardVals": {"l": 1000}}, "hr-draw": {"description": "turn drawings into bitmaps", "args": {"?x=width:i:1~100": "width (pixels)", "?y=height:i:1~100": "height (pixels)"}, "defaultValues": {"width": 5, "height": 5}, "isSecret": true}, "hr": {"description": "create a hr code", "args": {"message:s": "the message to encode", "?f=fontmode:s": "the font mode to use", "?fill:b": "fill empty spaces with random data"}, "defaultValues": {"fontmode": "5x5"}}, "href": {"description": "open a link in another tab", "args": {"?u=url:s": "url to open", "?f=file:s": "file to open"}}, "image-crop": {"description": "start image cropper program"}, "img2ascii": {"description": "Convert an image to ASCII art", "args": {"?w=width:i:1~500": "the width of the output image in characters"}, "defaultValues": {"width": 60}}, "isprime": {"description": "Check if a number is prime", "args": {"n:i": "The number to check"}}, "joke": {"description": "tell a joke"}, "kaprekar": {"description": "display the kaprekar steps of a number", "args": {"n:n:1~999999999": "the number to display the kaprekar steps of"}}, "keyboard": {"description": "Toggle mobile mode", "args": {"?m=mode:s": "status | on | off | auto"}, "defaultValues": {"m": "status"}}, "kill": {"description": "kill a process", "args": {"process": "the process to kill"}}, "labyrinth": {"description": "play a game of labyrinth", "isGame": true, "args": {"?fps:n:1~60": "the frames per second of the game"}, "standardVals": {"fps": 30}}, "letters": {"description": "prints the given text in ascii art", "args": {"*text": "the text to print"}, "example": "letters hello world"}, "live-quiz": {"description": "a simple quiz game that uses your camera as input for your answer", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "live-rocket": {"description": "a simple avoid game that you steer using camera input", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "logistic-map": {"description": "draw the logistic map", "args": {"?min:n:-2~4": "minimum R value", "?max:n:-2~4": "maximum R value", "?w:n:10~200": "width of display", "?h:n:5~100": "height of display"}, "standardVals": {"min": 0, "max": 4, "w": 80, "h": 20}}, "longjump": {"description": "Play a game of longjump", "isGame": true, "args": {"?f=fullscreen:b": "Play in fullscreen"}}, "lorem": {"description": "generate lorem ipsum text", "args": {"?l=length:i": "number of words to generate", "?c=copy:b": "copy to clipboard"}, "defaultValues": {"l": 100}}, "ls": {"helpVisible": true, "description": "list all files of current directory", "args": {"?folder:f": "folder to list", "?r:b": "list recursively"}, "standardVals": {"folder": ""}}, "lscmds": {"description": "list all available commands", "helpVisible": true, "args": {"?m:b": "format output as markdown table"}}, "lscpu": {"description": "get some helpful info about your cpu"}, "lunar-lander": {"description": "play a classic game of moon-lander", "args": {"?particles:n:1~1000": "number of particles to generate", "?f=fullscreen:b": "enable fullscreen application"}, "standardVals": {"particles": 10}, "isGame": true}, "man": {"description": "show the manual page for a command", "args": {"command:c": "the command to show the manual page for"}, "helpVisible": true}, "mandelbrot": {"description": "draws the mandelbrot set", "args": {"?x:i:10~1000": "width of the plot", "?y:i:10~1000": "height of the plot"}}, "matdet": {"description": "find the determinant of a matrix", "args": {"?A:sm": "square matrix"}}, "matinv": {"description": "find the inverse of a matrix", "args": {"?A:sm": "matrix to invert"}}, "matmin": {"description": "find the matrix of minors of a given matrix", "args": {"?A:sm": "matrix to find minors of"}}, "matmul": {"description": "multiply two matrices with each other", "args": {"?A:m": "matrix A", "?B:m": "matrix B"}}, "matred": {"description": "reduce a given matrix to reduced row echelon form", "args": {"?A:m": "matrix to reduce"}}, "mill2player": {"description": "play a game of mill with a friend locally", "isGame": true}, "minesweeper": {"description": "play a game of minesweeper", "args": {"?x=width:i:5~100": "width of the board", "?y=height:i:5~100": "height of the board", "?b=bombs:i:10~90": "percentage of bombs"}, "defaultValues": {"width": 10, "height": 10, "bombs": 20}, "isGame": true}, "minigolf": {"description": "play a game of minigolf", "args": {"?l=level:i": "open a specific level", "?e=edit:b": "open map editor", "?f=file:s": "open a specific file", "?fullscreen:b": "activate fullscreen mode"}, "defaultValues": {"level": 1}, "isGame": true}, "mkdir": {"description": "create a new directory", "args": ["directory_name"]}, "morse": {"description": "translate latin to morse or morse to latin", "args": {"*text": "text to translate"}}, "mv": {"description": "move a file", "args": ["file", "directory"]}, "name-gen": {"description": "start a name generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "name": {"description": "set a default name for the highscore system to use", "args": {"method": "set | get | reset", "?newname": "the new name"}}, "ncr": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "k:n:0~100": "the number of successes"}}, "neural-car": {"description": "start a neural car simulation", "args": {"?cars:i:1~9999": "number of cars to simulate", "?edit:b": "activate the wall editor"}, "defaultValues": {"cars": 100}}, "neural-rocket": {"description": "trains neural networks to fly rockets", "args": {"?population:i:10~99999": "number of rockets in the population"}, "defaultValues": {"population": 100}, "isSecret": true}, "nsolve": {"description": "solve an equation using the newton-raphson method", "args": {"*e=equation:s": "the equation to solve", "?s=startn:n": "Starting number", "?i=iterations:i:1~999999": "number of iterations to perform", "?l=list:b": "list all intermediate values"}, "defaultValues": {"startn": 0.71, "iterations": 1000}}, "number-guess": {"description": "guess a random number", "isGame": true}, "particle": {"description": "start a particle simulation", "args": {"?n:i:1000~10000000": "number of particles"}, "standardVals": {"n": 100000}, "isSecret": true}, "pascal": {"description": "print a pascal triangle", "args": {"?depth:n:1~100": "the depth of the triangle", "?f:b": "only show the final row"}, "standardVals": {"depth": 10}}, "password": {"description": "Generate a random password", "args": {"?l=length:i:1~9999": "The length of the password", "?c=chars:s": "The characters to use in the password", "?norepeat:b": "If present, the password will not repeat characters", "?nocopy:b": "Do not copy the password to the clipboard", "?d=diverse:b": "Use at least one special character, number, and uppercase letter"}, "standardVals": {"l": 20, "c": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&!?.,;:[]{}()_-+=*"}}, "pendulum": {"description": "start a pendulum wave simulation", "args": {"?n:i:1~10000": "number of pendulums", "?o:n:0~1": "offset of pendulums", "?f=fullscreen:b": "start in fullscreen mode"}, "standardVals": {"n": 20, "o": 0.025}}, "perilious-path": {"description": "play perilous path", "isGame": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "physics": {"description": "start a physics simulation", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "pi": {"description": "calculate pi to the n-th digit", "args": {"?n:i:1~10000": "the number of digits"}, "standardVals": {"n": 100}}, "piano": {"description": "play a piano with your keyboard"}, "plane": {"description": "play the plane game", "args": {"?f=fullscreen:b": "open in fullscreen mode"}, "isGame": true}, "plot": {"description": "plot a mathematical function within bounds", "args": {"equation": "the equation to plot", "?xmin:n:-1000~1000": "the minimum x value", "?xmax:n:-1000~1000": "the maximum x value", "?ymin:n:-1000~1000": "the minimum y value", "?ymax:n:-1000~1000": "the maximum y value", "?playtime:i:0~10000": "the time to play the sound for in milliseconds"}, "standardVals": {"xmin": -3, "xmax": 3.1, "ymin": -3, "ymax": 3.1, "playtime": 2500}}, "plotter": {"description": "plot mathematical functions", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "polyrythm": {"description": "creates a polyrythm", "args": {"*numbers": "numbers (e.g. \"3 4 5\")", "?t=time:n:10~99999": "time in miliseconds for full rotation", "?b=beepMs:n": "time in miliseconds that they beep for"}, "defaultValues": {"time": 4000, "beepMs": 150}}, "pong": {"description": "play a game of pong against the computer", "isGame": true}, "primes": {"description": "generate mersenne primes"}, "pull": {"description": "pull a file from the server", "args": {"file": "file to pull"}}, "push": {"description": "push a file to the server", "args": {"file": "file to push"}}, "pv": {"description": "print a message with a typing animation", "args": ["*message"]}, "pwd": {"description": "print the current working directory"}, "python": {"description": "run a script or open a python shell", "args": {"?f=file:s": "the script to run", "?c=code:s": "the code to run"}, "disableEqualsArgNotation": true}, "qr": {"description": "generate a qr code", "args": {"*text": "the text to encode"}}, "rate": {"description": "rate a programming language", "args": ["language"]}, "raycasting": {"description": "play with raycasting", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "reboot": {"description": "reboot the website"}, "reload": {"description": "Reloads the terminal"}, "rename": {"description": "rename a file or folder", "args": {"file": "the file or folder to rename", "name": "the new name of the file or folder"}}, "reset": {"description": "reset the terminal", "args": {"?n=now:b": "reset now"}}, "reverse": {"description": "reverse a message", "args": {"*message": "the message to reverse", "?c": "copy the reversed message to the clipboard"}}, "rm": {"description": "remove a file", "args": ["*file"]}, "rmdir": {"description": "remove a directory", "args": ["directory"]}, "rndm": {"description": "generate a random number based on the current time", "args": {"?min:n:0~100000": "minimum value (inclusive)", "?max:n:0~100000": "maximum value (inclusive)", "?t=time:b": "use a time based random number generator", "?f=float:b": "generate a float instead of an integer"}, "standardVals": {"min": 1, "max": 100}}, "sc": {"description": "manage the startup commands", "args": {"?mode": "'add', 'remove', 'reset' or 'list'", "?command": "the command to add or remove (or index)"}, "defaultValues": {"mode": "list"}}, "scarpet": {"description": "draws the Sierpinski carpet using the chaos game", "args": {"?s=speed:i:1~99999": "the speed of dots placed. The higher the faster.", "?size:i:10~1000": "size of output canvas in characters"}, "defaultValues": {"speed": 30, "size": 50}}, "search": {"description": "search something via google.com", "args": {"*query": "the search query", "?b=baseUrl": "the base search-engine url"}, "standardVals": {"b": "https://www.google.com/search?q="}}, "set": {"description": "set a value on the server", "args": {"key": "the key to set the value of", "value": "the value to set"}, "disableEqualsArgNotation": true}, "sha256": {"description": "calculate the SHA-256 hash of a message", "args": {"?s": "a string to hash", "?f": "a file to hash"}, "standardVals": {"s": null, "f": null}}, "shoot": {"description": "Play a game of Shoot against another player locally", "isGame": true, "args": {"?l=lives:i:1~100": "The number of lives each player has", "?s=shoot-delay:i:0~1000": "The number of frames between each shot"}, "defaultValues": {"l": 3, "s": 20}}, "shutdown": {"description": "shutdown the terminal"}, "sl": {"description": "Steam Locomotive", "args": {"?f=F:b": "Make it fly"}}, "sleep": {"description": "sleep for a number of seconds", "args": ["seconds:n:0~1000000"]}, "slime": {"description": "Start a slime simulation"}, "snake": {"description": "play a game of snake", "args": {"?s:n:1~10": "speed level of snake moving"}, "standardVals": {"s": 2}, "isGame": true}, "sodoku": {"description": "Solve or generate a sodoku puzzle", "args": {"?mode:s": "the mode to run in (play, solve)", "?fen:s": "a FEN string to load", "?give-fen:b": "output the FEN string for the inputted puzzle"}, "isGame": true}, "solve": {"description": "solve a mathematical equation for x", "args": {"*equation": "the equation to solve", "?i:n:1~5": "the number of iteration-steps to perform", "?m:n:1~100000": "the maximum number of total iterations to perform", "?l:n": "the lower bound of the search interval", "?u:n": "the upper bound of the search interval"}, "standardVals": {"i": 4, "m": 100000, "l": -100, "u": 100}, "disableEqualsArgNotation": true}, "sorting": {"description": "display a sorting algorithm", "args": {"?algorithm": "the algorithm to display", "?n:i:10~1000": "the number of elements to sort", "?speed:n:0~100": "the speed of the sorting algorithm", "?s:b": "silent mode (deactivate sound)"}, "standardVals": {"algorithm": null, "n": 20, "speed": 1}}, "spion": {"description": "Spiel Spiel Manager", "args": {"?a=add:b": "add a new place", "?l=list:s": "list a given places roles"}, "isSecret": true}, "stacker": {"description": "play a stacker game", "isGame": true}, "stat": {"description": "show a statistic of a given data set", "args": {"?*nums:s": "the numbers to show the statistic of", "?f=function:s": "the function to plot", "?min:n": "the minimum value of the function", "?max:n": "the maximum value of the function", "?width:n:1~9999": "the width of the canvas", "?height:n:1~9999": "the height of the canvas", "?x=x-name:s": "the name of the x axis", "?y=y-name:s": "the name of the y axis", "?p=padding:n:0~9999": "the padding of the canvas", "?color=foreground:s": "the color of plot", "?axis-color:s": "the color of the axis", "?a=animateMs": "animate the plot", "?background": "the background color of the canvas", "?l=length:i:2~99999": "the length of a data set", "?linewidth:n:1~999": "the width of the line in pixels", "?nopoints:b": "disable the points being displayed"}, "defaultValues": {"nums": null, "width": 640, "height": 400, "x": null, "y": null, "min": -10, "max": 10, "padding": 20, "axis-color": null, "color": null, "animateMs": 500, "background": null, "length": 100, "linewidth": 2}}, "style": {"description": "change the style of the terminal", "args": ["?preset"], "standardVals": {"preset": null}}, "sudo": {"description": "try to use sudo", "args": ["**"]}, "terminal": {"description": "a terminal inside a terminal", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "terml": {"description": "run a .terml file", "args": {"file": "the file to run"}}, "tetris": {"description": "play a classic game of tetris", "isGame": true}, "tictactoe": {"description": "play a game of tic tac toe against the computer.", "args": {"?d=difficulty": "play against an unbeatable computer."}, "standardVals": {"d": "impossible"}, "isGame": true}, "time": {"description": "Shows the current time.", "args": {"?m=show-milli:b": "Show milliseconds.", "?f=size:n:0.1~99": "Font size in em.", "?s=start:b": "Start a stopwatch."}, "defaultValues": {"size": 3}}, "timer": {"description": "set a timer", "rawArgMode": true}, "todo": {"description": "manage a todo list", "rawArgMode": true}, "touch": {"description": "create a file in the current directory", "args": {"filename": "the name of the file"}}, "turing": {"description": "run a turing machine file", "args": {"file": "file to run", "?t=startTape": "starting tape content", "?s=sleep:i:0~10000": "sleep time between steps (in ms)", "?d=startingState": "starting state", "?m=maxSteps:i:0~9999999999": "maximum number of steps to run", "?turbo:b": "run as fast as possible"}, "standardVals": {"startTape": "", "s": 100, "d": "0", "m": 100000}}, "turtlo": {"description": "spawn turtlo", "args": {"?size:i:1~3": "size of turtlo", "?silent:b": "don't print anything"}, "defaultValues": {"size": 1}}, "type-test": {"description": "test your typing speed", "isGame": true}, "uname": {"description": "print the operating system name"}, "upload": {"description": "upload a file from your computer"}, "vigenere": {"description": "encrypt/decrypt a message using the vigenere cipher", "args": {"message": "the message to encrypt/decrypt", "key": "the key to use", "?d=decrypt:b": "decrypt the message instead of encrypting it", "?c=copy:b": "copy the result to the clipboard"}}, "visits": {"description": "Shows the number of page visits"}, "w": {"description": "print the current time elapsed"}, "wave": {"description": "play with a wave"}, "wc": {"description": "display word and line count of file", "args": {"?f=file": "file to open", "?s": "string to count instead of file"}}, "weather": {"description": "Get the current weather", "author": "Colin Chadwick"}, "whatday": {"description": "get the weekday of a date", "args": ["DD.MM.YYYY"]}, "whatis": {"description": "display a short description of a command", "args": ["command"]}, "whoami": {"description": "get client info"}, "yes": {"description": "print a message repeatedly", "args": {"?message": "the message to print", "?s:b": "slow mode"}, "standardVals": {"message": "y"}}, "zip": {"description": "zip a file"}}
+
+// ------------------- js/commands/2048.js --------------------
 terminal.addCommand("2048", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -206,7 +3545,8 @@ terminal.addCommand("2048", async function(args) {
    description: "play a game of 2048",
    isGame: true
 })
-// ------------------- 4inarow.js --------------------
+
+// ------------------- js/commands/4inarow.js --------------------
 terminal.addCommand("4inarow", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -577,7 +3917,8 @@ terminal.addCommand("4inarow", async function(args) {
     },
     isGame: true
 })
-// ------------------- alias.js --------------------
+
+// ------------------- js/commands/alias.js --------------------
 terminal.addCommand("alias", function(args) {
     let actionCount = 0
 
@@ -633,7 +3974,8 @@ terminal.addCommand("alias", function(args) {
 })
 
 
-// ------------------- ant-opt.js --------------------
+
+// ------------------- js/commands/ant-opt.js --------------------
 terminal.addCommand("ant-opt", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -648,7 +3990,8 @@ terminal.addCommand("ant-opt", async function(args) {
     description: "interactive solution to the travelling salesman problem using ant colony optimization",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- asteroids.js --------------------
+
+// ------------------- js/commands/asteroids.js --------------------
 terminal.addCommand("asteroids", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
@@ -1105,7 +4448,8 @@ terminal.addCommand("asteroids", async function(args) {
     },
     isGame: true
 })
-// ------------------- avoida.js --------------------
+
+// ------------------- js/commands/avoida.js --------------------
 terminal.addCommand("avoida", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
@@ -1415,7 +4759,8 @@ terminal.addCommand("avoida", async function(args) {
     description: "play a game of avoida",
     isGame: true,
 })
-// ------------------- background.js --------------------
+
+// ------------------- js/commands/background.js --------------------
 const OG_BACKGROUND_COLOR = Color.rgb(3, 3, 6)
 
 terminal.addCommand("background", function(args) {
@@ -1435,7 +4780,8 @@ terminal.addCommand("background", function(args) {
     args: ["color"]
 })
 
-// ------------------- base64.js --------------------
+
+// ------------------- js/commands/base64.js --------------------
 terminal.addCommand("base64", async function(args) {
     let msg = args.message
     let output = ""
@@ -1456,7 +4802,8 @@ terminal.addCommand("base64", async function(args) {
         "?c=copy:b": "copy the result to the clipboard"
     },
 })
-// ------------------- bc.js --------------------
+
+// ------------------- js/commands/bc.js --------------------
 terminal.addCommand("bc", async function() {
     await terminal.modules.load("mathenv", terminal)
     while (true) {
@@ -1475,7 +4822,8 @@ terminal.addCommand("bc", async function() {
 })
 
 
-// ------------------- bezier.js --------------------
+
+// ------------------- js/commands/bezier.js --------------------
 terminal.addCommand("bezier", async function() {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -1488,7 +4836,8 @@ terminal.addCommand("bezier", async function() {
 }, {
     description: "play with bezier curves"
 })
-// ------------------- bin.js --------------------
+
+// ------------------- js/commands/bin.js --------------------
 terminal.addCommand("bin", async function(args) {
     let result = parseInt(args.n, args.f).toString(args.t)
     terminal.printLine(result)
@@ -1504,7 +4853,8 @@ terminal.addCommand("bin", async function(args) {
         f: 10
     }
 })
-// ------------------- binomcdf.js --------------------
+
+// ------------------- js/commands/binomcdf.js --------------------
 terminal.addCommand("binomcdf", async function(args) {
     const binomcdf = (await terminal.modules.load("binom", terminal)).binomcdf
     let n = ~~args.n
@@ -1522,7 +4872,8 @@ terminal.addCommand("binomcdf", async function(args) {
 })
 
 
-// ------------------- binompdf.js --------------------
+
+// ------------------- js/commands/binompdf.js --------------------
 terminal.addCommand("binompdf", async function(args) {
     const binompdf = (await terminal.modules.load("binom", terminal)).binompdf
     let n = ~~args.n
@@ -1541,7 +4892,8 @@ terminal.addCommand("binompdf", async function(args) {
 })
 
 
-// ------------------- blocks.js --------------------
+
+// ------------------- js/commands/blocks.js --------------------
 terminal.addCommand("blocks", async function(args) {
 	await terminal.modules.import("game", window)
 	
@@ -1884,7 +5236,8 @@ terminal.addCommand("blocks", async function(args) {
         viewDistance: 13
     }
 })
-// ------------------- brainfuck.js --------------------
+
+// ------------------- js/commands/brainfuck.js --------------------
 terminal.addCommand("brainfuck", function(args) {
     const codeLib = {
         "test": "++++[>++++<-]>[>++++<-]",
@@ -2016,7 +5369,8 @@ terminal.addCommand("brainfuck", function(args) {
     description: "parse given brainfuck code",
     args: ["*code"]
 })
-// ------------------- cal.js --------------------
+
+// ------------------- js/commands/cal.js --------------------
 terminal.addCommand("cal", async function(args) {
     const today = new Date()
 
@@ -2205,7 +5559,8 @@ terminal.addCommand("cal", async function(args) {
 })
 
 
-// ------------------- cardoid.js --------------------
+
+// ------------------- js/commands/cardoid.js --------------------
 terminal.addCommand("cardoid", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -2221,7 +5576,8 @@ terminal.addCommand("cardoid", async function(args) {
     description: "start a cardoid generator",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- cat.js --------------------
+
+// ------------------- js/commands/cat.js --------------------
 terminal.addCommand("cat", async function(args) {
     const specialCases = {
         "turtlo": "no, turtlo isn't a cat"
@@ -2270,7 +5626,8 @@ terminal.addCommand("cat", async function(args) {
         "file:f": "file to display the content of"
     }
 })
-// ------------------- cd.js --------------------
+
+// ------------------- js/commands/cd.js --------------------
 terminal.addCommand("cd", function(args) {
     if (["-", ".."].includes(args.directory)) {
         if (terminal.fileSystem.currPath.length > 0) {
@@ -2299,7 +5656,8 @@ terminal.addCommand("cd", function(args) {
     },
     description: "change current directory",
 })
-// ------------------- ceasar.js --------------------
+
+// ------------------- js/commands/ceasar.js --------------------
 terminal.addCommand("ceasar", function(args) {
     let text = args.text
     let shiftVal = args.shift
@@ -2330,7 +5688,8 @@ terminal.addCommand("ceasar", function(args) {
 })
 
 
-// ------------------- cheese.js --------------------
+
+// ------------------- js/commands/cheese.js --------------------
 terminal.addCommand("cheese", async function(args) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
         throw new Error("Device does not support MediaDevices API")
@@ -2369,7 +5728,8 @@ terminal.addCommand("cheese", async function(args) {
 })
 
 
-// ------------------- chess.js --------------------
+
+// ------------------- js/commands/chess.js --------------------
 const PieceType = {
     ROOK: 'R',
     KNIGHT: 'N',
@@ -3275,13 +6635,15 @@ terminal.addCommand("chess", async function() {
     description: "play a game of chess against the computer",
     isGame: true
 })
-// ------------------- clear.js --------------------
+
+// ------------------- js/commands/clear.js --------------------
 terminal.addCommand("clear", async function() {
     terminal.clear(true)
 }, {
     description: "clear the terminal"
 })
-// ------------------- clock.js --------------------
+
+// ------------------- js/commands/clock.js --------------------
 terminal.addCommand("clock", async function(args) {
     let displayMillis = !!args.m
     let gridSize = {
@@ -3367,7 +6729,8 @@ terminal.addCommand("clock", async function(args) {
 })
 
 
-// ------------------- cmatrix.js --------------------
+
+// ------------------- js/commands/cmatrix.js --------------------
 terminal.addCommand("cmatrix", async function(args) {
     function makeCMatrix(makeWindow) {
         const terminalWindow = makeWindow({name: "CMatrix", fullscreen: !args.nf})
@@ -3443,7 +6806,8 @@ terminal.addCommand("cmatrix", async function(args) {
 })
 
 
-// ------------------- cmdnotfound.js --------------------
+
+// ------------------- js/commands/cmdnotfound.js --------------------
 terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
     const maxDistance = 2
 
@@ -3462,7 +6826,8 @@ terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
     rawArgMode: true,
     isSecret: true
 })
-// ------------------- code.js --------------------
+
+// ------------------- js/commands/code.js --------------------
 const jsKeywords = [
     "abstract", "arguments", "await*", "boolean",
     "break", "byte", "case", "catch",
@@ -3657,7 +7022,8 @@ terminal.addCommand("code", async function(args) {
         "command:c": "the command to show the source code of"
     }
 })
-// ------------------- collatz.js --------------------
+
+// ------------------- js/commands/collatz.js --------------------
 terminal.addCommand("collatz", async function(args) {
 	let currNum = args.n
 
@@ -3696,7 +7062,8 @@ terminal.addCommand("collatz", async function(args) {
 		m: 999999999999
 	}
 })
-// ------------------- color-test.js --------------------
+
+// ------------------- js/commands/color-test.js --------------------
 terminal.addCommand("color-test", function(args) {
     let size = {x: args.size*2, y: args.size}
     for (let i = 0; i < size.y; i++) {
@@ -3723,7 +7090,8 @@ terminal.addCommand("color-test", function(args) {
         size: 60
     }
 })
-// ------------------- compliment.js --------------------
+
+// ------------------- js/commands/compliment.js --------------------
 terminal.addCommand("compliment", function() {
     function startsWithVowel(word) {
         return (
@@ -3762,7 +7130,8 @@ terminal.addCommand("compliment", function() {
 })
 
 
-// ------------------- contact.js --------------------
+
+// ------------------- js/commands/contact.js --------------------
 const formContainer = document.createElement("div")
 const formWidth = "min(25em, 50vw)"
 
@@ -3966,7 +7335,8 @@ terminal.addCommand("contact", async function(args) {
 }, {
     description: "Open contact form",
 })
-// ------------------- copy.js --------------------
+
+// ------------------- js/commands/copy.js --------------------
 terminal.addCommand("copy", async function(rawArgs) {
     rawArgs = rawArgs.trim()
     if (terminal.parser.isVariable(rawArgs)) {
@@ -3987,7 +7357,8 @@ terminal.addCommand("copy", async function(rawArgs) {
     description: "copy the file content to the clipboard",
     rawArgMode: true
 })
-// ------------------- coville.js --------------------
+
+// ------------------- js/commands/coville.js --------------------
 terminal.addCommand("coville", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -4004,8 +7375,9 @@ terminal.addCommand("coville", async function(args) {
     isSecret: true,
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- cowsay.js --------------------
-const COW_SAY = ` 
+
+// ------------------- js/commands/cowsay.js --------------------
+var COW_SAY = ` 
 \\   ^__^
  \\  (oo)\\_______
     (__)\       )\\/\\
@@ -4072,8 +7444,9 @@ terminal.addCommand("cowsay", function(args) {
     description: "let the cow say something",
     args: ["*message"]
 })
-// ------------------- cowthink.js --------------------
-const COW_SAY = ` 
+
+// ------------------- js/commands/cowthink.js --------------------
+var COW_SAY = ` 
 o   ^__^
  o  (oo)\\_______
     (__)\       )\\/\\
@@ -4136,7 +7509,8 @@ terminal.addCommand("cowthink", function(args) {
     description: "let the cow say something",
     args: ["*thought"]
 })
-// ------------------- cp.js --------------------
+
+// ------------------- js/commands/cp.js --------------------
 terminal.addCommand("cp", async function(args) {
     let file = terminal.getFile(args.file)
     if (["..", "-"].includes(args.directory)) {
@@ -4156,7 +7530,8 @@ terminal.addCommand("cp", async function(args) {
 })
 
 
-// ------------------- crossp.js --------------------
+
+// ------------------- js/commands/crossp.js --------------------
 terminal.addCommand("crossp", function(args) {
     const x = args.y1 * args.z2 - args.z1 * args.y2
     const y = args.z1 * args.x2 - args.x1 * args.z2
@@ -4174,7 +7549,8 @@ terminal.addCommand("crossp", function(args) {
         "z2:n": "the z component of the second vector"
     }
 })
-// ------------------- curl.js --------------------
+
+// ------------------- js/commands/curl.js --------------------
 terminal.addCommand("curl", async function(args) {
     function corsError() {
         terminal.printError("Cross-origin requests are not allowed")
@@ -4233,7 +7609,8 @@ terminal.addCommand("curl", async function(args) {
     },
     disableEqualsArgNotation: true
 })
-// ------------------- cw.js --------------------
+
+// ------------------- js/commands/cw.js --------------------
 terminal.addCommand("cw", function(args) {
     if (args.date == "today" || !args.date) {
         args.date = "today"
@@ -4293,7 +7670,8 @@ terminal.addCommand("cw", function(args) {
 })
 
 
-// ------------------- debug.js --------------------
+
+// ------------------- js/commands/debug.js --------------------
 terminal.addCommand("debug", function(args) {
 	if (terminal.debugMode) {
 		throw new Error("Debug Mode already activated")
@@ -4306,7 +7684,8 @@ terminal.addCommand("debug", function(args) {
 	description: "activate the debug mode to enable untested new features",
 	isSecret: true
 })
-// ------------------- donut.js --------------------
+
+// ------------------- js/commands/donut.js --------------------
 terminal.addCommand("donut", async function() {
     setTimeout(() => terminal.scroll(), 100)
     let commandIsActive = true
@@ -4344,7 +7723,8 @@ terminal.addCommand("donut", async function() {
 })
 
 
-// ------------------- download.js --------------------
+
+// ------------------- js/commands/download.js --------------------
 terminal.addCommand("download", function(args) {
     function downloadFile(fileName, file) {
         let element = document.createElement('a')
@@ -4368,7 +7748,8 @@ terminal.addCommand("download", function(args) {
     description: "download a file",
     args: {"file": "the file to download"}
 })
-// ------------------- draw.js --------------------
+
+// ------------------- js/commands/draw.js --------------------
 terminal.addCommand("draw", async function() {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -4381,7 +7762,8 @@ terminal.addCommand("draw", async function() {
 }, {
     description: "start simple drawing app"
 })
-// ------------------- du.js --------------------
+
+// ------------------- js/commands/du.js --------------------
 terminal.addCommand("du", function(args) {
     let fileNames = []
     let fileSizes = []
@@ -4426,7 +7808,8 @@ terminal.addCommand("du", function(args) {
 })
 
 
-// ------------------- easter-eggs.js --------------------
+
+// ------------------- js/commands/easter-eggs.js --------------------
 terminal.addCommand("easter-eggs", async function(args) {
     if (args.reset) {
         await terminal.acceptPrompt("Do you really want to reset the easter egg hunt?", false)
@@ -4474,14 +7857,16 @@ terminal.addCommand("easter-eggs", async function(args) {
         "?reset:b": "reset easter egg hunt"
     }
 })
-// ------------------- echo.js --------------------
+
+// ------------------- js/commands/echo.js --------------------
 terminal.addCommand("echo", function(rawArgs) {
     terminal.printLine(rawArgs.slice(1))
 }, {
     description: "print a line of text",
     rawArgMode: true,
 })
-// ------------------- edit.js --------------------
+
+// ------------------- js/commands/edit.js --------------------
 const cssCode = {
     ".editor-parent": {
         "width": "100%",
@@ -4666,7 +8051,8 @@ terminal.addCommand("edit", async function(args) {
 })
 
 
-// ------------------- enigma.js --------------------
+
+// ------------------- js/commands/enigma.js --------------------
 class EnigmaWheel {
 
     constructor(permutation, overflowLetter, offset, name) {
@@ -5125,7 +8511,8 @@ terminal.addCommand("enigma", async function(args) {
         "?s=show:b": "Shows the current settings"
     }
 })
-// ------------------- error404.js --------------------
+
+// ------------------- js/commands/error404.js --------------------
 const warningText = `
  _  _    ___  _  _                            _        __                      _ 
 | || |  / _ \\| || |                          | |      / _|                    | |
@@ -5155,7 +8542,8 @@ terminal.addCommand("error404", async function() {
     description: "Display a 404 error",
     rawArgMode: true
 })
-// ------------------- eval.js --------------------
+
+// ------------------- js/commands/eval.js --------------------
 terminal.addCommand("eval", async function(argString) {
     await terminal.modules.load("mathenv", terminal)
     let [result, error] = terminal.modules.mathenv.eval(argString)
@@ -5170,7 +8558,8 @@ terminal.addCommand("eval", async function(argString) {
     description: "evaluate javascript code",
     rawArgMode: true
 })
-// ------------------- exit.js --------------------
+
+// ------------------- js/commands/exit.js --------------------
 terminal.addCommand("exit", function() {
     terminal.printLine(`please don't exit. please.`)
 }, {
@@ -5178,7 +8567,8 @@ terminal.addCommand("exit", function() {
 })
 
 
-// ------------------- f.js --------------------
+
+// ------------------- js/commands/f.js --------------------
 terminal.addCommand("f", async function(args) {
     async function randomFriendScore(friendName) {
         const round = (num, places) => Math.round(num * 10**places) / 10**places
@@ -5203,7 +8593,8 @@ terminal.addCommand("f", async function(args) {
 })
 
 
-// ------------------- factor.js --------------------
+
+// ------------------- js/commands/factor.js --------------------
 terminal.addCommand("factor", async function(args) {
 
     function primeFactors(n) {
@@ -5260,7 +8651,8 @@ terminal.addCommand("factor", async function(args) {
         n: null
     }
 })
-// ------------------- fakechat.js --------------------
+
+// ------------------- js/commands/fakechat.js --------------------
 async function loadImage(url) {
     return new Promise((resolve, reject) => {
         let img = new Image()
@@ -5638,7 +9030,8 @@ terminal.addCommand("fakechat", async function(args) {
         y: 1560,
     }
 })
-// ------------------- fibo.js --------------------
+
+// ------------------- js/commands/fibo.js --------------------
 terminal.addCommand("fibo", function(args) {
     let a = 0
     let b = 1
@@ -5673,7 +9066,8 @@ terminal.addCommand("fibo", function(args) {
         n: 10
     }
 })
-// ------------------- fizzbuzz.js --------------------
+
+// ------------------- js/commands/fizzbuzz.js --------------------
 terminal.addCommand("fizzbuzz", function(args) {
     let output = ""
     for (let i = 1; i <= args.max; i++) {
@@ -5695,7 +9089,8 @@ terminal.addCommand("fizzbuzz", function(args) {
 })
 
 
-// ------------------- flaci-to-turing.js --------------------
+
+// ------------------- js/commands/flaci-to-turing.js --------------------
 terminal.addCommand("flaci-to-turing", async function(args) {
     const file = terminal.getFile(args.file)
     const code = file.content
@@ -5791,7 +9186,8 @@ terminal.addCommand("flaci-to-turing", async function(args) {
         terminal.printItalic("terminal using the 'turing' command.")
     }
 })
-// ------------------- flappy.js --------------------
+
+// ------------------- js/commands/flappy.js --------------------
 terminal.addCommand("flappy", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
@@ -6043,7 +9439,8 @@ terminal.addCommand("flappy", async function(args) {
     },
     isGame: true
 })
-// ------------------- font.js --------------------
+
+// ------------------- js/commands/font.js --------------------
 const OG_FONT = 
 
 terminal.addCommand("font", function(args) {
@@ -6057,7 +9454,8 @@ terminal.addCommand("font", function(args) {
     args: ["*font"]
 })
 
-// ------------------- foreground.js --------------------
+
+// ------------------- js/commands/foreground.js --------------------
 const OG_FOREGROUND_COLOR = Color.rgb(255, 255, 255)
 
 terminal.addCommand("foreground", function(args) {
@@ -6078,7 +9476,8 @@ terminal.addCommand("foreground", function(args) {
         "color": "the color to change the foreground to"
     }
 })
-// ------------------- fraction.js --------------------
+
+// ------------------- js/commands/fraction.js --------------------
 terminal.addCommand("fraction", function(args) {
     let n = args.n
 
@@ -6136,7 +9535,8 @@ terminal.addCommand("fraction", function(args) {
         d: 1000
     }
 })
-// ------------------- games.js --------------------
+
+// ------------------- js/commands/games.js --------------------
 terminal.addCommand("games", function() {
     let gameCommands = Object.entries(terminal.commandData)
         .filter(([_, info]) => info.isGame)
@@ -6151,7 +9551,8 @@ terminal.addCommand("games", function() {
 }, {
     description: "shows the game menu",
 })
-// ------------------- get.js --------------------
+
+// ------------------- js/commands/get.js --------------------
 terminal.addCommand("get", async function(args) {
     await terminal.modules.load("cliapi", terminal)
     const CliApi = terminal.modules.cliapi
@@ -6171,7 +9572,8 @@ terminal.addCommand("get", async function(args) {
 })
 
 
-// ------------------- greed.js --------------------
+
+// ------------------- js/commands/greed.js --------------------
 terminal.addCommand("greed", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -6508,7 +9910,8 @@ terminal.addCommand("greed", async function(args) {
     }
 })
 
-// ------------------- grep.js --------------------
+
+// ------------------- js/commands/grep.js --------------------
 terminal.addCommand("grep", async function(args) {
     let recursive = args.r ?? false
     let ignorecase = args.i ?? false
@@ -6608,8 +10011,9 @@ terminal.addCommand("grep", async function(args) {
 })
 
 
-// ------------------- hangman.js --------------------
-const englishWords = [
+
+// ------------------- js/commands/hangman.js --------------------
+var englishWords = [
     "spokesman", "slots", "man", "targets", "sec", "reflects", "constitutional", "hereby", "progressive", 
     "authors", "secrets", "basically", "wild", "beautiful", "theatre", "cry", "vhs", "fraction", "breakfast", "meal", "far", 
     "out", "glow", "literally", "specialist", "touch", "coastal", "ala", "ingredients", "medal", "adsl", "extract", "corresponding", 
@@ -6856,7 +10260,8 @@ terminal.addCommand("hangman", async function(args) {
     description: "play a game of hangman",
     isGame: true
 })
-// ------------------- head.js --------------------
+
+// ------------------- js/commands/head.js --------------------
 terminal.addCommand("head", function(args) {
     let file = terminal.getFile(args.file)
     if (file.isDirectory)
@@ -6875,7 +10280,8 @@ terminal.addCommand("head", function(args) {
 })
 
 
-// ------------------- helloworld.js --------------------
+
+// ------------------- js/commands/helloworld.js --------------------
 terminal.addCommand("helloworld", async function() {
     const welcomeLineFuncs = [
         () => terminal.print("                  _    __      _          _      _      _       "),
@@ -6941,7 +10347,8 @@ terminal.addCommand("helloworld", async function() {
     description: "display the hello-world text",
     rawArgMode: true,
 })
-// ------------------- help.js --------------------
+
+// ------------------- js/commands/help.js --------------------
 terminal.addCommand("help", function() {
     terminal.printLine("Welcome to the Help Menu!", Color.COLOR_1)
     terminal.printLine("Here are some commands to try out:\n")
@@ -6957,7 +10364,8 @@ terminal.addCommand("help", function() {
 }, {
     description: "shows this help menu",
 })
-// ------------------- hi.js --------------------
+
+// ------------------- js/commands/hi.js --------------------
 async function funnyPrint(msg) {
     let colors = msg.split("").map(Color.niceRandom)
     for (let i = 0; i < msg.length; i++) {
@@ -6970,7 +10378,8 @@ async function funnyPrint(msg) {
 terminal.addCommand("hi", async () => await funnyPrint("hello there!"), {
     description: "say hello to the terminal"
 })
-// ------------------- highscore-admin.js --------------------
+
+// ------------------- js/commands/highscore-admin.js --------------------
 terminal.addCommand("highscore-admin", async function(args) {
     await terminal.modules.import("game", window)
     
@@ -6988,7 +10397,8 @@ terminal.addCommand("highscore-admin", async function(args) {
         "?d": "Delete password from local storage"
     }
 })
-// ------------------- highscore-remove.js --------------------
+
+// ------------------- js/commands/highscore-remove.js --------------------
 terminal.addCommand("highscore-remove", async function(args) {
     
     await terminal.modules.import("game", window)
@@ -7029,7 +10439,8 @@ terminal.addCommand("highscore-remove", async function(args) {
         "l": Infinity
     }
 })
-// ------------------- highscores.js --------------------
+
+// ------------------- js/commands/highscores.js --------------------
 terminal.addCommand("highscores", async function(args) {
     if (args["show-all"]) args.l = Infinity
 
@@ -7085,7 +10496,8 @@ terminal.addCommand("highscores", async function(args) {
         "l": 10
     }
 })
-// ------------------- history.js --------------------
+
+// ------------------- js/commands/history.js --------------------
 terminal.addCommand("history", function(args) {
     let sliceLimit = args["show-full"] ? Infinity : 50
     let output = ""
@@ -7107,7 +10519,8 @@ terminal.addCommand("history", function(args) {
         l: 1000
     }
 })
-// ------------------- hr-draw.js --------------------
+
+// ------------------- js/commands/hr-draw.js --------------------
 terminal.addCommand("hr-draw", async function(args) {
     const makeCanvas = (data, width=30) => {
         const canvas = terminal.document.createElement("canvas")
@@ -7226,7 +10639,8 @@ terminal.addCommand("hr-draw", async function(args) {
     },
     isSecret: true
 })
-// ------------------- hr.js --------------------
+
+// ------------------- js/commands/hr.js --------------------
 const letterData = {
     "4x4": {
         letters: {
@@ -7385,7 +10799,8 @@ terminal.addCommand("hr", async function(args) {
         fontmode: "5x5"
     }
 })
-// ------------------- href.js --------------------
+
+// ------------------- js/commands/href.js --------------------
 terminal.addCommand("href", function(args) {
     function href(url) {
         if (!url.includes(".")) url = `noel-friedrich.de/${url}`
@@ -7414,7 +10829,8 @@ terminal.addCommand("href", function(args) {
 })
 
 
-// ------------------- image-crop.js --------------------
+
+// ------------------- js/commands/image-crop.js --------------------
 terminal.addCommand("image-crop", async function() {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -7427,7 +10843,8 @@ terminal.addCommand("image-crop", async function() {
 }, {
     description: "start image cropper program"
 })
-// ------------------- img2ascii.js --------------------
+
+// ------------------- js/commands/img2ascii.js --------------------
 terminal.addCommand("img2ascii", async function(args) {
     await terminal.modules.load("upload", terminal)
 
@@ -7487,7 +10904,8 @@ terminal.addCommand("img2ascii", async function(args) {
         width: 60
     }
 })
-// ------------------- isprime.js --------------------
+
+// ------------------- js/commands/isprime.js --------------------
 terminal.addCommand("isprime", async function(args) {
     function isPrime(n) {
         if (n < 2)
@@ -7515,7 +10933,8 @@ terminal.addCommand("isprime", async function(args) {
         "n:i": "The number to check"
     }
 })
-// ------------------- joke.js --------------------
+
+// ------------------- js/commands/joke.js --------------------
 terminal.addCommand("joke", async function(args) {
     let response = await fetch("https://official-joke-api.appspot.com/random_joke")
     let joke = await response.json()
@@ -7527,7 +10946,8 @@ terminal.addCommand("joke", async function(args) {
 })
 
 
-// ------------------- kaprekar.js --------------------
+
+// ------------------- js/commands/kaprekar.js --------------------
 terminal.addCommand("kaprekar", async function(args) {
     let startNumber = ~~args.n
     let numDigits = startNumber.toString().length
@@ -7574,7 +10994,8 @@ terminal.addCommand("kaprekar", async function(args) {
 })
 
 
-// ------------------- keyboard.js --------------------
+
+// ------------------- js/commands/keyboard.js --------------------
 terminal.addCommand("keyboard", function(args) {
     let mode = args.m || "toggle"
 
@@ -7616,7 +11037,8 @@ terminal.addCommand("keyboard", function(args) {
         m: "status"
     }
 })
-// ------------------- kill.js --------------------
+
+// ------------------- js/commands/kill.js --------------------
 terminal.addCommand("kill", async function(args) {
     if (args.process.toLowerCase() == "turtlo") {
         await terminal.modules.load("turtlo", terminal)
@@ -7636,7 +11058,8 @@ terminal.addCommand("kill", async function(args) {
 })
 
 
-// ------------------- labyrinth.js --------------------
+
+// ------------------- js/commands/labyrinth.js --------------------
 terminal.addCommand("labyrinth", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -7917,7 +11340,8 @@ terminal.addCommand("labyrinth", async function(args) {
         fps: 30
     }
 })
-// ------------------- letters.js --------------------
+
+// ------------------- js/commands/letters.js --------------------
 const AsciiArtLetters = {}
 {
     let chars = "abcdefghijklmnopqrstuvwxyz"
@@ -8387,7 +11811,8 @@ terminal.addCommand("letters", function(args) {
 })
 
 
-// ------------------- live-quiz.js --------------------
+
+// ------------------- js/commands/live-quiz.js --------------------
 terminal.addCommand("live-quiz", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -8402,7 +11827,8 @@ terminal.addCommand("live-quiz", async function(args) {
     description: "a simple quiz game that uses your camera as input for your answer",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- live-rocket.js --------------------
+
+// ------------------- js/commands/live-rocket.js --------------------
 terminal.addCommand("live-rocket", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -8418,7 +11844,8 @@ terminal.addCommand("live-rocket", async function(args) {
     description: "a simple avoid game that you steer using camera input",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- logistic-map.js --------------------
+
+// ------------------- js/commands/logistic-map.js --------------------
 terminal.addCommand("logistic-map", async function(args) {
     const maxIterations = 100
     const startValue = 0.5
@@ -8504,7 +11931,8 @@ terminal.addCommand("logistic-map", async function(args) {
 })
 
 
-// ------------------- longjump.js --------------------
+
+// ------------------- js/commands/longjump.js --------------------
 terminal.addCommand("longjump", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
@@ -9058,7 +12486,8 @@ terminal.addCommand("longjump", async function(args) {
         "?f=fullscreen:b": "Play in fullscreen"
     }
 })
-// ------------------- lorem.js --------------------
+
+// ------------------- js/commands/lorem.js --------------------
 const loremText = "Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed aliquam, nisi quis porttitor congue, elit erat euismod orci, ac placerat dolor lectus quis orci. Phasellus consectetuer vestibulum elit. Aenean tellus metus, bibendum sed, posuere ac, mattis non, nunc. Vestibulum fringilla pede sit amet augue. In turpis. Pellentesque posuere. Praesent turpis. Aenean posuere, tortor sed cursus feugiat, nunc augue blandit nunc, eu sollicitudin urna dolor sagittis lacus. Donec elit libero, sodales nec, volutpat a, suscipit non, turpis. Nullam sagittis. Suspendisse pulvinar, augue ac venenatis condimentum, sem libero volutpat nibh, nec pellentesque velit pede quis nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id purus. Ut varius tincidunt libero. Phasellus dolor. Maecenas vestibulum mollis diam. Pellentesque ut neque. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. In dui magna, posuere eget, vestibulum et, tempor auctor, justo. In ac felis quis tortor malesuada pretium. Pellentesque auctor neque nec urna. Proin sapien ipsum, porta a, auctor quis, euismod ut, mi. Aenean viverra rhoncus pede. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Ut non enim eleifend felis pretium feugiat. Vivamus quis mi. Phasellus a est. Phasellus magna. In hac habitasse platea dictumst. Curabitur at lacus ac velit ornare lobortis. Curabitur a felis in nunc fringilla tristique. Morbi mattis ullamcorper velit. Phasellus gravida semper nisi. Nullam vel sem. Pellentesque libero tortor, tincidunt et, tincidunt eget, semper nec, quam. Sed hendrerit. Morbi ac felis. Nunc egestas, augue at pellentesque laoreet, felis eros vehicula leo, at malesuada velit leo quis pede. Donec interdum, metus et hendrerit aliquet, dolor diam sagittis ligula, eget egestas libero turpis vel mi. Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem. Sed magna purus, fermentum eu, tincidunt eu, varius ut, felis. In auctor lobortis lacus. Quisque libero metus, condimentum nec, tempor a, commodo mollis, magna. Vestibulum ullamcorper mauris at ligula. Fusce fermentum. Nullam cursus lacinia erat. Praesent blandit laoreet nibh. Fusce convallis metus id felis luctus adipiscing. Pellentesque egestas, neque sit amet convallis pulvinar, justo nulla eleifend augue, ac auctor orci leo non est. Quisque id mi. Ut tincidunt tincidunt erat. Etiam feugiat lorem non metus. Vestibulum dapibus nunc ac augue. Curabitur vestibulum aliquam leo. Praesent egestas neque eu enim. In hac habitasse platea dictumst. Fusce a quam. Etiam ut purus mattis mauris sodales aliquam. Curabitur nisi. Quisque malesuada placerat nisl. Nam ipsum risus, rutrum vitae, vestibulum eu, molestie vel, lacus. Sed augue ipsum, egestas nec, vestibulum et, malesuada adipiscing, dui. Vestibulum facilisis, purus nec pulvinar iaculis, ligula mi congue nunc, vitae euismod ligula urna in dolor. Mauris sollicitudin fermentum libero. Praesent nonummy mi in odio. Nunc interdum lacus sit amet orci. Vestibulum rutrum, mi nec elementum vehicula, eros quam gravida nisl, id fringilla neque ante vel mi. Morbi mollis tellus ac sapien. Phasellus volutpat, metus eget egestas mollis, lacus lacus blandit dui, id egestas quam mauris ut lacus. Fusce vel dui. Sed in libero ut nibh placerat accumsan. Proin faucibus arcu quis ante. In consectetuer turpis ut velit. Nulla sit amet est. Praesent metus tellus, elementum eu, semper a, adipiscing nec, purus. Cras risus ipsum, faucibus ut, ullamcorper id, varius ac, leo. Suspendisse feugiat. Suspendisse enim turpis, dictum sed, iaculis a, condimentum nec, nisi. Praesent nec nisl a purus blandit viverra. Praesent ac massa at ligula laoreet iaculis. Nulla neque dolor, sagittis eget, iaculis quis, molestie non, velit. Mauris turpis nunc, blandit et, volutpat molestie, porta ut, ligula. Fusce pharetra convallis urna. Quisque ut nisi. Donec mi odio, faucibus at, scelerisque quis, convallis in, nisi. Suspendisse non nisl sit amet velit hendrerit rutrum. Ut leo. Ut a nisl id ante tempus hendrerit. Proin pretium, leo ac pellentesque mollis, felis nunc ultrices eros, sed gravida augue augue mollis justo. Suspendisse eu ligula. Nulla facilisi. Donec id justo. Praesent porttitor, nulla vitae posuere iaculis, arcu nisl dignissim dolor, a pretium mi sem ut ipsum. Curabitur suscipit suscipit tellus. Praesent vestibulum dapibus nibh. Etiam iaculis nunc ac metus. Ut id nisl quis enim dignissim sagittis. Etiam sollicitudin, ipsum eu pulvinar rutrum, tellus ipsum laoreet sapien, quis venenatis ante odio sit amet eros. Proin magna. Duis vel nibh at velit scelerisque suscipit. Curabitur turpis. Vestibulum suscipit nulla quis orci. Fusce ac felis sit amet ligula pharetra condimentum. Maecenas egestas arcu quis ligula mattis placerat. Duis lobortis massa imperdiet quam. Suspendisse potenti. Pellentesque commodo eros a enim. Vestibulum turpis sem, aliquet eget, lobortis pellentesque, rutrum eu, nisl. Sed libero. Aliquam erat volutpat. Etiam vitae tortor. Morbi vestibulum volutpat enim. Aliquam eu nunc. Nunc sed turpis. Sed mollis, eros et ultrices tempus, mauris ipsum aliquam libero, non adipiscing dolor urna a orci. Nulla porta dolor. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos hymenaeos. Pellentesque dapibus hendrerit tortor. Praesent egestas tristique nibh. Sed a libero. Cras varius. Donec vitae orci sed dolor rutrum auctor. Fusce egestas elit eget lorem. Suspendisse nisl elit, rhoncus eget, elementum ac, condimentum eget, diam. Nam at tortor in tellus interdum sagittis. Aliquam lobortis. Donec orci lectus, aliquam ut, faucibus non, euismod id, nulla. Curabitur blandit mollis lacus. Nam adipiscing. Vestibulum eu odio. Vivamus laoreet. Nullam tincidunt adipiscing enim. Phasellus tempus. Proin viverra, ligula sit amet ultrices semper, ligula arcu tristique sapien, a accumsan nisi mauris ac eros. Fusce neque. Suspendisse faucibus, nunc et pellentesque egestas, lacus ante convallis tellus, vitae iaculis lacus elit id tortor. Vivamus aliquet elit ac nisl. Fusce fermentum odio nec arcu. Vivamus euismod mauris. In ut quam vitae odio lacinia tincidunt. Praesent ut ligula non mi varius sagittis. Cras sagittis. Praesent ac sem eget est egestas volutpat. Vivamus consectetuer hendrerit lacus. Cras non dolor. Vivamus in erat ut urna cursus vestibulum. Fusce commodo aliquam arcu. Nam commodo suscipit quam. Quisque id odio. Praesent venenatis metus at tortor pulvinar varius.Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. Nam quam nunc, blandit vel, luctus pulvinar, hendrerit id, lorem. Maecenas nec odio et ante tincidunt tempus. Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt. Duis leo. Sed fringilla mauris sit amet nibh. Donec sodales sagittis magna. Sed consequat, leo eget bibendum sodales, augue velit cursus nunc, quis gravida magna mi a libero. Fusce vulputate eleifend sapien. Vestibulum purus quam, scelerisque ut, mollis sed, nonummy id, metus. Nullam accumsan lorem in dui. Cras ultricies mi eu turpis hendrerit fringilla. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; In ac dui quis mi consectetuer lacinia. Nam pretium turpis et arcu. Duis arcu tortor, suscipit eget, imperdiet nec, imperdiet iaculis, ipsum. Sed aliquam ultrices mauris. Integer ante arcu, accumsan a, consectetuer eget, posuere ut, mauris. Praesent adipiscing. Phasellus ullamcorper ipsum rutrum nunc. Nunc nonummy metus. Vestibulum volutpat pretium libero. Cras id dui. Aenean ut eros et nisl sagittis vestibulum. Nullam nulla eros, ultricies sit amet, nonummy id, imperdiet feugiat, pede. Sed lectus. Donec mollis hendrerit risus. Phasellus nec sem in justo pellentesque facilisis. Etiam imperdiet imperdiet orci. Nunc nec neque. Phasellus leo dolor, tempus non, auctor et, hendrerit quis, nisi. Curabitur ligula sapien, tincidunt non, euismod vitae, posuere imperdiet, leo. Maecenas malesuada. Praesent congue erat at massa. Sed cursus turpis vitae tortor. Donec posuere vulputate arcu. Phasellus accumsan cursus velit. Vestibulum ante ipsum primis in"
 const loremWords = loremText.split(" ")
 
@@ -9105,7 +12534,8 @@ terminal.addCommand("lorem", async function(args) {
         l: 100
     }
 })
-// ------------------- ls.js --------------------
+
+// ------------------- js/commands/ls.js --------------------
 terminal.addCommand("ls", function(args) {
     let targetFolder = terminal.getFile(!!args.folder ? args.folder : "", FileType.FOLDER)
 
@@ -9166,7 +12596,8 @@ terminal.addCommand("ls", function(args) {
 })
 
 
-// ------------------- lscmds.js --------------------
+
+// ------------------- js/commands/lscmds.js --------------------
 terminal.addCommand("lscmds", async function(args) {
     let functions = [...terminal.visibleFunctions]
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -9261,7 +12692,8 @@ terminal.addCommand("lscmds", async function(args) {
 })
 
 
-// ------------------- lscpu.js --------------------
+
+// ------------------- js/commands/lscpu.js --------------------
 terminal.addCommand("lscpu", function() {
     const runs = 150000000
     const start = performance.now()
@@ -9301,7 +12733,8 @@ terminal.addCommand("lscpu", function() {
 })
 
 
-// ------------------- lunar-lander.js --------------------
+
+// ------------------- js/commands/lunar-lander.js --------------------
 terminal.window.secretShip = null
 terminal.addCommand("lunar-lander", async function(args) {
     await terminal.modules.import("game", window)
@@ -10131,7 +13564,8 @@ terminal.addCommand("lunar-lander", async function(args) {
     isGame: true,
 })
 
-// ------------------- man.js --------------------
+
+// ------------------- js/commands/man.js --------------------
 terminal.addCommand("man", async function(args) {
     if (!terminal.commandExists(args.command))
         throw new Error(`No manual entry for ${args.command}`)
@@ -10180,7 +13614,8 @@ terminal.addCommand("man", async function(args) {
 })
 
 
-// ------------------- mandelbrot.js --------------------
+
+// ------------------- js/commands/mandelbrot.js --------------------
 terminal.addCommand("mandelbrot", async function(args) {
     let gridSize = {x: 0, y: 0}
     gridSize.x = ~~(terminal.approxWidthInChars)
@@ -10244,7 +13679,8 @@ terminal.addCommand("mandelbrot", async function(args) {
 })
 
 
-// ------------------- matdet.js --------------------
+
+// ------------------- js/commands/matdet.js --------------------
 terminal.addCommand("matdet", async function(args) {
     await terminal.modules.import("matrix", window)
 
@@ -10261,10 +13697,11 @@ terminal.addCommand("matdet", async function(args) {
 }, {
     description: "find the determinant of a matrix",
     args: {
-        "?A:sm": "matrix to invert",
+        "?A:sm": "square matrix",
     }
 })
-// ------------------- matinv.js --------------------
+
+// ------------------- js/commands/matinv.js --------------------
 terminal.addCommand("matinv", async function(args) {
     await terminal.modules.import("matrix", window)
 
@@ -10283,7 +13720,8 @@ terminal.addCommand("matinv", async function(args) {
         "?A:sm": "matrix to invert",
     }
 })
-// ------------------- matmin.js --------------------
+
+// ------------------- js/commands/matmin.js --------------------
 terminal.addCommand("matmin", async function(args) {
     await terminal.modules.import("matrix", window)
 
@@ -10299,10 +13737,11 @@ terminal.addCommand("matmin", async function(args) {
 }, {
     description: "find the matrix of minors of a given matrix",
     args: {
-        "?A:sm": "matrix to invert",
+        "?A:sm": "matrix to find minors of",
     }
 })
-// ------------------- matmul.js --------------------
+
+// ------------------- js/commands/matmul.js --------------------
 terminal.addCommand("matmul", async function(args) {
     await terminal.modules.import("matrix", window)
 
@@ -10341,7 +13780,8 @@ terminal.addCommand("matmul", async function(args) {
         "?B:m": "matrix B",
     }
 })
-// ------------------- matred.js --------------------
+
+// ------------------- js/commands/matred.js --------------------
 terminal.addCommand("matred", async function(args) {
     await terminal.modules.import("matrix", window)
 
@@ -10350,7 +13790,7 @@ terminal.addCommand("matred", async function(args) {
         matrix = Matrix.fromArray(args.A)
         terminal.printLine(matrix)
     } else {
-        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A", square: true}))
+        matrix = await inputMatrix(await inputMatrixDimensions({matrixName: "A"}))
         terminal.addLineBreak()
     }
 
@@ -10497,10 +13937,11 @@ terminal.addCommand("matred", async function(args) {
 }, {
     description: "reduce a given matrix to reduced row echelon form",
     args: {
-        "?A:sm": "matrix to invert",
+        "?A:m": "matrix to reduce",
     }
 })
-// ------------------- mill2player.js --------------------
+
+// ------------------- js/commands/mill2player.js --------------------
 terminal.addCommand("mill2player", async function() {
 
     //     #-----------#-----------#
@@ -10753,7 +14194,8 @@ terminal.addCommand("mill2player", async function() {
     description: "play a game of mill with a friend locally",
     isGame: true
 })
-// ------------------- minesweeper.js --------------------
+
+// ------------------- js/commands/minesweeper.js --------------------
 const defaultSettings = {
     width: 10,
     height: 10,
@@ -11140,7 +14582,8 @@ terminal.addCommand("minesweeper", async function(args) {
     },
     isGame: true
 })
-// ------------------- minigolf.js --------------------
+
+// ------------------- js/commands/minigolf.js --------------------
 const courseData = [
     {
         name: "#1: The Basic",
@@ -12314,7 +15757,8 @@ terminal.addCommand("minigolf", async function(args) {
     },
     isGame: true
 })
-// ------------------- mkdir.js --------------------
+
+// ------------------- js/commands/mkdir.js --------------------
 terminal.addCommand("mkdir", async function(args) {
     if (args.directory_name.match(/[\\\/\.\s]/))
         throw new Error("File may not contain '/' or '\\'")
@@ -12330,7 +15774,8 @@ terminal.addCommand("mkdir", async function(args) {
 })
 
 
-// ------------------- morse.js --------------------
+
+// ------------------- js/commands/morse.js --------------------
 terminal.addCommand("morse", async function(args) {
     function mostPopularChar(string) {
         string = string.toLowerCase().trim()
@@ -12448,7 +15893,8 @@ terminal.addCommand("morse", async function(args) {
 })
 
 
-// ------------------- mv.js --------------------
+
+// ------------------- js/commands/mv.js --------------------
 terminal.addCommand("mv", async function(args) {
     let file = terminal.getFile(args.file)
     if (["..", "-"].includes(args.directory)) {
@@ -12473,7 +15919,8 @@ terminal.addCommand("mv", async function(args) {
 })
 
 
-// ------------------- name-gen.js --------------------
+
+// ------------------- js/commands/name-gen.js --------------------
 terminal.addCommand("name-gen", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -12488,7 +15935,8 @@ terminal.addCommand("name-gen", async function(args) {
     description: "start a name generator",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- name.js --------------------
+
+// ------------------- js/commands/name.js --------------------
 terminal.addCommand("name", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -12535,7 +15983,8 @@ terminal.addCommand("name", async function(args) {
 		"?newname": "the new name"
 	},
 })
-// ------------------- ncr.js --------------------
+
+// ------------------- js/commands/ncr.js --------------------
 terminal.addCommand("ncr", async function(args) {
     const binom = (await terminal.modules.load("binom", terminal)).binom
     let n = ~~args.n
@@ -12553,7 +16002,8 @@ terminal.addCommand("ncr", async function(args) {
 })
 
 
-// ------------------- neural-car.js --------------------
+
+// ------------------- js/commands/neural-car.js --------------------
 const myNewGrid = {
     width: 256,
     height: 128,
@@ -13643,7 +17093,8 @@ terminal.addCommand("neural-car", async function(args) {
         cars: 100,
     }
 })
-// ------------------- neural-rocket.js --------------------
+
+// ------------------- js/commands/neural-rocket.js --------------------
 terminal.addCommand("neural-rocket", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("neural", terminal)
@@ -13998,7 +17449,8 @@ terminal.addCommand("neural-rocket", async function(args) {
     isSecret: true
 })
 
-// ------------------- nsolve.js --------------------
+
+// ------------------- js/commands/nsolve.js --------------------
 terminal.addCommand("nsolve", async function(args) {
     function makeDerivative(f, h=0.0001) {
         return x => (f(x + h) - f(x)) / h
@@ -14069,7 +17521,8 @@ terminal.addCommand("nsolve", async function(args) {
         iterations: 1000
     }
 })
-// ------------------- number-guess.js --------------------
+
+// ------------------- js/commands/number-guess.js --------------------
 terminal.addCommand("number-guess", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -14098,7 +17551,8 @@ terminal.addCommand("number-guess", async function(args) {
     description: "guess a random number",
     isGame: true
 })
-// ------------------- particle.js --------------------
+
+// ------------------- js/commands/particle.js --------------------
 terminal.addCommand("particle", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -14118,7 +17572,8 @@ terminal.addCommand("particle", async function(args) {
     },
     isSecret: true
 })
-// ------------------- pascal.js --------------------
+
+// ------------------- js/commands/pascal.js --------------------
 terminal.addCommand("pascal", async function(args) {
     function generate(depth) {
         let rows = []
@@ -14164,7 +17619,8 @@ terminal.addCommand("pascal", async function(args) {
 })
 
 
-// ------------------- password.js --------------------
+
+// ------------------- js/commands/password.js --------------------
 terminal.addCommand("password", async function(args) {
     function generatePassword(length, characters, repeatChars) {
         let password = String()
@@ -14247,7 +17703,8 @@ terminal.addCommand("password", async function(args) {
 })
 
 
-// ------------------- pendulum.js --------------------
+
+// ------------------- js/commands/pendulum.js --------------------
 terminal.addCommand("pendulum", async function(args) {
     args.o /= args.n / 20
     await terminal.modules.load("window", terminal)
@@ -14272,7 +17729,8 @@ terminal.addCommand("pendulum", async function(args) {
         o: 0.025
     }
 })
-// ------------------- perilious-path.js --------------------
+
+// ------------------- js/commands/perilious-path.js --------------------
 terminal.addCommand("perilious-path", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -14289,7 +17747,8 @@ terminal.addCommand("perilious-path", async function(args) {
     isGame: true,
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- physics.js --------------------
+
+// ------------------- js/commands/physics.js --------------------
 terminal.addCommand("physics", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -14304,7 +17763,8 @@ terminal.addCommand("physics", async function(args) {
     description: "start a physics simulation",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- pi.js --------------------
+
+// ------------------- js/commands/pi.js --------------------
 terminal.addCommand("pi", function(args) {
     let pi = ""
     pi += "1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679"
@@ -14422,7 +17882,8 @@ terminal.addCommand("pi", function(args) {
 
 
 
-// ------------------- piano.js --------------------
+
+// ------------------- js/commands/piano.js --------------------
 const asciiPiano = `+-+---+---+-+-+---+---+---+-+-+---+---+-+
 | | C | D | | | F | G | A | | | C | D | |
 | | # | # | | | # | # | # | | | # | # | |
@@ -14511,7 +17972,8 @@ terminal.addCommand("piano", async function(args) {
 }, {
     description: "play a piano with your keyboard"
 })
-// ------------------- plane.js --------------------
+
+// ------------------- js/commands/plane.js --------------------
 terminal.addCommand("plane", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -14530,7 +17992,8 @@ terminal.addCommand("plane", async function(args) {
     },
     isGame: true
 })
-// ------------------- plot.js --------------------
+
+// ------------------- js/commands/plot.js --------------------
 terminal.addCommand("plot", async function(args) {
     await terminal.modules.load("mathenv", terminal)
 
@@ -14711,7 +18174,8 @@ terminal.addCommand("plot", async function(args) {
         playtime: 2500
     }
 })
-// ------------------- plotter.js --------------------
+
+// ------------------- js/commands/plotter.js --------------------
 terminal.addCommand("plotter", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -14726,7 +18190,8 @@ terminal.addCommand("plotter", async function(args) {
     description: "plot mathematical functions",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- polyrythm.js --------------------
+
+// ------------------- js/commands/polyrythm.js --------------------
 terminal.addCommand("polyrythm", async function(args) {
     if (!args.numbers.match(/^(?:\d+\s)*\d+$/)) {
         terminal.printLine(`Example Use: "polyrythm 3 4 5"`)
@@ -14864,7 +18329,8 @@ terminal.addCommand("polyrythm", async function(args) {
         beepMs: 150
     }
 })
-// ------------------- pong.js --------------------
+
+// ------------------- js/commands/pong.js --------------------
 terminal.addCommand("pong", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -15083,7 +18549,8 @@ terminal.addCommand("pong", async function(args) {
     description: "play a game of pong against the computer",
     isGame: true
 })
-// ------------------- primes.js --------------------
+
+// ------------------- js/commands/primes.js --------------------
 terminal.addCommand("primes", async function() {
     function sqrt(value) {
         if (value < 0n) {
@@ -15143,7 +18610,8 @@ terminal.addCommand("primes", async function() {
 }, {
     description: "generate mersenne primes"
 })
-// ------------------- pull.js --------------------
+
+// ------------------- js/commands/pull.js --------------------
 terminal.addCommand("pull", async function(args) {
     if (terminal.fileExists(args.file))
         throw new Error("file already exists in folder")
@@ -15171,7 +18639,8 @@ terminal.addCommand("pull", async function(args) {
         "file": "file to pull"
     }
 })
-// ------------------- push.js --------------------
+
+// ------------------- js/commands/push.js --------------------
 terminal.addCommand("push", async function(args) {
     if (!terminal.isValidFileName(args.file))
         throw new Error("invalid file name")
@@ -15191,7 +18660,8 @@ terminal.addCommand("push", async function(args) {
         "file": "file to push"
     }
 })
-// ------------------- pv.js --------------------
+
+// ------------------- js/commands/pv.js --------------------
 terminal.addCommand("pv", async function(args) {
     await terminal.animatePrint(args.message)
 }, {
@@ -15200,7 +18670,8 @@ terminal.addCommand("pv", async function(args) {
 })
 
 
-// ------------------- pwd.js --------------------
+
+// ------------------- js/commands/pwd.js --------------------
 terminal.addCommand("pwd", function() {
     terminal.printLine("/" + terminal.fileSystem.pathStr)
 }, {
@@ -15208,7 +18679,8 @@ terminal.addCommand("pwd", function() {
 })
 
 
-// ------------------- python.js --------------------
+
+// ------------------- js/commands/python.js --------------------
 terminal.addCommand("python", async function(args) {
     if (args.file)
         terminal.getFile(args.file)
@@ -15315,7 +18787,8 @@ terminal.addCommand("python", async function(args) {
     },
     disableEqualsArgNotation: true
 })
-// ------------------- qr.js --------------------
+
+// ------------------- js/commands/qr.js --------------------
 terminal.addCommand("qr", async function(args) {
     
     let api = "https://chart.apis.google.com/chart?chs=500x500&cht=qr&chld=L&chl="
@@ -15331,7 +18804,8 @@ terminal.addCommand("qr", async function(args) {
         "*text": "the text to encode"
     }
 })
-// ------------------- rate.js --------------------
+
+// ------------------- js/commands/rate.js --------------------
 terminal.addCommand("rate", function(args) {
     let languageEvaluations = {
         "py": "it's got everything: explicity, typing, great syntax, just speed is lacking",
@@ -15372,7 +18846,8 @@ terminal.addCommand("rate", function(args) {
     description: "rate a programming language",
     args: ["language"]
 })
-// ------------------- raycasting.js --------------------
+
+// ------------------- js/commands/raycasting.js --------------------
 terminal.addCommand("raycasting", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -15387,13 +18862,15 @@ terminal.addCommand("raycasting", async function(args) {
     description: "play with raycasting",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- reboot.js --------------------
+
+// ------------------- js/commands/reboot.js --------------------
 terminal.addCommand("reboot", () => terminal.reload(), {
     description: "reboot the website"
 })
 
 
-// ------------------- reload.js --------------------
+
+// ------------------- js/commands/reload.js --------------------
 terminal.addCommand("reload", async function(args) {
     if (terminal.inTestMode)
         return
@@ -15403,7 +18880,8 @@ terminal.addCommand("reload", async function(args) {
 }, {
     description: "Reloads the terminal",
 })
-// ------------------- rename.js --------------------
+
+// ------------------- js/commands/rename.js --------------------
 terminal.addCommand("rename", async function(args) {
     if (!terminal.isValidFileName(args.name))
         throw new Error("invalid file name")
@@ -15432,7 +18910,8 @@ terminal.addCommand("rename", async function(args) {
         "name": "the new name of the file or folder"
     }
 })
-// ------------------- reset.js --------------------
+
+// ------------------- js/commands/reset.js --------------------
 terminal.addCommand("reset", async function(args) {
     async function animatedDo(action) {
         return new Promise(async resolve => {
@@ -15461,7 +18940,8 @@ terminal.addCommand("reset", async function(args) {
         "?n=now:b": "reset now"
     }
 })
-// ------------------- reverse.js --------------------
+
+// ------------------- js/commands/reverse.js --------------------
 terminal.addCommand("reverse", async function(args) {
     let reversed = args.message.split("").reverse().join("")
     terminal.printLine(reversed)
@@ -15478,7 +18958,8 @@ terminal.addCommand("reverse", async function(args) {
 })
 
 
-// ------------------- rm.js --------------------
+
+// ------------------- js/commands/rm.js --------------------
 terminal.addCommand("rm", async function(args) {
     let file = terminal.getFile(args.file)
     if (file.type == FileType.FOLDER)
@@ -15489,7 +18970,8 @@ terminal.addCommand("rm", async function(args) {
     description: "remove a file",
     args: ["*file"]
 })
-// ------------------- rmdir.js --------------------
+
+// ------------------- js/commands/rmdir.js --------------------
 terminal.addCommand("rmdir", async function(args) {
     let directory = terminal.getFile(args.directory, FileType.FOLDER)
     if (Object.keys(directory.content).length > 0) {
@@ -15504,7 +18986,8 @@ terminal.addCommand("rmdir", async function(args) {
 })
 
 
-// ------------------- rndm.js --------------------
+
+// ------------------- js/commands/rndm.js --------------------
 terminal.addCommand("rndm", async function(args) {
     if (args.max - args.min <= 0)
         throw new Error("max value must be greater than min value")
@@ -15552,7 +19035,8 @@ terminal.addCommand("rndm", async function(args) {
 })
 
 
-// ------------------- sc.js --------------------
+
+// ------------------- js/commands/sc.js --------------------
 terminal.addCommand("sc", async function(args) {
     if (args.command && args.mode == "add") {
         let tokens = TerminalParser.tokenize(args.command)
@@ -15633,7 +19117,8 @@ terminal.addCommand("sc", async function(args) {
         mode: "list"
     }
 })
-// ------------------- scarpet.js --------------------
+
+// ------------------- js/commands/scarpet.js --------------------
 terminal.addCommand("scarpet", async function(args) {
 	await terminal.modules.import("game", window)
 
@@ -15699,7 +19184,8 @@ terminal.addCommand("scarpet", async function(args) {
         size: 50
     }
 })
-// ------------------- search.js --------------------
+
+// ------------------- js/commands/search.js --------------------
 terminal.addCommand("search", async function(args) {
     terminal.href(args.b + encodeURIComponent(args.query))
 }, {
@@ -15714,7 +19200,8 @@ terminal.addCommand("search", async function(args) {
 })
 
 
-// ------------------- set.js --------------------
+
+// ------------------- js/commands/set.js --------------------
 terminal.addCommand("set", async function(args) {
     await terminal.modules.load("cliapi", terminal)
     const CliApi = terminal.modules.cliapi
@@ -15738,7 +19225,8 @@ terminal.addCommand("set", async function(args) {
 })
 
 
-// ------------------- sha256.js --------------------
+
+// ------------------- js/commands/sha256.js --------------------
 terminal.addCommand("sha256", async function(args) {
     if (!window.crypto || !window.crypto.subtle)
         throw new Error("crypto API not supported")
@@ -15779,7 +19267,8 @@ terminal.addCommand("sha256", async function(args) {
 })
 
 
-// ------------------- shoot.js --------------------
+
+// ------------------- js/commands/shoot.js --------------------
 terminal.addCommand("shoot", async function(args) {
 	const world1 = `
 +--------------------------------------------------------------------+
@@ -16241,7 +19730,8 @@ terminal.addCommand("shoot", async function(args) {
 	}
 })
 
-// ------------------- shutdown.js --------------------
+
+// ------------------- js/commands/shutdown.js --------------------
 terminal.addCommand("shutdown", async function() {
     terminal.print("Shutting down")
     for (let i = 0; i < 10; i++) {
@@ -16268,7 +19758,8 @@ terminal.addCommand("shutdown", async function() {
 })
 
 
-// ------------------- sl.js --------------------
+
+// ------------------- js/commands/sl.js --------------------
 terminal.addCommand("sl", async function(args) {
     let FRAME = "", FRAMES = []
     FRAME  = "     ooOOOO\n"
@@ -16420,7 +19911,8 @@ terminal.addCommand("sl", async function(args) {
         "?f=F:b": "Make it fly"
     }
 })
-// ------------------- sleep.js --------------------
+
+// ------------------- js/commands/sleep.js --------------------
 terminal.addCommand("sleep", async function(args) {
     await sleep(args.seconds * 1000)
 }, {
@@ -16428,7 +19920,8 @@ terminal.addCommand("sleep", async function(args) {
     args: ["seconds:n:0~1000000"]
 })
 
-// ------------------- slime.js --------------------
+
+// ------------------- js/commands/slime.js --------------------
 terminal.addCommand("slime", async function() {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -16441,7 +19934,8 @@ terminal.addCommand("slime", async function() {
 }, {
     description: "Start a slime simulation"
 })
-// ------------------- snake.js --------------------
+
+// ------------------- js/commands/snake.js --------------------
 terminal.addCommand("snake", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -16652,7 +20146,8 @@ terminal.addCommand("snake", async function(args) {
     },
     isGame: true
 })
-// ------------------- sodoku.js --------------------
+
+// ------------------- js/commands/sodoku.js --------------------
 terminal.addCommand("sodoku", async function(args) {
 
     const MODES = ["play", "solve"]
@@ -17398,7 +20893,8 @@ terminal.addCommand("sodoku", async function(args) {
     },
     isGame: true
 })
-// ------------------- solve.js --------------------
+
+// ------------------- js/commands/solve.js --------------------
 terminal.addCommand("solve", async function(args) {
     let equation = args.equation
     if (!/^[0-9x\s\\\*\.a-z+-\^\(\)]+=[0-9x\s\\\*\.a-z+-\^\(\)]+$/.test(equation)) {
@@ -17485,7 +20981,8 @@ terminal.addCommand("solve", async function(args) {
 })
 
 
-// ------------------- sorting.js --------------------
+
+// ------------------- js/commands/sorting.js --------------------
 terminal.addCommand("sorting", async function(args) {
 
     let array = Array.from({length: args.n}, (_, i) => i + 1)
@@ -17763,7 +21260,8 @@ terminal.addCommand("sorting", async function(args) {
 })
 
 
-// ------------------- spion.js --------------------
+
+// ------------------- js/commands/spion.js --------------------
 const getApiUrl = "../spion/api/get.php"
 const addApiUrl = "../spion/api/add.php"
 
@@ -17858,7 +21356,8 @@ terminal.addCommand("spion", async function(args) {
     },
     isSecret: true
 })
-// ------------------- stacker.js --------------------
+
+// ------------------- js/commands/stacker.js --------------------
 terminal.addCommand("stacker", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -18015,7 +21514,8 @@ terminal.addCommand("stacker", async function(args) {
     description: "play a stacker game",
     isGame: true
 })
-// ------------------- stat.js --------------------
+
+// ------------------- js/commands/stat.js --------------------
 terminal.addCommand("stat", async function(args) {
     await terminal.modules.import("statistics", window)
 
@@ -18206,7 +21706,8 @@ terminal.addCommand("stat", async function(args) {
         linewidth: 2,
     }
 })
-// ------------------- style.js --------------------
+
+// ------------------- js/commands/style.js --------------------
 terminal.addCommand("style", async function(args) {
     class Preset {  
 
@@ -18260,7 +21761,8 @@ terminal.addCommand("style", async function(args) {
 })
 
 
-// ------------------- sudo.js --------------------
+
+// ------------------- js/commands/sudo.js --------------------
 terminal.addCommand("sudo", async function() {
     let password = await terminal.prompt("[sudo] password: ", {password: true})
     
@@ -18293,7 +21795,8 @@ terminal.addCommand("sudo", async function() {
     description: "try to use sudo",
     args: ["**"]
 })
-// ------------------- terminal.js --------------------
+
+// ------------------- js/commands/terminal.js --------------------
 terminal.addCommand("terminal", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -18308,7 +21811,8 @@ terminal.addCommand("terminal", async function(args) {
     description: "a terminal inside a terminal",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
-// ------------------- terml.js --------------------
+
+// ------------------- js/commands/terml.js --------------------
 class TermlSettings {
 
     static INLINE_DELIMITER = " "
@@ -19505,7 +23009,8 @@ terminal.addCommand("terml", async function(args) {
 		"file": "the file to run"
 	}
 })
-// ------------------- tetris.js --------------------
+
+// ------------------- js/commands/tetris.js --------------------
 terminal.addCommand("tetris", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -19892,7 +23397,8 @@ terminal.addCommand("tetris", async function(args) {
     description: "play a classic game of tetris",
     isGame: true
 })
-// ------------------- tictactoe.js --------------------
+
+// ------------------- js/commands/tictactoe.js --------------------
 terminal.addCommand("tictactoe", async function(args) {
     await terminal.modules.import("game", window)
 
@@ -20116,7 +23622,8 @@ terminal.addCommand("tictactoe", async function(args) {
     },
     isGame: true
 })
-// ------------------- time.js --------------------
+
+// ------------------- js/commands/time.js --------------------
 terminal.addCommand("time", async function(args) {
     const output = terminal.print("", undefined, {forceElement: true})
     output.style.fontSize = args.size + "em"
@@ -20181,7 +23688,8 @@ terminal.addCommand("time", async function(args) {
         size: 3,
     }
 })
-// ------------------- timer.js --------------------
+
+// ------------------- js/commands/timer.js --------------------
 terminal.addCommand("timer", async function(rawArgs) {
     let words = rawArgs.split(" ").filter(w => w.length > 0)
     let ms = 0
@@ -20281,7 +23789,8 @@ terminal.addCommand("timer", async function(rawArgs) {
 })
 
 
-// ------------------- todo.js --------------------
+
+// ------------------- js/commands/todo.js --------------------
 function fetchWithParam(url, params) {
     let query = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join("&")
     return fetch(`${url}?${query}`)
@@ -20429,7 +23938,8 @@ terminal.addCommand("todo", async function(rawArgs) {
     description: "manage a todo list",
     rawArgMode: true
 })
-// ------------------- touch.js --------------------
+
+// ------------------- js/commands/touch.js --------------------
 terminal.addCommand("touch", async function(args) {
     if (!terminal.isValidFileName(args.filename))
         throw new Error("Invalid filename")
@@ -20449,7 +23959,8 @@ terminal.addCommand("touch", async function(args) {
 })
 
 
-// ------------------- turing.js --------------------
+
+// ------------------- js/commands/turing.js --------------------
 class TuringError {
 
     constructor(message, lineNum, lineContent) {
@@ -20779,7 +24290,8 @@ terminal.addCommand("turing", async function(args) {
     }
 })
 
-// ------------------- turtlo.js --------------------
+
+// ------------------- js/commands/turtlo.js --------------------
 terminal.addCommand("turtlo", async function(args) {
     await terminal.modules.load("turtlo", terminal)
     terminal.modules.turtlo.spawn({size: args.size, silent: args.silent})
@@ -20793,10 +24305,11 @@ terminal.addCommand("turtlo", async function(args) {
         size: 1
     }
 })
-// ------------------- type-test.js --------------------
+
+// ------------------- js/commands/type-test.js --------------------
 // 1000 words randomly chosen from a list of 10000 most common english words
 // source: https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english.txt
-const englishWords = [
+var englishWords = [
     "spokesman", "slots", "man", "targets", "plymouth", "sec", "reflects", "constitutional", "hereby", "progressive", "rss", 
     "authors", "secrets", "basically", "wild", "beautiful", "theatre", "cry", "vhs", "fraction", "breakfast", "meal", "far", 
     "out", "glow", "literally", "specialist", "touch", "coastal", "ala", "ingredients", "medal", "adsl", "extract", "corresponding", 
@@ -21022,7 +24535,8 @@ terminal.addCommand("type-test", async function(args) {
     description: "test your typing speed",
     isGame: true
 })
-// ------------------- uname.js --------------------
+
+// ------------------- js/commands/uname.js --------------------
 terminal.addCommand("uname", function() {
     terminal.printLine("NOELOS OS 1.0.5")
 }, {
@@ -21030,7 +24544,8 @@ terminal.addCommand("uname", function() {
 })
 
 
-// ------------------- upload.js --------------------
+
+// ------------------- js/commands/upload.js --------------------
 terminal.addCommand("upload", async function() {
     await terminal.modules.load("upload", terminal)
     try {
@@ -21056,7 +24571,8 @@ terminal.addCommand("upload", async function() {
 })
 
 
-// ------------------- vigenere.js --------------------
+
+// ------------------- js/commands/vigenere.js --------------------
 terminal.addCommand("vigenere", async function(args) {
     const getCharValue = char => char.toLowerCase().charCodeAt(0) - 97
     const getCharFromValue = value => String.fromCharCode(value + 97)
@@ -21097,7 +24613,8 @@ terminal.addCommand("vigenere", async function(args) {
 })
 
 
-// ------------------- visits.js --------------------
+
+// ------------------- js/commands/visits.js --------------------
 terminal.addCommand("visits", async function(args) {
     let visits = await fetch(
         "api/get_visit_count.php"
@@ -21106,7 +24623,8 @@ terminal.addCommand("visits", async function(args) {
 }, {
     "description": "Shows the number of page visits",
 })
-// ------------------- w.js --------------------
+
+// ------------------- js/commands/w.js --------------------
 terminal.addCommand("w", function() {
     terminal.printLine("USER   TIME_ELAPSED")
     terminal.print("root   ", Color.COLOR_1)
@@ -21116,7 +24634,8 @@ terminal.addCommand("w", function() {
 })
 
 
-// ------------------- wave.js --------------------
+
+// ------------------- js/commands/wave.js --------------------
 terminal.addCommand("wave", async function() {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
@@ -21131,7 +24650,8 @@ terminal.addCommand("wave", async function() {
 }, {
     description: "play with a wave"
 })
-// ------------------- wc.js --------------------
+
+// ------------------- js/commands/wc.js --------------------
 terminal.addCommand("wc", function(args) {
     let text = ""
     if (args.s) {
@@ -21167,7 +24687,8 @@ terminal.addCommand("wc", function(args) {
 })
 
 
-// ------------------- weather.js --------------------
+
+// ------------------- js/commands/weather.js --------------------
 terminal.addCommand("weather", async () => {
   try {
     const position = await new Promise((resolve, reject) => {
@@ -21215,7 +24736,8 @@ terminal.addCommand("weather", async () => {
   description: "Get the current weather",
   author: "Colin Chadwick"
 })
-// ------------------- whatday.js --------------------
+
+// ------------------- js/commands/whatday.js --------------------
 terminal.addCommand("whatday", function(args) {
 
     function dayToStr(n) {
@@ -21335,7 +24857,8 @@ terminal.addCommand("whatday", function(args) {
 })
 
 
-// ------------------- whatis.js --------------------
+
+// ------------------- js/commands/whatis.js --------------------
 terminal.addCommand("whatis", async function(args) {
     if (args.command == "*") {
         let maxFuncLength = terminal.visibleFunctions.reduce((p, c) => Math.max(p, c.name.length), 0)
@@ -21360,7 +24883,8 @@ terminal.addCommand("whatis", async function(args) {
     description: "display a short description of a command",
     args: ["command"]
 })
-// ------------------- whoami.js --------------------
+
+// ------------------- js/commands/whoami.js --------------------
 terminal.addCommand("whoami", async function() {
     terminal.printLine("fetching data...")
 
@@ -21406,7 +24930,8 @@ terminal.addCommand("whoami", async function() {
 }, {
     description: "get client info"
 })
-// ------------------- yes.js --------------------
+
+// ------------------- js/commands/yes.js --------------------
 terminal.addCommand("yes", async function(args) {
     let message = args.message
     while (true) {
@@ -21426,7 +24951,8 @@ terminal.addCommand("yes", async function(args) {
 })
 
 
-// ------------------- zip.js --------------------
+
+// ------------------- js/commands/zip.js --------------------
 terminal.addCommand("zip", async function() {
     await terminal.animatePrint("zip it lock it put it in your pocket")
     await terminal.animatePrint("(Sorry, this command is not yet implemented)")
@@ -21450,4 +24976,2503 @@ terminal.addCommand("zip", async function() {
     description: "zip a file"
 })
 
+
+
+// ------------------- js/modules/binom.js --------------------
+function binom(n, k) {
+    let res = 1
+    for (let i = 1; i <= k; i++) {
+        res *= n - k + i
+        res /= i
+    }
+    return res
+}
+
+function binompdf(n, p, k) {
+    return binom(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k)
+}
+
+function binomcdf(n, p, lower, upper) {
+    let res = 0
+    for (let i = lower; i <= upper; i++)
+        res += binompdf(n, p, i)
+    return res
+}
+
+terminal.modules.binom = {binom, binompdf, binomcdf}
+
+// ------------------- js/modules/cliapi.js --------------------
+class CliApi {
+
+    static urlBase = "api/"
+
+    static KEY_REGEX = /^[a-zA-Z\_\-][a-zA-Z\_\-0-9\#\~]*$/
+
+    static async get(name) {
+        let url = `${CliApi.urlBase}get.php?key=${encodeURIComponent(name)}`
+        return await fetch(url).then(response => response.text())
+    }
+
+    static async set(name, value) {
+        let url = `${CliApi.urlBase}set.php`
+        return await fetch(`${url}?key=${encodeURIComponent(name)}&value=${encodeURIComponent(value)}`)
+    }
+
+    static async pullFile(name) {
+        let url = `${CliApi.urlBase}pull_file.php?key=${encodeURIComponent(name)}`
+        return await fetch(url).then(response => response.text())
+    }
+
+    static async pushFile(name, content) {
+        let url = `${CliApi.urlBase}push_file.php`
+        let formData = new FormData()
+        formData.append("file_name", name)
+        formData.append("content", content)
+        let result = await fetch(url, {
+            method: "POST",
+            body: formData
+        }).then(response => response.json())
+        return result
+    }
+
+}
+
+terminal.modules.cliapi = CliApi
+
+// ------------------- js/modules/game.js --------------------
+function angleDifference(a, b) {
+    var diff = a - b
+    while (diff < -Math.PI/2) diff += Math.PI
+    while (diff > Math.PI/2) diff -= Math.PI
+    return diff
+}
+
+class Vector2d {
+
+    constructor(x, y) {
+        this.x = x
+        this.y = y
+    }
+
+    static get zero() {
+        return new Vector2d(0, 0)
+    }
+
+    static fromFunc(f) {
+        return new Vector2d(f(0), f(1))
+    }
+
+    copy() {
+        return new Vector2d(this.x, this.y)
+    }
+
+    add(v) {
+        return new Vector2d(this.x + v.x, this.y + v.y)
+    }
+
+    iadd(v) {
+        this.x += v.x
+        this.y += v.y
+    }
+
+    sub(v) {
+        return new Vector2d(this.x - v.x, this.y - v.y)
+    }
+
+    isub(v) {
+        this.x -= v.x
+        this.y -= v.y
+    }
+
+    mul(v) {
+        return new Vector2d(this.x * v.x, this.y * v.y)
+    }
+
+    imul(v) {
+        this.x *= v.x
+        this.y *= v.y
+    }
+
+    div(v) {
+        return new Vector2d(this.x / v.x, this.y / v.y)
+    }
+
+    idiv(v) {
+        this.x /= v.x
+        this.y /= v.y
+    }
+
+    get length() {
+        return Math.sqrt(this.x * this.x + this.y * this.y)
+    }
+
+    get normalized() {
+        let m = this.length
+        return new Vector2d(this.x / m, this.y / m)
+    }
+    
+    scale(x) {
+        return new Vector2d(this.x * x, this.y * x)
+    }
+
+    lerp(v, t) {
+        let delta = v.sub(this)
+        return this.add(delta.scale(t))
+    }
+
+    dot(v) {
+        return this.x * v.x + this.y * v.y
+    }
+
+    iscale(x) {
+        this.x *= x
+        this.y *= x
+    }
+
+    distance(v) {
+        return this.sub(v).length
+    }
+
+    cross(v) {
+        return this.x * v.y - this.y * v.x
+    }
+
+    static fromAngle(angle) {
+        return new Vector2d(Math.cos(angle), Math.sin(angle))
+    }
+
+    static fromPolar(mag, angle) {
+        return new Vector2d(mag * Math.cos(angle), mag * Math.sin(angle))
+    }
+
+    static fromArray(arr) {
+        return new Vector2d(arr[0], arr[1])
+    }
+
+    set(x, y) {
+        this.x = x
+        this.y = y
+    }
+
+    addX(x) {
+        return new Vector2d(this.x + x, this.y)
+    }
+
+    addY(y) {
+        return new Vector2d(this.x, this.y + y)
+    }
+
+    rotate(angle) {
+        let x = this.x * Math.cos(angle) - this.y * Math.sin(angle)
+        let y = this.x * Math.sin(angle) + this.y * Math.cos(angle)
+        return new Vector2d(x, y)
+    }
+
+    irotate(angle) {
+        let x = this.x * Math.cos(angle) - this.y * Math.sin(angle)
+        let y = this.x * Math.sin(angle) + this.y * Math.cos(angle)
+        this.x = x
+        this.y = y
+    }
+
+    static random() {
+        let direction = Math.random() * Math.PI * 2
+        return Vector2d.fromAngle(direction)
+    }
+
+    get angle() {
+        return Math.atan2(this.y, this.x)
+    }
+
+    angleDifference(v) {
+        return angleDifference(this.angle, v.angle)
+    }
+
+    angleTo(v) {
+        return Math.atan2(v.y - this.y, v.x - this.x)
+    }
+
+    equals(v) {
+        return this.x == v.x && this.y == v.y
+    }
+
+    map(f) {
+        return new Vector2d(f(this.x), f(this.y))
+    }
+
+    product() {
+        return this.x * this.y
+    }
+
+    get array() {
+        return [this.x, this.y]
+    }
+
+    get min() {
+        return Math.min(...this.array)
+    }
+
+    get max() {
+        return Math.max(...this.array)
+    }
+
+    toArray() {
+        return [this.x, this.y]
+    }
+
+}
+
+class Vector3d {
+	
+	constructor(x, y, z) {
+		this.x = x
+		this.y = y
+		this.z = z
+	}
+	
+	get length() {
+		return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z)
+	}
+
+    get normalized() {
+        return this.div(this.length)
+    }
+
+    get array() {
+        return [this.x, this.y, this.z]
+    }
+
+    get min() {
+        return Math.min(...this.array)
+    }
+
+    get max() {
+        return Math.max(...this.array)
+    }
+
+    copy() {
+        return new Vector3d(this.x, this.y, this.z)
+    }
+	
+	add(other) {
+		return new Vector3d(
+			this.x + other.x,
+			this.y + other.y,
+			this.z + other.z
+		)
+	}
+
+    lerp(other, t) {
+        return this.add(other.sub(this).mul(t))
+    }
+
+    distanceTo(other) {
+        return this.sub(other).length
+    }
+	
+	mul(scalar) {
+		return new Vector3d(
+			this.x * scalar,
+			this.y * scalar,
+			this.z * scalar
+		)
+	}
+	
+	sub(other) {
+		return this.add(other.mul(-1))
+	}
+	
+	div(scalar) {
+		return this.mul(1 / scalar)
+	}
+	
+	cross(other) {
+		return new Vector3d(
+			this.y * other.z - this.z * other.y,
+			this.z * other.x - this.x * other.z,
+			this.x * other.y - this.y * other.x
+		)
+	}
+	
+	dot(other) {
+		return (
+			this.x * other.x +
+			this.y * other.y +
+			this.z * other.z
+		)
+	}
+	
+	get angleX() {
+		return Math.atan2(this.z, this.y)
+	}
+	
+	rotateX(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x,
+            this.y * cos - this.z * sin,
+            this.y * sin + this.z * cos
+        )
+	}
+
+    setAngleX(angle) {
+        return this.rotateX(angle - this.angleX)
+    }
+
+    get angleY() {
+        return Math.atan2(this.z, this.x)
+    }
+
+    rotateY(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x * cos - this.z * sin,
+            this.y,
+            this.x * sin + this.z * cos
+        )
+    }
+
+    setAngleY(angle) {
+        return this.rotateY(angle - this.angleY)
+    }
+
+    get angleZ() {
+        return Math.atan2(this.y, this.x)
+    }
+
+    rotateZ(angle) {
+        let cos = Math.cos(angle)
+        let sin = Math.sin(angle)
+        return new Vector3d(
+            this.x * cos - this.y * sin,
+            this.x * sin + this.y * cos,
+            this.z
+        )
+    }
+
+    setAngleZ(angle) {
+        return this.rotateZ(angle - this.angleZ)
+    }
+
+    rotateUp(angle) {
+        let temp = this.angleZ
+        return this.setAngleZ(0).rotateY(angle).setAngleZ(temp)
+    }
+
+    setAngleUp(angle) {
+        let temp = this.angleZ
+        return this.setAngleZ(0).setAngleY(angle).setAngleZ(temp)
+    }
+
+    get angleUp() {
+        return this.setAngleZ(0).angleY
+    }
+
+    rotateRight(angle) {
+        return this.rotateZ(angle)
+        let temp = this.angleUpS
+        return this.setAngleUp(0).rotateZ(angle).setAngleUp(temp)
+    }
+
+    apply(func) {
+        return new Vector3d(
+            func(this.x),
+            func(this.y),
+            func(this.z)
+        )
+    }
+
+    round() {
+        return this.apply(Math.round)
+    }
+
+    floor() {
+        return this.apply(Math.floor)
+    }
+
+}
+
+class HighscoreApi {
+
+    static baseUrl = "./api/"
+    static tempName = null
+    static tempGame = null
+    static tempPassword = null
+	static username = null
+
+    static async req(url, data) {
+        url = terminal.baseUrl + this.baseUrl + url + ".php?"
+        for (let key in data)
+            url += encodeURIComponent(key) + "=" + encodeURIComponent(data[key]) + "&"
+        let response = await fetch(url.slice(0, -1))
+        return await response.text()
+    }
+
+    static async getHighscores(game) {
+        let data = await this.req("get_highscores", {game})
+        return JSON.parse(data)
+    }
+
+    static async addHighscore(game, name, score) {
+        await this.req("upload_highscore", {game, name, score})
+    }
+
+    static async removeHighscore(password, uid) {
+        await this.req("remove_highscore", {password, uid})
+    }
+    
+    static async getUsername() {
+    	if (this.username) {
+    		this.tempName = this.username
+    		return
+    	}
+    
+    	this.tempName = await terminal.prompt("[highscores] Your name: ")
+        while (!/^[a-zA-Z0-9_\-]{1,20}$/.test(this.tempName)) {
+            terminal.printError("Name must be 1-20 characters long and only contain letters, numbers, dashes and underscores")
+            this.tempName = await terminal.prompt("[highscores] Your name: ")
+        }
+
+        terminal.print("Tip: You can set your username permanently using ")
+        terminal.printCommand(`name set ${this.tempName}`)
+    }
+
+    static async registerProcess(game, {
+        ask=true
+    }={}) {
+        if (ask) {
+            try {
+                await terminal.acceptPrompt("[highscores] Do you want to upload your score?", false)
+            } catch {
+                terminal.printLine("[highscores] Score not uploaded")
+                this.tempGame = null
+                return
+            }
+        }
+
+        this.tempGame = game
+        await this.getUsername()
+    }
+
+    static async getRank(game, score, scores) {
+        let highscores = scores ?? await this.getHighscores(game)
+        let rank = 1
+        let lastScore = null
+        for (let highscore of highscores) {
+            if (lastScore != null && lastScore == highscore.score) {
+                continue
+            }
+            if (highscore.score > score) rank++
+            lastScore = highscore.score
+        }
+        return rank
+    }
+
+    static async uploadScore(score) {
+        if (this.tempGame == null) return
+        await this.addHighscore(this.tempGame, this.tempName, score)
+
+        let rank = await this.getRank(this.tempGame, score)
+
+        if (rank == 1) {
+            terminal.printSuccess("You got the new highscore! Congratulations!")
+        } else if (rank == 2) {
+            terminal.printSuccess("You got the second best score! Congratulations!")
+        } else if (rank == 3) {
+            terminal.printSuccess("You got the third best score! Congratulations!")
+        } else {
+            terminal.printSuccess("You got rank " + rank)
+        }
+
+        terminal.print("You can view the highscores using ")
+        terminal.printCommand("highscores " + this.tempGame)
+
+        this.tempGame = null
+    }
+
+    static async getHighscore(game) {
+        let highscores = await this.getHighscores(game)
+        if (highscores.length == 0) return null
+        return highscores[0]
+    }
+
+    static async loginAdmin(silent=false) {
+        if (this.tempPassword != null) return
+
+        let password = null
+
+        if (localStorage.getItem("highscore_password") != null) {
+            password = localStorage.getItem("highscore_password")
+        } else {
+            password = await terminal.prompt("Password: ", {password: true})
+        }
+
+        let data = await this.req("admin", {confirm: true, password})
+        if (data === "Confirmed") {
+            if (!silent) {
+                terminal.printSuccess("Logged in as admin")
+            }
+            this.tempPassword = password
+            localStorage.setItem("highscore_password", password)
+        } else {
+            localStorage.removeItem("highscore_password")
+            throw new Error("Incorrect password")
+        }
+    }
+
+    static async removeHighscoreProcess() {
+        await this.loginAdmin()
+    }
+    
+    static async setUsername(newUsername) {
+    	this.username = newUsername
+    	localStorage.setItem("highscore_username", newUsername)
+    }
+    
+    static async resetUsername() {
+        this.username = null
+    	localStorage.removeItem("highscore_username")
+    }
+    
+    static async loadUsernameFromLocalStorage() {
+    	this.username = localStorage.getItem("highscore_username") || null
+    }
+
+}
+
+class CanvasDrawer {
+
+    static async promptOptions(context, {
+        options=[
+            "Respawn",
+            "Upload Score",
+            "Exit"
+        ],
+        infoLines=[]
+    }={}) {
+        let promptActive = true
+
+        let canvas = context.canvas
+
+        let extraLines = [
+            "Use arrow keys to select an option",
+            "Press enter to select an option"
+        ].concat(infoLines).concat([""])
+
+        const drawBackground = () => {
+            context.fillStyle = "black"
+            context.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        let optionsIndex = 0
+
+        const drawOptions = () => {
+            let textSize = 20
+            let textMargin = 10
+            let textHeight = textSize + textMargin
+            context.font = textSize + "px monospace"
+            context.textAlign = "center"
+            context.textBaseline = "middle"
+            context.fillStyle = "white"
+
+            let lines = extraLines.concat(options)
+            lines[optionsIndex + extraLines.length] = `> ${lines[optionsIndex + extraLines.length]} <`
+
+            let yOffset = canvas.height / 2 - textHeight * (lines.length - 1) / 2
+            for (let i = 0; i < lines.length; i++) {
+                context.fillText(
+                    lines[i],
+                    canvas.width / 2,
+                    yOffset + textHeight * i
+                )
+            }
+        }
+
+        const draw = () => {
+            drawBackground()
+            drawOptions()
+        }
+
+        terminal.onInterrupt(() => promptActive = false)
+
+        terminal.window.addEventListener("keydown", e => {
+            if (!promptActive) return
+
+            if (e.key == "ArrowUp" || e.key == "ArrowLeft") {
+                optionsIndex--
+                e.preventDefault()
+                if (optionsIndex < 0) optionsIndex = options.length - 1
+            } else if (e.key == "ArrowDown" || e.key == "ArrowRight") {
+                optionsIndex++
+                e.preventDefault()
+                if (optionsIndex >= options.length) optionsIndex = 0
+            }
+
+            if (e.key == "Enter") {
+                promptActive = false
+                e.preventDefault()
+            }
+
+            draw()
+        })
+
+        draw()
+
+        while (promptActive) {
+            await terminal.sleep(100)
+            draw()
+        }
+
+        return optionsIndex
+    }
+
+}
+
+HighscoreApi.loadUsernameFromLocalStorage()
+
+function printSquareCanvas({widthChars=60}={}) {
+    let canvas = terminal.document.createElement("canvas")
+    let sizePx = terminal.charWidth * widthChars
+    canvas.width = sizePx
+    canvas.height = sizePx
+    terminal.parentNode.appendChild(canvas)
+    return canvas
+}
+
+terminal.modules.game = {
+    Vector2d,
+    Vector3d,
+    angleDifference,
+    HighscoreApi,
+    CanvasDrawer,
+    addEventListener: terminal.window.addEventListener,
+    removeEventListener: terminal.window.removeEventListener,
+    requestAnimationFrame: terminal.window.requestAnimationFrame,
+    setInterval: terminal.window.setInterval,
+    clearInterval: terminal.window.clearInterval,
+    setTimeout: terminal.window.setTimeout,
+    clearTimeout: terminal.window.clearTimeout,
+    printSquareCanvas: printSquareCanvas
+}
+
+// ------------------- js/modules/mathenv.js --------------------
+class JsEnvironment {
+    constructor() {
+        this.iframe = document.createElement("iframe")
+        this.iframe.style.display = "none"
+        document.body.appendChild(this.iframe)
+        this.document = this.iframe.contentDocument || this.iframe.contentWindow.document
+    }
+
+    eval(code) {
+        try {
+            let evaluation = this.iframe.contentWindow.eval(code)
+            return [evaluation, null]
+        } catch (e) {
+            return [null, `${e.name}: ${e.message}`]
+        }
+    }
+
+    getVars() {
+        return this.iframe.contentWindow
+    }
+
+    getValue(name) {
+        return this.getVars()[name]
+    }
+
+    setValue(name, value) {
+        this.getVars()[name] = value
+    }
+}
+
+terminal.modules.mathenv = new JsEnvironment()
+terminal.modules.mathenv.setValue("sin", Math.sin)
+terminal.modules.mathenv.setValue("cos", Math.cos)
+terminal.modules.mathenv.setValue("tan", Math.tan)
+terminal.modules.mathenv.setValue("asin", Math.asin)
+terminal.modules.mathenv.setValue("acos", Math.acos)
+terminal.modules.mathenv.setValue("atan", Math.atan)
+terminal.modules.mathenv.setValue("atan2", Math.atan2)
+terminal.modules.mathenv.setValue("sinh", Math.sinh)
+terminal.modules.mathenv.setValue("cosh", Math.cosh)
+terminal.modules.mathenv.setValue("tanh", Math.tanh)
+terminal.modules.mathenv.setValue("asinh", Math.asinh)
+terminal.modules.mathenv.setValue("acosh", Math.acosh)
+terminal.modules.mathenv.setValue("atanh", Math.atanh)
+terminal.modules.mathenv.setValue("exp", Math.exp)
+terminal.modules.mathenv.setValue("log", Math.log)
+terminal.modules.mathenv.setValue("log10", Math.log10)
+terminal.modules.mathenv.setValue("sqrt", Math.sqrt)
+terminal.modules.mathenv.setValue("abs", Math.abs)
+terminal.modules.mathenv.setValue("ceil", Math.ceil)
+terminal.modules.mathenv.setValue("floor", Math.floor)
+terminal.modules.mathenv.setValue("round", Math.round)
+terminal.modules.mathenv.setValue("PI", Math.PI)
+terminal.modules.mathenv.setValue("e", Math.E)
+terminal.modules.mathenv.setValue("E", Math.E)
+
+terminal.modules.mathenv.setValue("sum", (startX, endX, func) => {
+    let sum = 0
+    for (let x = startX; x <= endX; x++) {
+        sum += func(x)
+    }
+    return sum
+})
+
+terminal.modules.mathenv.setValue("terminal", terminal)
+
+// ------------------- js/modules/matrix.js --------------------
+const MatrixCellType = {
+    Numeric: 0,
+    Expression: 1
+}
+
+class MatrixCell {
+
+    constructor(value) {
+        this.value = value
+    }
+
+    get type() {
+        return (typeof this.value === "number") ? MatrixCellType.Numeric : MatrixCellType.Expression
+    }
+
+    static toMatrixCell(object) {
+        if (object instanceof MatrixCell) {
+            return object
+        } else {
+            return new MatrixCell(object)
+        }
+    }
+
+    static get Default() {
+        return new MatrixCell(0)
+    }
+
+    toString() {
+        return this.value.toString()
+    }
+
+    toSimplifiedString() {
+        if (this.type != MatrixCellType.Numeric) {
+            return this.toString()
+        }
+
+        if (Number.isInteger(this.value)) {
+            return this.value.toString()
+        }
+
+        if (this.value == 0) {
+            return "0"
+        }
+
+        // find fraction approximation (very inefficiently!)
+        // only works for denominator < 10000
+
+        let bestFraction = null
+        let bestError = Infinity
+        for (let denominator = 1; denominator < 10000; denominator++) {
+            let numerator = Math.round(this.value * denominator)
+            const newValue = numerator / denominator
+            
+            const error = Math.abs(this.value - newValue)
+
+            if (error == 0) {
+                return `${numerator}/${denominator}`
+            }
+
+            if (error < bestError) {
+                bestError = error
+                bestFraction = `${numerator}/${denominator}`
+            }
+        }
+
+        return bestFraction
+    }
+
+    _arithmeticFunc(other, f, templateString) {
+        other = MatrixCell.toMatrixCell(other)
+        if (this.type == MatrixCellType.Numeric && other.type == MatrixCellType.Numeric) {
+            return new MatrixCell(f(this.value, other.value))
+        } else {
+            let str = `(${templateString})`
+                .replace("x", this.value)
+                .replace("y", other.value)
+            return new MatrixCell(str)
+        } 
+    }
+
+    mul(other) {
+        return this._arithmeticFunc(other, (x, y) => x * y, "x*y")
+    }
+
+    add(other) {
+        return this._arithmeticFunc(other, (x, y) => x + y, "x+y")
+    }
+
+    sub(other) {
+        return this._arithmeticFunc(other, (x, y) => x - y, "x-y")
+    }
+
+    div(other) {
+        return this._arithmeticFunc(other, (x, y) => x / y, "x/y")
+    }
+
+    copy() {
+        return new MatrixCell(this.value)
+    }
+
+    simplify(steps=100) {
+        if (this.type == MatrixCellType.Numeric) {
+            return this.copy()
+        }
+
+        let newValue = this.value
+
+        if (this.type == MatrixCellType.Expression) {
+            for (let i = 0; i < steps; i++) {
+                newValue = newValue
+                    .replaceAll("0+", "")
+                    .replaceAll("+0", "")
+                    .replaceAll("+-", "-")
+                    .replaceAll("--", "+")
+                    .replaceAll(/([a-zA-Z])\*-1/g, "-$1")
+                    .replaceAll(/-1\*([a-zA-Z])/g, "-$1")
+                    .replaceAll(/\(([a-zA-Z])\*1\)/g, "$1")
+                    .replaceAll(/\(1\*([a-zA-Z])\)/g, "$1")
+                    .replaceAll(/\(\(([a-zA-Z])\*([a-zA-Z])\)\*([a-zA-Z])\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(([a-zA-Z])\*\(([a-zA-Z])\*([a-zA-Z])\)\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(\(([a-zA-Z])\+([a-zA-Z])\)\+([a-zA-Z])\)/g, "($1*$2*$3)")
+                    .replaceAll(/\(([a-zA-Z])\+\(([a-zA-Z])\+([a-zA-Z])\)\)/g, "($1*$2*$3)")
+            }
+        }
+
+        return new MatrixCell(newValue)
+    }
+
+}
+
+class MatrixDimensions {
+
+    constructor(rows, columns) {
+        this.rows = rows
+        this.columns = columns
+    }
+
+    transpose() {
+        return new MatrixDimensions(this.columns, this.rows)
+    }
+
+    add(n) {
+        return new MatrixDimensions(
+            this.rows + n,
+            this.columns + n
+        )
+    }
+
+    copy() {
+        return new MatrixDimensions(this.rows, this.columns)
+    }
+
+    static get Undefined() {
+        return new MatrixDimensions(undefined, undefined)
+    }
+
+    toString() {
+        return `${this.rows}x${this.columns}`
+    }
+
+    get isSquare() {
+        return this.rows == this.columns
+    }
+
+    equals(otherDimensions) {
+        return this.rows == otherDimensions.rows && this.columns == otherDimensions.columns
+    }
+
+}
+
+class Matrix {
+
+    constructor(dimensions, arrayData=undefined) {
+        this.dimensions = dimensions
+
+        this._data = Array.from({length: dimensions.rows},
+            () => Array.from({length: dimensions.columns}, () => MatrixCell.Default))
+
+        if (Array.isArray(arrayData)) {
+            for (let i = 0; i < arrayData.length; i++) {
+                if (Array.isArray(arrayData[i])) {
+                    for (let j = 0; j < arrayData[i].length; j++) {
+                        if (i < this._data.length && j < this._data[i].length && arrayData[i][j] !== undefined) {
+                            this._data[i][j].value = arrayData[i][j]
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static fromArray(arr) {
+        const dimensions = new MatrixDimensions(arr.length, arr[0].length)
+        return new Matrix(dimensions, arr)
+    }
+
+    get nRows() {
+        return this.dimensions.rows
+    }
+
+    get nCols() {
+        return this.dimensions.columns
+    }
+
+    get(rowIndex, columnIndex) {
+        return this._data[rowIndex][columnIndex].value
+    }
+
+    set(rowIndex, columnIndex, value) {
+        this._data[rowIndex][columnIndex].value = value
+    }
+
+    setCell(rowIndex, columnIndex, cell) {
+        if (!(cell instanceof MatrixCell)) {
+            throw new Error("cell must be instance of MatrixCell")
+        }
+
+        this._data[rowIndex][columnIndex] = cell
+    }
+
+    setCellValue(rowIndex, columnIndex, value) {
+        this._data[rowIndex][columnIndex].value = value
+    }
+
+    getCell(rowIndex, columnIndex) {
+        return this._data[rowIndex][columnIndex]
+    }
+
+    getCellValue(rowIndex, columnIndex) {
+        return this._data[rowIndex][columnIndex].value
+    }
+
+    get rows() {
+        return this._data
+    }
+
+    get rowsValues() {
+        return this._data.map(
+            row => row.map(
+                cell => cell.value
+            )
+        )
+    }
+
+    get columns() {
+        return Array.from({length: this.dimensions.columns}, (_, ci) => this.getColumn(ci))
+    }
+
+    get columnsValues() {
+        return this.columns.map(
+            column => column.map(
+                cell => cell.value
+            )
+        )
+    }
+
+    toStringArray() {
+        return this._data.map(
+            row => row.map(
+                element => {
+                    if (typeof element.value === "number") {
+                        return element.toSimplifiedString()
+                    }
+                    return element.toString()
+                }
+            )
+        )
+    }
+
+    getColumn(i) {
+        return this.rows.map(row => row[i])
+    }
+
+    getRow(i) {
+        return this._data[i]
+    }
+
+    toString() {
+        let stringArray = this.toStringArray()
+        const getColumnWidth = ci => Math.max(...stringArray.map(row => row[ci].length))
+        const columnWidths = Array.from({length: this.dimensions.columns}, (_, ci) => getColumnWidth(ci))
+
+        const padMiddle = (str, length) => {
+            if (str.length >= length) return str
+            let padLength = length - str.length
+            let half = Math.floor(padLength / 2)
+            return " ".repeat(half) + str + " ".repeat(padLength - half)
+        }
+
+        let outString = ""
+        for (let ri = 0; ri < this.dimensions.rows; ri++) {
+            outString += "[ "
+            for (let ci = 0; ci < this.dimensions.columns; ci++) {
+                outString += padMiddle(stringArray[ri][ci], columnWidths[ci])
+                outString += " "
+            }
+            outString = outString.slice(0, -1) + " ]\n"
+        }
+
+        return outString.slice(0, -1)
+    }
+
+    multiply(other) {
+        let result = new Matrix(new MatrixDimensions(
+            this.dimensions.rows, other.dimensions.columns))
+        for (let ri = 0; ri < result.dimensions.rows; ri++) {
+            for (let ci = 0; ci < result.dimensions.columns; ci++) {
+                let row = this.getRow(ri)
+                let column = other.getColumn(ci)
+
+                let dotProduct = row.map((n, i) => n.mul(column[i]))
+                    .reduce((p, c) => p.add(c))
+                result.setCell(ri, ci, dotProduct)
+            }
+        }
+        return result
+    }
+
+    transpose() {
+        return new Matrix(this.dimensions.transpose(), this.columnsValues)
+    }
+
+    without(rowIndex, columnIndex) {
+        const result = new Matrix(this.dimensions.add(-1))
+
+        for (let i = 0; i < this.dimensions.rows; i++) {
+            for (let j = 0; j < this.dimensions.columns; j++) {
+                if (i == rowIndex || j == columnIndex) {
+                    continue
+                }
+
+                let newRowIndex = i
+                let newColumnIndex = j
+
+                if (i > rowIndex) {
+                    newRowIndex--
+                }
+
+                if (j > columnIndex) {
+                    newColumnIndex--
+                }
+
+                result._data[newRowIndex][newColumnIndex] = this._data[i][j]
+            }   
+        }
+
+        return result
+    }
+
+    get isSquare() {
+        return this.dimensions.isSquare
+    }
+
+    get n() {
+        return this.dimensions.rows
+    }
+
+    determinant() {
+        if (!this.isSquare) {
+            throw new Error("Determinant is undefined for non-square matrices")
+        }
+
+        if (this.n == 1) {
+            return this._data[0][0]
+        }
+
+        let sum = new MatrixCell(0)
+
+        for (let j = 0; j < this.n; j++) {
+            const sgn = new MatrixCell((j % 2 == 0) ? 1 : -1)
+            sum = sum.add(this.getCell(0, j).mul(sgn).mul(this.without(0, j).determinant()))
+        }
+
+        return sum
+    }
+
+    mapValue(mapFunc) {
+        const result = new Matrix(this.dimensions.copy())
+        for (let i = 0; i < result.dimensions.rows; i++) {
+            for (let j = 0; j < result.dimensions.columns; j++) {
+                result._data[i][j].value = mapFunc(this.getCell(i, j), i, j)
+            }
+        }
+        return result
+    }
+
+    map(mapFunc) {
+        const result = new Matrix(this.dimensions.copy())
+        for (let i = 0; i < result.dimensions.rows; i++) {
+            for (let j = 0; j < result.dimensions.columns; j++) {
+                result._data[i][j] = mapFunc(this.getCell(i, j), i, j)
+            }
+        }
+        return result
+    }
+
+    static RandomIntegers(n, m, maxInt=10) {
+        if (m === undefined) {
+            m = n
+        }
+
+        return new Matrix(new MatrixDimensions(n, m)).mapValue(
+            () => Math.floor(Math.random() * maxInt)
+        )
+    }
+
+    minors() {
+        return this.map((cell, i, j) => {
+            return this.without(i, j).determinant()
+        })
+    }
+
+    cofactor() {    
+        return this.minors().map((cell, i, j) => {
+            return cell.mul(new MatrixCell(((i + j) % 2 == 0) ? 1 : -1))
+        })
+    }
+
+    adjunct() {
+        return this.cofactor().transpose()
+    }
+
+    inverse() {
+        const det = this.determinant()
+        if (det == 0) {
+            throw new Error("Matrix is not invertible (det = 0)")
+        }
+
+        return this.adjunct().scale(new MatrixCell(1).div(det))
+    }
+
+    simplify() {
+        return this.map(cell => cell.simplify())
+    }
+
+    add(otherMatrix) {
+        if (!this.dimensions.equals(otherMatrix.dimensions)) {
+            return new Error("Matrix Dimensions must be equal")
+        }
+
+        return this.map((cell, i, j) => {
+            return cell.add(otherMatrix.getCell(i, j))
+        })
+    }
+
+    scale(scalar) {
+        return this.map(cell => {
+            return cell.mul(MatrixCell.toMatrixCell(scalar))
+        })
+    }
+
+    // row operations (inplace)
+
+    swapRows(r1, r2) {
+        const temp = this._data[r1]
+        this._data[r1] = this._data[r2]
+        this._data[r2] = temp
+    }
+
+    scaleRow(rowIndex, scalar) {
+        const scalarCell = MatrixCell.toMatrixCell(scalar)
+        for (let columnIndex = 0; columnIndex < this.nCols; columnIndex++) {
+            const newCell = this.getCell(rowIndex, columnIndex).mul(scalarCell)
+            this.setCell(rowIndex, columnIndex, newCell)
+        }
+    }
+
+    addScalarRow(r1, r2, scalar) {
+        const scalarCell = MatrixCell.toMatrixCell(scalar)
+        for (let columnIndex = 0; columnIndex < this.nCols; columnIndex++) {
+            const newCell = this.getCell(r2, columnIndex).add(this.getCell(r1, columnIndex).mul(scalarCell))
+            this.setCell(r2, columnIndex, newCell)
+        }
+    }
+
+    isZeroColumn(columnIndex) {
+        for (let i = 0; i < this.nRows; i++) {
+            if (this.get(i, columnIndex) != 0) {
+                return false
+            }
+        }
+        return true
+    }
+
+    isZeroMatrix() {
+        for (let i = 0; i < this.nCols; i++) {
+            if (!this.isZeroColumn(i)) {
+                return false
+            }
+        }
+        return true
+    }
+
+    containsOnlyNumbers() {
+        return !this._data.flat().some(cell => cell.type != MatrixCellType.Numeric)
+    }
+
+}
+
+async function inputMatrixDimensions({
+    matrixName="A",
+    forcedRows=undefined,
+    square=false
+}={}) {
+    let message = `Matrix ${matrixName} Dimensions [e.g. 3x2]: `
+    if (forcedRows) {
+        message += `${forcedRows}x`
+    }
+
+    if (square) {
+        while (true) {
+            const input = await terminal.prompt(`Matrix ${matrixName} size: `)
+            if (/^[0-9]+$/.test(input)) {
+                const n = parseInt(input)
+                return new MatrixDimensions(n, n)
+            } else {
+                terminal.printError("Invalid Format! Valid format is positive integer, e.g. \"3\"", "ParserError")
+            }
+        }
+    }
+
+    while (true) {
+        const input = await terminal.prompt(message)
+        if (forcedRows === undefined) {
+            if (/^[0-9]+x[0-9]+$/.test(input)) {
+                const splitValues = input.split("x").map(v => parseInt(v))
+                if (Math.min(...splitValues) == 0) {
+                    terminal.printError("Dimensions must be larger than 0", "ValueError")
+                } else {
+                    return new MatrixDimensions(...splitValues)
+                }
+            } else {
+                terminal.printError("Invalid Format! Valid format is RxC, e.g. \"3x2\"", "ParserError")
+            }
+        } else {
+            if (/^[0-9]+$/.test(input)) {
+                if (parseInt(input) == 0) {
+                    terminal.printError("Dimensions must be larger than 0", "ValueError")
+                } else {
+                    return new MatrixDimensions(forcedRows, parseInt(input))
+                }
+            } else {
+                terminal.printError("Invalid Format: Please enter a valid number of columns!", "ParserError")
+            }
+        }
+    }
+}
+
+async function inputMatrix(dimensions) {
+    let matrix = new Matrix(dimensions)
+    const minInputWidth = 3
+    let inputWidth = minInputWidth
+    const badColor = "rgba(255, 0, 0, 0.5)"
+    const goodColor = "rgba(0, 255, 0, 0.5)"
+
+    let inputs = []
+    let finishButton = null
+
+    const updateInputWidth = () => {
+        let maxInputWidth = Math.max(...inputs.map(inp => inp.value.length)) + 1
+        inputWidth = Math.max(maxInputWidth, minInputWidth)
+
+        for (let input of inputs) {
+            input.style.width = `${inputWidth * terminal.charWidth}px`
+        } 
+        finishButton.style.width = `${(dimensions.columns * (inputWidth + 1) + 1) * terminal.charWidth}px`
+    }
+
+    for (let ri = 0; ri < dimensions.rows; ri++) {
+        for (let ci = 0; ci < dimensions.columns; ci++) {
+            terminal.print(ci == 0 ? "[" : " ")
+            let input = terminal.createStyledInput()
+
+            const setBad = () => {
+                input.style.backgroundColor = badColor
+                input.dataset.valid = false
+            }
+
+            const setGood = () => {
+                input.style.backgroundColor = goodColor
+                input.dataset.valid = true
+            }
+
+            input.style.textAlign = "center"
+            setBad()
+            input.style.width = `${terminal.charWidth * inputWidth}px`
+            terminal.parentNode.appendChild(input)
+
+            input.oninput = () => {
+                updateInputWidth()
+                if (input.value.match(/^\-?[0-9]+\/[0-9]+$/)) {
+                    const parts = input.value.split("/")
+                    let numericValue = parseInt(parts[0]) / parseInt(parts[1])
+                    matrix.setCell(ri, ci, new MatrixCell(numericValue))
+                    setGood()
+                } else if (input.value.toString().match(/^\-?[0-9]+(?:\.[0-9]+)?$/)) {
+                    let numericValue = parseFloat(input.value)
+                    matrix.setCell(ri, ci, new MatrixCell(numericValue))
+                    setGood()
+                } else if (input.value.toString().match(/^[a-z]$/)) {
+                    matrix.setCell(ri, ci, new MatrixCell(input.value.toString()))
+                    setGood()
+                } else {
+                    setBad()
+                }
+            }
+
+            inputs.push(input)
+        }
+        terminal.printLine("]")
+    }
+
+    inputs[0].focus()
+
+    return new Promise(resolve => {
+        finishButton = terminal.createTerminalButton({
+            text: "Submit",
+            charWidth: dimensions.columns * (inputWidth + 1) + 1,
+            onPress: () => {
+                if (inputs.find(inp => inp.dataset.valid == "false")) {
+                    return
+                }
+
+                for (let input of inputs) {
+                    input.style.backgroundColor = "transparent"
+                    input.oninput = () => {}
+                }
+
+                finishButton.remove()
+
+                resolve(matrix)
+            }
+        })
+    
+        terminal.parentNode.appendChild(finishButton)
+    })
+}
+
+terminal.modules.matrix = {
+    Matrix, MatrixCellType,
+    MatrixCell, MatrixDimensions,
+    inputMatrixDimensions,
+    inputMatrix
+}
+
+// ------------------- js/modules/neural.js --------------------
+const sigmoid = t => 1 / (1 + Math.pow(Math.E, -t))
+
+class Node {
+    
+    constructor(layer, previousRow, {biasEnabled=false}={}) {
+        this.output = 0.0
+        this.weights = []
+        this.layer = layer
+        this.biasEnabled = biasEnabled
+        this.bias = (Math.random() - 0.5)
+
+        for (let i = 0; i < previousRow.length; i++) {
+            this.weights.push(Math.random())
+        }
+
+    }
+
+    fire(previousRow) {
+        let cumulativeWeight = 0.0
+        for (let i = 0; i < previousRow.length; i++) {
+            let combined = previousRow[i].output * this.weights[i]
+            cumulativeWeight += combined
+        }
+        let average = cumulativeWeight / previousRow.length
+        if (this.biasEnabled) {
+            average += this.bias
+        }
+        this.output = sigmoid(average)
+    }
+
+    copy() {
+        let newNode = new Node(this.layer, [])
+        newNode.output = this.output
+        newNode.weights = this.weights.slice()
+        return newNode
+    }
+
+}
+
+class Net {
+
+    constructor(nodes, {biasEnabled=false}={}) {
+        this.nodes = []
+
+        let previousRow = []
+        for (let i = 0; i < nodes.length; i++) {
+            let newRow = []
+            for (let j = 0; j < nodes[i]; j++) {
+                let newNode = new Node(i, previousRow, {biasEnabled})
+                newRow.push(newNode)
+            }
+            previousRow = newRow
+            this.nodes.push(newRow)
+        }
+    }
+
+    train(inputs, expected, cycles = 200, learningRate = 0.5) {
+        for (let i = 0; i < cycles; i++) {
+            for (let j = 0; j < inputs.length; j++) {
+                this.input(inputs[j])
+                this.backpropagation(expected[j])
+                this.updateWeights(learningRate)
+            }
+        }
+    }
+
+    input(inputData) {
+        if (inputData.length != this.nodes[0].length)
+            throw new Error("Input Array must be same size as Input Neuron Layer")
+        for (let i = 0; i < inputData.length; i++) {
+            this.nodes[0][i].output = inputData[i]
+        }
+
+        this.fire()
+
+        let output = []
+        for (let i = 0; i < this.nodes[this.nodes.length - 1].length; i++) {
+            output.push(this.nodes[this.nodes.length - 1][i].output)
+        }
+        return output
+    }
+
+    fire() {
+        for (let i = 1; i < this.nodes.length; i++) {
+            let previousRow = this.nodes[i - 1]
+            for (let j = 0; j < this.nodes[i].length; j++) {
+                this.nodes[i][j].fire(previousRow)
+            }
+        }
+    }
+
+    updateWeights(learningRate) {
+        for (let i = 1; i < this.nodes.length; i++) {
+            let inputs = []
+            for (let j = 0; j < this.nodes[i - 1].length; j++)
+                inputs.push(this.nodes[i - 1][j].output)
+            for (let j = 0; j < this.nodes[i].length; j++) {
+                for (let k = 0; k < inputs.length; k++) {
+                    this.nodes[i][j].weights[k] += learningRate * this.nodes[i][j].delta * inputs[k]
+                }
+            }
+        }
+    }
+
+    backpropagation(expected) {
+        function derivative(output) {
+            return output * (1.0 - output)
+        }
+
+        for (let i = this.nodes.length - 1; i >= 0; i--) {
+            let layer = this.nodes[i]
+            let errors = []
+            if (i != this.nodes.length - 1) {
+                for (let j = 0; j < layer.length; j++) {
+                    let error = 0.0
+                    for (let k = 0; k < this.nodes[i + 1].length; k++) {
+                        let neuron = this.nodes[i + 1][k]
+                        error += neuron.weights[j] * neuron.delta
+                    }
+                    errors.push(error)
+                }
+            } else {
+                for (let j = 0; j < layer.length; j++) {
+                    let neuron = layer[j]
+                    errors.push(expected[j] - neuron.output)
+                }
+            }
+            for (let j = 0; j < layer.length; j++) {
+                let neuron = this.nodes[i][j]
+                neuron.delta = errors[j] * derivative(neuron.output)
+            }
+        }
+    }
+
+    copy() {
+        let newNet = new Net([])
+        for (let i = 0; i < this.nodes.length; i++) {
+            let newRow = []
+            for (let j = 0; j < this.nodes[i].length; j++) {
+                newRow.push(this.nodes[i][j].copy())
+            }
+            newNet.nodes.push(newRow)
+        }
+        return newNet
+    }
+
+    mutate(rate) {
+        for (let i = 0; i < this.nodes.length; i++) {
+            for (let j = 0; j < this.nodes[i].length; j++) {
+                for (let k = 0; k < this.nodes[i][j].weights.length; k++) {
+                    if (Math.random() < rate) {
+                        this.nodes[i][j].weights[k] = Math.random()
+                    }
+
+                    if (Math.random() < rate) {
+                        this.nodes[i][j].bias += (Math.random() - 0.5)
+                    }
+                }
+            }
+        }
+    }
+
+    static crossover(net1, net2) {
+        let newNet = net1.copy()
+        for (let i = 0; i < newNet.nodes.length; i++) {
+            for (let j = 0; j < newNet.nodes[i].length; j++) {
+                for (let k = 0; k < newNet.nodes[i][j].weights.length; k++) {
+                    if (Math.random() < 0.5) {
+                        newNet.nodes[i][j].weights[k] = net2.nodes[i][j].weights[k]
+                    }
+
+                    if (Math.random() < 0.5) {
+                        newNet.nodes[i][j].bias = net2.nodes[i][j].bias
+                    }
+                }
+            }
+        }
+        return newNet
+    }
+}
+
+function indexOfMax(arr) {
+    if (arr.length === 0) {
+        return -1
+    }
+
+    let max = arr[0]
+    let maxIndex = 0
+
+    for (let i = 1; i < arr.length; i++) {
+        if (arr[i] > max) {
+            maxIndex = i
+            max = arr[i]
+        }
+    }
+
+    return maxIndex
+}
+
+terminal.modules.neural = {
+    Net, Node, sigmoid, indexOfMax
+}
+
+// ------------------- js/modules/pyscript.js --------------------
+const changePromptCode = `from js import terminalPrompt
+input = terminalPrompt
+__builtins__.input = terminalPrompt`
+
+function load(addStyling=false) {
+    return new Promise(resolve => {
+        let script = document.createElement("script")
+        script.src = "https://pyscript.net/latest/pyscript.js"
+        script.onload = async function() {
+            while (!terminal.window.loadPyodide) {
+                await sleep(100)
+            }
+            terminal.modules.pyscript.pyodide = await terminal.window.loadPyodide({
+                stdout: (msg) => {
+                    terminal.printLine(msg)
+                },
+                stderr: (msg) => {
+                    terminal.printError(msg)
+                },
+                fullStdLib: false
+            })
+
+            terminal.window.terminalPrompt = prompt
+            terminal.modules.pyscript.pyodide.runPython(changePromptCode)
+
+            terminal.modules.pyscript.hasLoaded = true
+            resolve()
+        }
+        terminal.document.head.appendChild(script)
+        terminal.modules.pyscript.script = script
+    
+        if (addStyling) {
+            let link = document.createElement("link")
+            link.rel = "stylesheet"
+            link.href = "https://pyscript.net/latest/pyscript.css"
+            terminal.document.head.appendChild(link)
+            terminal.modules.pyscript.link = link
+        }
+    })
+}
+
+
+terminal.modules.pyscript = {
+    hasLoaded: false,
+    load,
+    pyodide: null,
+    script: null,
+    link: null
+}
+
+// ------------------- js/modules/statistics.js --------------------
+function drawLine(context, x1, y1, x2, y2, {
+    color = "black",
+    lineWidth = 1
+}={}) {
+    context.strokeStyle = color
+    context.lineWidth = lineWidth
+    context.beginPath()
+    context.moveTo(x1, y1)
+    context.lineTo(x2, y2)
+    context.stroke()
+}
+
+function drawTurnedText(context, text, x, y, {
+    angle = 0
+}={}) {
+    context.save()
+    context.translate(x, y)
+    context.rotate(angle)
+    context.fillText(text, 0, 0)
+    context.restore()
+}
+
+function drawTriangle(context, x, y, width, height, {
+    color = "black",
+    angle = 0
+}={}) {
+    let pos1 = {
+        x: 0,
+        y: -height
+    }
+
+    let pos2 = {
+        x: -width,
+        y: height
+    }
+
+    let pos3 = {
+        x: width,
+        y: height
+    }
+
+    context.save()
+    context.translate(x, y)
+    context.rotate(angle)
+    context.beginPath()
+    context.fillStyle = color
+    context.moveTo(pos1.x, pos1.y)
+    context.lineTo(pos2.x, pos2.y)
+    context.lineTo(pos3.x, pos3.y)
+    context.closePath()
+    context.fill()
+    context.restore()
+}
+
+function drawAxis(context, {
+    color = "black",
+    xAxisName = null,
+    yAxisName = null,
+    xAxisNameColor = "black",
+    yAxisNameColor = "black",
+    xAxisNameSize = 20,
+    yAxisNameSize = 20,
+    font = "monospace",
+    lineWidth = 1,
+    backgroundColor = "white",
+    paddingPx = 50,
+    arrowSize = 0
+}={}) {
+    fillBackground(context, {color: backgroundColor})
+
+    const canvas = context.canvas
+
+    context.strokeStyle = color
+    context.lineWidth = lineWidth
+    context.font = `${xAxisNameSize}px ${font}`
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    context.beginPath()
+
+    let yAxisStartX = paddingPx
+    let xAxisStartY = canvas.height - paddingPx
+    let xAxisEndX = canvas.width - paddingPx
+    let xAxisMiddleY = (xAxisStartY + paddingPx) / 2
+    let yAxisMiddleX = (yAxisStartX + canvas.width - paddingPx) / 2
+
+    if (xAxisName != null) {
+        context.fillStyle = xAxisNameColor
+        while (context.measureText(xAxisName).width > canvas.width - paddingPx * 2) {
+            xAxisNameSize--
+            context.font = `${xAxisNameSize}px ${font}`
+        }
+        context.fillText(xAxisName, yAxisMiddleX, xAxisStartY)
+        xAxisStartY -= xAxisNameSize
+    }
+
+    if (yAxisName != null) {
+        context.fillStyle = yAxisNameColor
+        while (context.measureText(yAxisName).width > canvas.height - paddingPx * 2) {
+            yAxisNameSize--
+            context.font = `${yAxisNameSize}px ${font}`
+        }
+        drawTurnedText(context, yAxisName, yAxisStartX, xAxisMiddleY, {
+            angle: -Math.PI / 2
+        })
+        yAxisStartX += yAxisNameSize
+    }
+    
+    drawLine(context, yAxisStartX, paddingPx, yAxisStartX, xAxisStartY, {color, lineWidth})
+    drawLine(context, yAxisStartX, xAxisStartY, xAxisEndX, xAxisStartY, {color, lineWidth})
+
+    if (arrowSize > 0) {
+        drawTriangle(context, yAxisStartX, paddingPx + arrowSize / 2, arrowSize, arrowSize, {color, angle: 0})
+        drawTriangle(context, xAxisEndX - arrowSize / 2, xAxisStartY, arrowSize, arrowSize, {color, angle: Math.PI / 2 * 5})
+    }
+
+    return {
+        x: yAxisStartX,
+        y: xAxisStartY,
+        width: xAxisEndX - yAxisStartX,
+        height: xAxisStartY - paddingPx
+    }
+}
+
+function fillBackground(context, {
+    color = "white",
+}={}) {
+    const canvas = context.canvas
+    context.fillStyle = color
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.fillRect(0, 0, canvas.width, canvas.height)
+}
+
+function drawCircle(context, x, y, radius) {
+    context.beginPath()
+    context.arc(x, y, radius, 0, 2 * Math.PI)
+    context.fill()
+}
+
+class Dataset {
+
+    constructor(numbers) {
+        this.numbers = numbers
+    }
+
+    static random({
+        length=10,
+        min=0,
+        max=10,
+    }={}) {
+        let numbers = []
+        for (let i = 0; i < length; i++)
+            numbers.push(Math.random() * (max - min) + min)
+        return new Dataset(numbers)
+    }
+
+    static randomSorted({
+        length=10,
+        min=0,
+        max=10,
+    }={}) {
+        let numbers = []
+        for (let i = 0; i < length; i++)
+            numbers.push(Math.random() * (max - min) + min)
+        numbers.sort((a, b) => a - b)
+        return new Dataset(numbers)
+    }
+
+    static fromFunc(func, {
+        min=0,
+        max=10,
+        length=10
+    }={}) {
+        let numbers = []
+        let step = (max - min) / length
+        let x = min
+        for (let i = 0; i < length; i++) {
+            x += step
+            numbers.push(func(x))
+        }
+        return new Dataset(numbers)
+    }
+
+    get length() {
+        return this.numbers.length
+    }
+
+    static fromString(string) {
+        const numbersRegex = /^(?:-?\d+(\.\d+)?\s?)+$/g
+        if (!numbersRegex.test(string))
+            throw new Error("Invalid numbers format. Use \"1 2 3 4 5\"")
+        let numbers = string.split(" ").map(n => parseFloat(n))
+        return new Dataset(numbers)
+    }
+
+    toString() {
+        let out = "Dataset(["
+        for (let i = 0; i < this.numbers.length; i++) {
+            out += this.numbers[i]
+            if (i < this.numbers.length - 1)
+                out += ","
+        }
+        return out + `], length=${this.length})`
+    }
+
+    get average() {
+        let sum = 0
+        for (let i = 0; i < this.numbers.length; i++)
+            sum += this.numbers[i]
+        return sum / this.numbers.length
+    }
+    
+    get median() {
+        let sorted = this.numbers.slice().sort((a, b) => a - b)
+        let middle = Math.floor(sorted.length / 2)
+        if (sorted.length % 2 === 0)
+            return (sorted[middle - 1] + sorted[middle]) / 2
+        else
+            return sorted[middle]
+    }
+
+    get mode() {
+        let counts = {}
+        for (let i = 0; i < this.numbers.length; i++) {
+            let num = this.numbers[i]
+            if (counts[num] === undefined)
+                counts[num] = 0
+            counts[num]++
+        }
+        let max = 0
+        let maxNum = null
+        for (let num in counts) {
+            if (counts[num] > max) {
+                max = counts[num]
+                maxNum = num
+            }
+        }
+        return maxNum
+    }
+
+    get range() {
+        let min = this.numbers[0]
+        let max = this.numbers[0]
+        for (let i = 1; i < this.numbers.length; i++) {
+            let num = this.numbers[i]
+            if (num < min)
+                min = num
+            if (num > max)
+                max = num
+        }
+        return max - min
+    }
+
+    get variance() {
+        let avg = this.average
+        let sum = 0
+        for (let i = 0; i < this.numbers.length; i++)
+            sum += Math.pow(this.numbers[i] - avg, 2)
+        return sum / this.numbers.length
+    }
+
+    get standardDeviation() {
+        return Math.sqrt(this.variance)
+    }
+
+    get max() {
+        return Math.max(...this.numbers)
+    }
+
+    get min() {
+        return Math.min(...this.numbers)
+    }
+
+    subset(start, end) {
+        return new Dataset(this.numbers.slice(start, end))
+    }
+
+    lineplot(context, axisOptions={}, {
+        color="red",
+        lineWidth=1,
+        displayPoints=true,
+    }={}) {
+        const drawArea = drawAxis(context, axisOptions)
+
+        context.strokeStyle = color
+        context.fillStyle = color
+        let xStep = drawArea.width / (this.numbers.length - 1)
+        let prevX = null
+        let prevY = null
+        let minValue = Math.min(...this.numbers)
+        let maxValue = Math.max(...this.numbers)
+        let yRange = maxValue - minValue
+        let yStep = drawArea.height / yRange
+        if (yRange == 0) {
+            yStep = 0
+            minValue = 0
+            yRange = 1
+        }
+        for (let i = 0; i < this.numbers.length; i++) {
+            let x = drawArea.x + i * xStep
+            let y = drawArea.y - (this.numbers[i] - minValue) * yStep
+            let circleSize = Math.min(xStep * 0.4, 5)
+            if (circleSize > 1.5 && displayPoints)
+                drawCircle(context, x, y, circleSize)
+            if (prevX != null && prevY != null)
+                drawLine(context, prevX, prevY, x, y, {color, lineWidth})
+            prevX = x
+            prevY = y
+        }
+    }
+
+}
+
+terminal.modules.statistics = {
+    Dataset,
+}
+
+// ------------------- js/modules/turtlo.js --------------------
+terminal.turtlo = {}
+
+function removeExistingTurtlos() {
+    let count = 0
+    for (let element of terminal.document.querySelectorAll(".turtlo")) {
+        if (!element.classList.contains("gone")) {
+            element.classList.add("gone")
+            count++
+        }
+    }
+    return count
+}
+
+const TURTLO_CONTAINER = terminal.document.querySelector("#turtlo-container")
+
+const TURTLO_STATE = {
+    IDLE: "idle",
+    WALKING: "walking"
+}
+
+function resetTurtlo() {
+    terminal.turtlo = {
+        x: -500,
+        y: -500,
+        goalX: terminal.window.innerWidth / 2,
+        goalY: terminal.window.innerHeight / 2,
+        rot: 0,
+        moving: false,
+        intervalFunc: null,
+        imageElement: terminal.document.createElement("img"),
+        startTime: Date.now(),
+        state: TURTLO_STATE.WALKING,
+        shellDuration: 0,
+        lastShellTime: Date.now(),
+        inShell: () => ((terminal.turtlo.lastShellTime + terminal.turtlo.shellDuration) > Date.now()),
+        toungeDuration: 0,
+        lastToungeTime: Date.now(),
+        hasToungeOut: () => ((terminal.turtlo.lastToungeTime + terminal.turtlo.toungeDuration) > Date.now()),
+        spinDuration: 3000,
+        lastSpinTime: Date.now(),
+        inSpin: () => ((terminal.turtlo.lastSpinTime + terminal.turtlo.spinDuration) > Date.now()),
+        prevRot: 120,
+        hugeSpinDuration: 0,
+        lastHugeSpinTime: Date.now(),
+        radiusFactor: 0.9,
+        inHugeSpin: () => ((terminal.turtlo.lastHugeSpinTime + terminal.turtlo.hugeSpinDuration) > Date.now()),
+        starTurtlos: [],
+        hasStars: () => (terminal.turtlo.starTurtlos.length > 0),
+        mouseStartX: 0,
+        mouseStartY: 0,
+    }
+}
+
+terminal.window.addEventListener("mousemove", function(event) {
+    terminal.turtlo.goalX = event.clientX
+    terminal.turtlo.goalY = event.clientY
+    if (terminal.turtlo.imageElement) {
+        terminal.turtlo.goalX -= terminal.turtlo.imageElement.clientWidth / 2
+        terminal.turtlo.goalY -= terminal.turtlo.imageElement.clientHeight - 10
+    }
+})
+
+function drawTurtlo() {
+    let x = terminal.turtlo.x
+    let y = terminal.turtlo.y
+
+    let timeElapsed = (Date.now() - terminal.turtlo.startTime) % 1000
+    if (terminal.turtlo.inHugeSpin()) {
+        let walkingImages = ["walking-0", "walking-1", "walking-2", "walking-1"]
+        let imageIndex = Math.floor(timeElapsed / 1001 * walkingImages.length)
+        let currImage = walkingImages[imageIndex]
+        terminal.turtlo.imageElement.src = "res/img/turtlo/" + currImage + ".png"
+        let spinTimeElapsed = Date.now() - terminal.turtlo.lastHugeSpinTime
+        let timeFactor = spinTimeElapsed / (terminal.turtlo.hugeSpinDuration * terminal.turtlo.spinAmountFactor)
+        //terminal.turtlo.rot = timeFactor * 360 + terminal.turtlo.prevRot
+        let windowRadius = Math.min(terminal.window.innerHeight, terminal.window.innerWidth) / 2 * terminal.turtlo.radiusFactor
+        let [midX, midY] = [terminal.window.innerWidth / 2, terminal.window.innerHeight / 2]
+        terminal.turtlo.goalX = Math.cos(timeFactor * Math.PI * 2 + terminal.turtlo.radiusStart) * windowRadius + midX
+        terminal.turtlo.goalY = Math.sin(timeFactor * Math.PI * 2 + terminal.turtlo.radiusStart) * windowRadius + midY
+    } else if (terminal.turtlo.inSpin()) {
+        terminal.turtlo.imageElement.src = "res/img/turtlo/walking-0.png"
+        let timeElapsed = Date.now() - terminal.turtlo.lastSpinTime
+        terminal.turtlo.rot = ((timeElapsed / terminal.turtlo.spinDuration) * 360 + terminal.turtlo.prevRot)
+    } else if (terminal.turtlo.inShell()) {
+        terminal.turtlo.imageElement.src = "res/img/turtlo/hidden.png"
+    } else if (terminal.turtlo.hasToungeOut()) {
+        terminal.turtlo.imageElement.src = "res/img/turtlo/tounge.png"
+    } else if (terminal.turtlo.state == TURTLO_STATE.WALKING) {
+        let walkingImages = ["walking-0", "walking-1", "walking-2", "walking-1"]
+        let imageIndex = Math.floor(timeElapsed / 1001 * walkingImages.length)
+        let currImage = walkingImages[imageIndex]
+        terminal.turtlo.imageElement.src = "res/img/turtlo/" + currImage + ".png"
+    } else if (terminal.turtlo.state == TURTLO_STATE.IDLE) {
+        terminal.turtlo.imageElement.src = "res/img/turtlo/walking-0.png"
+    }
+
+    if (terminal.turtlo.hasStars()) {
+        for (let star of terminal.turtlo.starTurtlos) {
+            star.x += star.directionX
+            star.y += star.directionY
+            star.element.style.top = star.y + "px"
+            star.element.style.left = star.x + "px"
+            let starAge = Date.now() - star.startOfLife
+            let rotation = starAge / star.rotationTime * 360
+            star.element.style.transform = `rotate(${rotation}deg)`
+            star.element.style.opacity = Math.max(1, starAge / 1000)
+        }
+
+        function removeStar(star) {
+            star.element.remove()
+        }
+
+        terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.filter(star => {
+            let starSize = star.element.clientWidth * 2
+            if (star.x + starSize < 0 || star.x - starSize > terminal.window.innerWidth
+                || star.y + starSize < 0 || star.y - starSize > terminal.window.innerHeight) {
+                removeStar(star)
+                return false
+            }
+            return true
+        })
+    }
+
+    terminal.turtlo.imageElement.style.top = y + "px"
+    terminal.turtlo.imageElement.style.left = x + "px"
+    terminal.turtlo.imageElement.style.transform = `rotate(${terminal.turtlo.rot}deg)`
+}
+
+function randomTurtloActivity() {
+    let activities = {
+        goIntoShell() {
+            terminal.turtlo.lastShellTime = Date.now()
+            terminal.turtlo.shellDuration = 5000 + 8000 * Math.random()
+        },
+        stickToungeOut() {
+            terminal.turtlo.lastToungeTime = Date.now()
+            terminal.turtlo.toungeDuration = 1000 + 1000 * Math.random()
+        },
+        moveToRandomSpot() {
+            terminal.turtlo.goalX = Math.random() * terminal.window.innerWidth
+            terminal.turtlo.goalY = Math.random() * terminal.window.innerHeight
+        },
+        spinAround() {
+            terminal.turtlo.lastSpinTime = Date.now()
+            terminal.turtlo.spinDuration = 300 + Math.random() * 2000
+            terminal.turtlo.prevRot = terminal.turtlo.rot
+        },
+        spinWalkAround() {
+            terminal.turtlo.lastHugeSpinTime = Date.now()
+            terminal.turtlo.hugeSpinDuration = 5000 + Math.random() * 5000
+            terminal.turtlo.spinAmountFactor = Math.random()
+            terminal.turtlo.prevRot = terminal.turtlo.rot
+            terminal.turtlo.radiusFactor = (0.4 + Math.random() * 0.5)
+            terminal.turtlo.radiusStart = Math.random() * Math.PI * 2
+        },
+        walkout() {
+            let prevX = terminal.turtlo.x
+            let prevY = terminal.turtlo.y
+            terminal.turtlo.goalX += (Math.random() - 0.5) * 2 * 300
+            terminal.turtlo.goalX = -terminal.turtlo.imageElement.clientWidth * 2 - 100
+            setTimeout(function() {
+                if (terminal.turtlo.x > 0) return
+                terminal.turtlo.x = terminal.window.innerWidth + 100
+                terminal.turtlo.goalX = prevX
+                terminal.turtlo.goalY = prevY
+            }, Math.random() * 1000 + 2000)
+        },
+        starCopy() {
+            let starTurtlos = []
+            const numCopies = Math.floor(Math.random() * 10) + 10
+            let speed = Math.random() * 5 + 5
+            for (let i = 0; i < numCopies; i++) {
+                let element = document.createElement("img")
+                element.src = terminal.turtlo.imageElement.src
+                let directionAngle = (i / numCopies) * Math.PI * 2
+                element.style.transform = `rotate(${directionAngle * 180 / Math.PI}deg)`
+                element.style.opacity = 0
+                let speedFactor = Math.random() + 0.5
+                let directionX = Math.cos(directionAngle) * speed * speedFactor
+                let directionY = Math.sin(directionAngle) * speed * speedFactor
+                starTurtlos.push({
+                    element,
+                    x: terminal.turtlo.x,
+                    y: terminal.turtlo.y,
+                    directionX,
+                    directionY,
+                    speed,
+                    rotationTime: Math.random() * 1000 + 500,
+                    startOfLife: Date.now(),
+                })
+                element.classList.add("turtlo")
+                TURTLO_CONTAINER.appendChild(element)
+            }
+            terminal.turtlo.starTurtlos = terminal.turtlo.starTurtlos.concat(starTurtlos)
+        }
+    }
+    
+    let activityChances = [
+        [activities.goIntoShell,      2],
+        [activities.stickToungeOut,   6],
+        [activities.spinAround,       4],
+        [activities.spinWalkAround,   4],
+        [activities.moveToRandomSpot, 4],
+        [activities.walkout,          2],
+        [activities.starCopy,         1],
+    ]
+
+    let totalChance = activityChances.map(e => e[1]).reduce((a, e) => a + e, 0)
+    let randomValue = Math.random() * totalChance
+    let cumulativeChance = 0
+    for (let [activity, chance] of activityChances) {
+        cumulativeChance += chance
+        if (cumulativeChance > randomValue) {
+            activity()
+            break
+        }
+    }
+}
+
+function moveTurtlo() {
+    if (!terminal.turtlo.inShell()) {
+        let xDiff = terminal.turtlo.goalX - terminal.turtlo.x
+        let yDiff = terminal.turtlo.goalY - terminal.turtlo.y
+        terminal.turtlo.x += xDiff * 0.05
+        terminal.turtlo.y += yDiff * 0.05
+
+        while (terminal.turtlo.rot < 0)
+            terminal.turtlo.rot += 360
+        while (terminal.turtlo.rot > 360)
+            terminal.turtlo.rot -= 360
+
+        let rotation = (Math.atan2(yDiff, xDiff) + Math.PI / 2) * 180 / Math.PI
+        let rotDiff = (terminal.turtlo.rot - rotation)
+        if (rotDiff > 180)
+            rotDiff -= 360
+        if (rotDiff < -180)
+            rotDiff += 360
+        terminal.turtlo.rot -= rotDiff * 0.5
+
+        let length = Math.sqrt(xDiff ** 2 + yDiff ** 2)
+        terminal.turtlo.state = (length > 25) ? TURTLO_STATE.WALKING : TURTLO_STATE.IDLE
+    }
+
+    if (terminal.turtlo.state == TURTLO_STATE.IDLE) {
+        let chance = Math.random() < 0.01
+        if (!chance)
+            return
+        if (terminal.turtlo.hasToungeOut() || terminal.turtlo.inShell() || terminal.turtlo.inSpin() || terminal.turtlo.inHugeSpin())
+            return
+        randomTurtloActivity()
+    }
+}
+
+function updateTurtlo() {
+    drawTurtlo()
+    moveTurtlo()
+}
+
+function startTurtlo(cssClass=null, silent=false) {
+    if (!silent) {
+        terminal.print("to remove turtlo, use ")
+        terminal.printCommand("kill turtlo", "kill turtlo", Color.COLOR_1)
+    }
+    removeExistingTurtlos()
+    if (terminal.turtlo.intervalFunc)
+        clearInterval(terminal.turtlo.intervalFunc)
+    resetTurtlo()
+    terminal.turtlo.imageElement.classList.add("turtlo")
+    if (cssClass) terminal.turtlo.imageElement.classList.add(cssClass)
+    drawTurtlo()
+    TURTLO_CONTAINER.appendChild(terminal.turtlo.imageElement)
+    terminal.turtlo.intervalFunc = setInterval(updateTurtlo, 50)
+}
+
+terminal.modules.turtlo = {
+
+    spawn({size=1, silent=false}={}) {
+        switch(size) {
+            case 1:
+                startTurtlo(null, silent)
+                break
+            case 2:
+                startTurtlo("huge", silent)
+                break
+            case 3:
+                startTurtlo("hugehuge", silent)
+                break
+            default:
+                throw new Error("invalid size for turtlo")
+        }
+        terminal.log("spawned turtlo")
+    },
+
+    kill() {
+        if (terminal.turtlo.intervalFunc)
+            clearInterval(terminal.turtlo.intervalFunc)
+        if (removeExistingTurtlos() != 0) {
+            terminal.log("killed turtlo")
+            return true
+        } else {
+            return false
+        }
+    }
+
+}
+
+// ------------------- js/modules/upload.js --------------------
+async function fileFromUpload(fileType=null) {
+    return new Promise(async (resolve, reject) => {
+        let input = terminal.document.createElement("input")
+        input.setAttribute("type", "file")
+        if (fileType)
+            input.setAttribute("accept", fileType)
+        input.click()
+
+        input.onchange = function(event) {
+            if (!input.value.length) {
+                reject()
+                return
+            }
+            let fileReader = new FileReader()
+            let fileName = input.files[0].name
+            let readAsDataURL = (
+                fileName.endsWith(".jpg")
+                || fileName.endsWith(".png")
+                || fileName.endsWith(".jpeg")
+                || fileName.endsWith(".svg")
+                || fileName.endsWith(".bmp")
+                || fileName.endsWith(".gif")
+            )
+            fileReader.onload = function(event) {
+                resolve([fileName, event.target.result, readAsDataURL])
+            }
+            if (readAsDataURL) {
+                fileReader.readAsDataURL(input.files[0])
+            } else {
+                fileReader.readAsText(input.files[0])
+            }
+        }
+
+        terminal.document.body.onfocus = () => {
+            setTimeout(() => {
+                if (!input.value.length)
+                    reject()
+            }, 1000)
+        }  
+    })
+}
+
+async function getMP3FromUpload() {
+    return new Promise(async (resolve, reject) => {
+        let input = terminal.document.createElement("input")
+        input.setAttribute("type", "file")
+        input.setAttribute("accept", "audio/mpeg3")
+        input.click()
+
+        input.onchange = function(event) {
+            if (!input.value.length) {
+                reject()
+                return
+            }
+            let fileReader = new FileReader()
+            fileReader.onload = function(event) {
+                let audio = terminal.document.createElement("audio")
+                audio.src = event.target.result
+                resolve(audio)
+            }
+            fileReader.readAsDataURL(input.files[0])
+        }
+
+        terminal.document.body.onfocus = () => {if (!input.value.length) reject()}  
+    })
+}
+
+async function getImageFromUpload() {
+    return new Promise(async (resolve, reject) => {
+        let input = terminal.document.createElement("input")
+        input.setAttribute("type", "file")
+        input.setAttribute("accept", "image/*")
+        input.click()
+
+        input.onchange = function(event) {
+            if (!input.value.length) {
+                reject(new Error("No image selected"))
+                return
+            }
+            let fileReader = new FileReader()
+            fileReader.onload = function(event) {
+                let image = terminal.document.createElement("img")
+                image.onload = function() {
+                    resolve(image)
+                }
+                image.src = event.target.result
+            }
+            fileReader.readAsDataURL(input.files[0])
+        }
+
+        terminal.document.body.onfocus = () => {
+            setTimeout(() => {
+                if (!input.value.length) {
+                    reject(new Error("No image selected"))
+                }
+            }, 500)
+        }
+    })
+}
+
+terminal.modules.upload = {
+    file: fileFromUpload,
+    mp3: getMP3FromUpload,
+    image: getImageFromUpload,
+}
+
+// ------------------- js/modules/window.js --------------------
+terminal.modules.window = {
+
+    make({
+        backgroundColor="black",
+        name="My new Window",
+        iframeUrl=undefined,
+        fullscreen=false,
+        addResizeListener=true,
+        removeBar=false
+    }={}) {
+        const windowContainer = terminal.document.createElement("div")
+        windowContainer.classList.add("terminal-window")
+        
+        const header = terminal.document.createElement("div")
+        header.classList.add("terminal-window-header")
+        windowContainer.appendChild(header)
+
+        const title = terminal.document.createElement("div")
+        title.classList.add("terminal-window-title")
+        title.textContent = name
+        header.appendChild(title)
+
+        const exitBtn = terminal.document.createElement("div")
+        exitBtn.classList.add("terminal-window-exit")
+        exitBtn.textContent = "✕"
+        exitBtn.title = `Close ${name}`
+        header.appendChild(exitBtn)
+
+        exitBtn.addEventListener("click", function() {
+            terminal.interrupt()
+            windowContainer.remove()
+            setTimeout(() => {
+                if (terminal.currInputElement) {
+                    terminal.currInputElement.focus()
+                }
+            }, 200)
+        })
+
+        const content = terminal.document.createElement("div")
+        content.classList.add("terminal-window-content")
+        windowContainer.appendChild(content)
+        
+        if (fullscreen) {
+            windowContainer.style.width = "100%"
+            windowContainer.style.height = "100%"
+            windowContainer.style.margin = "0"
+            windowContainer.style.position = "fixed"
+            windowContainer.style.transform = "translate(0, 0)"
+		}
+
+        if (iframeUrl) {
+            const iframe = terminal.document.createElement("iframe")
+            iframe.src = iframeUrl
+            content.appendChild(iframe)
+            terminal.body.appendChild(windowContainer)
+
+            if (fullscreen) {
+                iframe.style.borderRadius = "0"
+                iframe.style.border = "0"
+                windowContainer.style.borderRadius = "0"
+            }
+
+            return {
+                iframe,
+                windowContainer,
+                close() {
+                    windowContainer.remove()
+                }
+            }
+        } else {
+            if (removeBar) {
+                content.style.width = "100%"
+                content.style.height = "100%"
+                content.style.margin = "0"
+                content.style.position = "fixed"
+            }
+
+            const CANVAS = terminal.document.createElement("canvas")
+            CANVAS.style.backgroundColor = backgroundColor
+            content.appendChild(CANVAS)
+            const CONTEXT = CANVAS.getContext("2d")
+
+            terminal.body.appendChild(windowContainer)
+            CANVAS.width = CANVAS.clientWidth
+            CANVAS.height = CANVAS.clientHeight
+        
+            CONTEXT.font = "15px Courier New"
+        
+            if (addResizeListener)
+            terminal.window.addEventListener("resize", function() {
+                CANVAS.width = CANVAS.clientWidth
+                CANVAS.height = CANVAS.clientHeight
+                CHARWIDTH = CONTEXT.measureText("A").width * 1.8
+                CONTEXT.font = "15px Courier New"
+            })
+
+            if (fullscreen) {
+                CANVAS.style.borderRadius = "0"
+                CANVAS.style.border = "0"
+            }
+        
+            return {
+                CANVAS,
+                CONTEXT,
+                windowContainer,
+                close() {
+                    windowContainer.remove()
+                    setTimeout(() => {
+                        if (terminal.currInputElement) {
+                            terminal.currInputElement.focus()
+                        }
+                    }, 200)
+                }
+            }
+        }
+    }
+    
+}
 

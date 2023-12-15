@@ -10,11 +10,7 @@ async function initalLoadScripts() {
         await new Promise(resolve => script.onload = resolve)
     }
 
-    for (let file of [
-        "js/terminal.js",
-    ]) {
-        await loadFile(file)
-    }
+    await loadFile("js/terminal.js")
 
     terminal = new Terminal("main")
     terminal.clear()

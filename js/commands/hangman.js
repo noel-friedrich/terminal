@@ -1,4 +1,4 @@
-const englishWords = [
+var englishWords = [
     "spokesman", "slots", "man", "targets", "sec", "reflects", "constitutional", "hereby", "progressive", 
     "authors", "secrets", "basically", "wild", "beautiful", "theatre", "cry", "vhs", "fraction", "breakfast", "meal", "far", 
     "out", "glow", "literally", "specialist", "touch", "coastal", "ala", "ingredients", "medal", "adsl", "extract", "corresponding", 

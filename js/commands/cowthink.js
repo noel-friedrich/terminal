@@ -1,4 +1,4 @@
-const COW_SAY = ` 
+var COW_SAY = ` 
 o   ^__^
  o  (oo)\\_______
     (__)\       )\\/\\

@@ -1,6 +1,6 @@
 // 1000 words randomly chosen from a list of 10000 most common english words
 // source: https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english.txt
-const englishWords = [
+var englishWords = [
     "spokesman", "slots", "man", "targets", "plymouth", "sec", "reflects", "constitutional", "hereby", "progressive", "rss", 
     "authors", "secrets", "basically", "wild", "beautiful", "theatre", "cry", "vhs", "fraction", "breakfast", "meal", "far", 
     "out", "glow", "literally", "specialist", "touch", "coastal", "ala", "ingredients", "medal", "adsl", "extract", "corresponding", 

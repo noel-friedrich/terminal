@@ -686,7 +686,6 @@ class Color {
     get string() {
         let self = this
         return {
-
             get rgb() {
                 return `rgb(${self.r}, ${self.g}, ${self.b})`
             },
