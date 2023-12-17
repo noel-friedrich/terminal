@@ -3001,7 +3001,7 @@ class Terminal {
         }
     }
 
-    currFontSizeIndex = 8
+    currFontSizeIndex = 6
 
     changeTextSize(increment) {
         const options = [3, 5, 7.5, 10, 12.5, 14, 15, 16, 17, 18, 19, 20, 22, 25, 30, 35, 40, 45, 50, 60, 80, 100]
