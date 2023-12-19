@@ -65,27 +65,49 @@ async function getMP3FromUpload() {
     })
 }
 
-async function getImageFromUpload() {
+async function getImageFromUpload({
+    multiple=false
+}={}) {
     return new Promise(async (resolve, reject) => {
         let input = terminal.document.createElement("input")
         input.setAttribute("type", "file")
         input.setAttribute("accept", "image/*")
+
+        if (multiple) {
+            input.setAttribute("multiple", "true")
+        }
+
         input.click()
+
+        let images = []
+        let numExpectedImages = []
 
         input.onchange = function(event) {
             if (!input.value.length) {
                 reject(new Error("No image selected"))
                 return
             }
-            let fileReader = new FileReader()
-            fileReader.onload = function(event) {
-                let image = terminal.document.createElement("img")
-                image.onload = function() {
-                    resolve(image)
+
+            numExpectedImages = input.files.length
+            for (let file of input.files) {
+                let fileReader = new FileReader()
+                fileReader.onload = function(event) {
+                    let image = terminal.document.createElement("img")
+                    image.name = file.name
+                    image.onload = function() {
+                        if (multiple) {
+                            images.push(image)
+                            if (images.length >= numExpectedImages) {
+                                resolve(images)
+                            }
+                        } else {
+                            resolve(image)
+                        }
+                    }
+                    image.src = event.target.result
                 }
-                image.src = event.target.result
+                fileReader.readAsDataURL(file)
             }
-            fileReader.readAsDataURL(input.files[0])
         }
 
         terminal.document.body.onfocus = () => {
