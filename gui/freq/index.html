@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>factor (Terminal Command)</title>
+        <title>freq (Terminal Command)</title>
         <link rel="stylesheet" href="../../style.css">
         <link rel="stylesheet" href="../style.css?t=0">
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lora">
@@ -21,11 +21,11 @@
         <main>
 
             <h1>
-                factor
+                freq
             </h1>
 
             <p class="subtitle">
-                print the prime factors of a number
+                play a frequency for an amount of time
             </p>
 
             <div id="inputs-container"></div>
@@ -55,7 +55,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "print the prime factors of a number", "args": {"?n:bn": "number to factorize"}, "standardVals": {"n": null}, "name": "factor"}
+            const command_data = {"description": "play a frequency for an amount of time", "args": {"f=frequency:n:0~30000": "the frequency to play", "?t=time:n:0~9999": "time in seconds to play frequency"}, "defaultValues": {"time": 0.5}, "name": "freq"}
         </script>
 
         <script src="../main.js"></script>

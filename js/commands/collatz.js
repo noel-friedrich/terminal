@@ -1,7 +1,7 @@
 terminal.addCommand("collatz", async function(args) {
 	let currNum = args.n
 
-	if (currNum < 1) {
+	if (currNum < 1n) {
 		throw new Error("Number must not be below 1")
 	}
 
@@ -10,15 +10,10 @@ terminal.addCommand("collatz", async function(args) {
 	
 	output += currNum + "\n"
 	while (currNum != 1) {
-		if (stepCount >= args.m) {
-			output += "Reached Limit"
-			terminal.printLine(output)
-			return
-		}
-		if (currNum % 2 === 0) {
-			currNum = currNum / 2
+		if (currNum % 2n === 0n) {
+			currNum >>= 1n
 		} else {
-			currNum = currNum * 3 + 1
+			currNum = currNum * 3n + 1n
 		}
 		output += currNum + "\n"
 		stepCount++
@@ -29,10 +24,6 @@ terminal.addCommand("collatz", async function(args) {
 }, {
 	description: "Calculate the Collatz Sequence (3x+1) for a given Number",
 	args: {
-		"n:i": "the starting number of the sequence",
-		"?m=max:i": "max number of steps to print"
+		"n:bn": "the starting number of the sequence"
 	},
-	standardVals: {
-		m: 999999999999
-	}
 })

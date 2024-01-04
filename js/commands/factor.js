@@ -1,17 +1,18 @@
 terminal.addCommand("factor", async function(args) {
+    console.log({a: args.n})
 
     function primeFactors(n) {
-        let i = 2
+        let i = 2n
         let factors = []
         while (i * i <= n) {
             if (n % i) {
-                i += 1
+                i++
             } else {
-                n = parseInt(n / i)
+                n /= i
                 factors.push(i)
             }
         }
-        if (n > 1) {
+        if (n > 1n) {
             factors.push(n)
         }
         return factors
@@ -48,7 +49,7 @@ terminal.addCommand("factor", async function(args) {
 }, {
     description: "print the prime factors of a number",
     args: {
-        "?n:n": "number to factorize"
+        "?n:bn": "number to factorize"
     },
     standardVals: {
         n: null

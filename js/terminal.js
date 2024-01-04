@@ -886,6 +886,9 @@ class TerminalParser {
                 argOptions.type = "number"
                 argOptions.typeName = "integer"
                 argOptions.numtype = "integer"
+            } else if (type == "bn") {
+                argOptions.type = "bigint"
+                argOptions.typeName = "integer"
             } else if (type == "b") {
                 argOptions.type = argOptions.typeName = "boolean"
             } else if (type == "s") {
@@ -1059,6 +1062,12 @@ class TerminalParser {
                 error(`At property "${argOption.name}": Expected a boolean`)
             }
             addVal(value == "true" || value === true)
+        } else if (argOption.type == "bigint") {
+            try {
+                addVal(BigInt(value))
+            } catch {
+                error(`At property "${argOption.name}": Expected an integer`)
+            }
         } else if (argOption.type == "file") {
             if (!terminal.fileExists(value)) {
                 error(`File not found: "${value}"`)
