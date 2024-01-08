@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 190 commands such as `ls`, `cd` and of course `cowsay`
+* 191 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -205,6 +205,7 @@ The following list can also be viewed using the `whatis *` command
 | `rm` | remove a file |
 | `rmdir` | remove a directory |
 | `rndm` | generate a random number based on the current time |
+| `say` | Say something |
 | `sc` | manage the startup commands |
 | `scarpet` | draws the Sierpinski carpet using the chaos game |
 | `search` | search something via google.com |
