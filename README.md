@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 191 commands such as `ls`, `cd` and of course `cowsay`
+* 192 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -220,6 +220,7 @@ The following list can also be viewed using the `whatis *` command
 | `sodoku` | Solve or generate a sodoku puzzle |
 | `solve` | solve a mathematical equation for x |
 | `sorting` | display a sorting algorithm |
+| `sounds` | make sounds |
 | `spion` | Spiel Spiel Manager |
 | `stacker` | play a stacker game |
 | `stat` | show a statistic of a given data set |

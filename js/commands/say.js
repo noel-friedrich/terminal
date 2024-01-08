@@ -1,17 +1,31 @@
 terminal.addCommand("say", async function({ text, pitch, language }) {
-    if (window.speechSynthesis) {
+    return new Promise(async resolve => {
+        if (window.speechSynthesis) {
+    
+            const message = new SpeechSynthesisUtterance();
+    
+            message.text = text;
+            message.pitch = pitch;
+            message.lang = language;
 
-        const message = new SpeechSynthesisUtterance();
+            let running = true;
+            message.onend = () => {
+                resolve();
+                running = false;
+            }
 
-        message.text = text;
-        message.pitch = pitch;
-        message.lang = language;
-        
-        window.speechSynthesis.speak(message);
+            terminal.onInterrupt(speechSynthesis.cancel.bind(speechSynthesis));
+            
+            window.speechSynthesis.speak(message);
 
-    } else {
-        terminal.printError("Sorry, your browser doesn't support text to speech!");
-    }
+            while (running) {
+                await sleep(1000);
+            }
+    
+        } else {
+            terminal.printError("Sorry, your browser doesn't support text to speech!");
+        }
+    });
 }, {
     author: "Colin Chadwick",
     description: "Say something",
