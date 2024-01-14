@@ -1322,12 +1322,14 @@ class Command {
             this.terminal.expectingFinishCommand = true
 
         try {
-            let argObject = this.processArgs(tokens, rawArgs)
+            const passingArguments = processArgs
+                ? [this.processArgs(tokens, rawArgs)]
+                : [rawArgs, tokens]
 
             if (this.callback.constructor.name === 'AsyncFunction') {
-                await this.callback(processArgs ? argObject : rawArgs)
+                await this.callback(...passingArguments)
             } else {
-                this.callback(processArgs ? argObject : rawArgs)
+                this.callback(...passingArguments)
             }
 
             if (callFinishFunc)
@@ -1338,8 +1340,10 @@ class Command {
                 this.terminal.printError(error.message, error.name)
                 console.error(error)
             }
-            if (callFinishFunc)
+
+            if (callFinishFunc) {
                 this.terminal.finishCommand()
+            }
 
             // if the sleep command was called a max number
             // of times, it's considered to be a success

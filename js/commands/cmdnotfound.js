@@ -1,5 +1,5 @@
-terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
-    const maxDistance = 2
+terminal.addCommand("cmdnotfound", async function(commandName, tokens) {
+    const commandArgs = tokens[2]
 
     let commandNames = Object.keys(terminal.commandData)
     let distances = Object.fromEntries(commandNames.map(name => [name, levenshteinDistance(commandName, name)]))
@@ -7,9 +7,9 @@ terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
 
     terminal.printLine(`command not found: ${commandName}`)
 
-    if (distances[bestMatch] <= maxDistance) {
+    if (distances[bestMatch] <= 2) {
         terminal.print("did you mean: ")
-        terminal.printCommand(bestMatch, `${bestMatch}${argText}`)
+        terminal.printCommand(`${bestMatch}${commandArgs}`, `${bestMatch}${commandArgs}`)
     }
 }, {
     description: "display that a command was not found",
