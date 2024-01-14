@@ -77,6 +77,8 @@ terminal.addCommand("todo", async function(args) {
                 loadingElement.remove()
                 reject(e)
             }
+
+            terminal.scroll()
         })
     }
 
@@ -124,7 +126,7 @@ terminal.addCommand("todo", async function(args) {
             for (let todo of todos) {
                 terminal.printClickable(todo.done == "1" ? "[x]" : "[ ]", async () => {
                     if (currUpdate != updateCount) return
-                    await TodoApi.checkItem(todo.uid, todo.done == "1" ? "0" : "1")
+                    await TodoApi.checkItem(todo.uid, todo.done != "1")
                     updateOutput()
                 }, Color.COLOR_1, {outputNode: outputElement})
 
