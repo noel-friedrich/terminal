@@ -2462,7 +2462,12 @@ class Terminal {
         }
     }
 
-    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined, addToCache=true}={}) {
+    print(text, color=undefined, {
+        forceElement=false, element="span", fontStyle=undefined,
+        background=undefined, addToCache=true, outputNode=undefined
+    }={}) {
+        outputNode ??= this.parentNode
+
         if (this.outputChannel == OutputChannel.CACHE_AND_USER && addToCache) {
             this.writeToOutputCache(text)
         }
@@ -2472,7 +2477,7 @@ class Terminal {
         if (color === undefined && !forceElement && fontStyle === undefined && background === undefined) {
             let textNode = document.createTextNode(text)
             if (!this.inTestMode)
-                this.parentNode.appendChild(textNode)
+                outputNode.appendChild(textNode)
             output = textNode
         } else {
             let span = document.createElement(element)
@@ -2484,7 +2489,7 @@ class Terminal {
             }
 
             if (!this.inTestMode) {
-                this.parentNode.appendChild(span)
+                outputNode.appendChild(span)
             }
             output = span
         }
@@ -2495,11 +2500,16 @@ class Terminal {
         return this.printLine(text, color, {...opts, fontStyle: "italic"})
     }
 
-    printImg(src, altText="") {
+    printImg(src, {
+        altText = "",
+        outputNode = undefined
+    }={}) {
+        outputNode ??= this.parentNode
+
         if (this.inTestMode)
             return
 
-        let img = this.parentNode.appendChild(document.createElement("img"))
+        let img = outputNode.appendChild(document.createElement("img"))
         img.src = src
         img.alt = altText
         img.classList.add("terminal-img")
@@ -2522,7 +2532,7 @@ class Terminal {
         }
     }
 
-    printTable(inRows, headerRow=null) {
+    printTable(inRows, headerRow=null, opts) {
         let rows = inRows.map(r => r.map(c => (c == undefined) ? " " : c))
         if (headerRow != null) rows.unshift(headerRow)
         const column = i => rows.map(row => row[i])
@@ -2538,7 +2548,7 @@ class Terminal {
                     line += `+-${item}-`
                 }
                 line += "+"
-                this.printLine(line)
+                this.printLine(line, opts)
             }
             if (rowIndex == rows.length) break
             let line = ""
@@ -2550,7 +2560,7 @@ class Terminal {
                 line += `| ${item} `
             }
             line += "|  "
-            this.printLine(line)
+            this.printLine(line, opts)
         }
     }
 
@@ -2571,9 +2581,9 @@ class Terminal {
         return this.print(text + "\n", color, opts)
     }
 
-    printError(text, name="Error") {
-        this.print(name, new Color(255, 0, 0))
-        this.printLine(": " + text)
+    printError(text, name="Error", opts) {
+        this.print(name, new Color(255, 0, 0), opts)
+        this.printLine(": " + text, undefined, opts)
         this.log(text, {type: "error"})
     }
 
@@ -2586,8 +2596,16 @@ class Terminal {
             this.printLine()
     }
 
-    printCommand(commandText, command, color, endLine=true) {
-        let element = this.print(commandText, color, {forceElement: true})
+    printClickable(text, callback, color, opts) {
+        let element = this.print(text, color, {forceElement: true, ...opts})
+        element.onclick = callback
+        element.classList.add("clickable")
+        if (color) element.style.color = color.string.hex
+        return element
+    }
+
+    printCommand(commandText, command, color, endLine=true, opts) {
+        let element = this.print(commandText, color, {forceElement: true, ...opts})
         element.onclick = this.makeInputFunc(command ?? commandText)
         element.classList.add("clickable")
         if (color) element.style.color = color.string.hex

@@ -46,102 +46,124 @@ class TodoApi {
 
 }
 
-terminal.addCommand("todo", async function(rawArgs) {
-    let parsedArgs = TerminalParser.tokenize(rawArgs)
-
-    const commands = {
-        "list": async function(name) {
-            let data = await TodoApi.getList(name)
-            let formattedData = []
-            for (let rawItem of data) {
-                let check = (rawItem.done == 1) ? "[x]" : "[ ]"
-                let due = rawItem.due_time == "-" ? "" : ` (${rawItem.due_time})`
-                let item = `${rawItem.text_content}${due}`
-                let uid = `#${rawItem.uid}`
-                formattedData.push({
-                    check: check, item: item, uid: uid
-                })
+terminal.addCommand("todo", async function(args) {
+    const getTodoItemChoice = async (headerText) => {
+        return new Promise(async (resolve, reject) => {
+            const elements = []
+    
+            const loadingElement = terminal.printLine("\nLoading...", undefined, {forceElement: true})
+    
+            try {
+                const todos = await TodoApi.getList(args.name)
+                loadingElement.remove()
+    
+                if (todos.length == 0) {
+                    throw new Error("Specified todo list is empty")
+                }
+    
+                elements.push(terminal.printLine(headerText, Color.COLOR_1, {forceElement: true}))
+                
+                for (let todo of todos) {
+                    let text = todo.done == "1" ? "[x]" : "[ ]"
+                    text += " " + todo.text_content + (todo.due_time != "-" ? ` (${todo.due_time})` : "") + "\n"
+                    elements.push(terminal.printClickable(text, () => {
+                        for (let element of elements) {
+                            element.remove()
+                        }
+                        resolve(todo)
+                    }))
+                }
+            } catch (e) {
+                loadingElement.remove()
+                reject(e)
             }
-            if (formattedData.length == 0) {
-                terminal.printLine(`No items found`)
+        })
+    }
+
+    if (args["rm-item"]) {
+        const choice = await getTodoItemChoice("Please choose an item to delete.")
+        await TodoApi.deleteItem(choice.uid)
+
+        terminal.printSuccess(`Successfully deleted item ("${choice.text_content}")`)
+        return
+
+    } else if (args["edit-item"]) {
+        const choice = await getTodoItemChoice("Please choose an item to edit.")
+        const newText = await terminal.prompt("Enter the new text: ")
+        await TodoApi.editItem(choice.uid, newText)
+
+        terminal.printSuccess(`Successfully edited item ("${choice.text_content}")`)
+        return
+
+    } else if (args["add-item"]) {
+        const newText = await terminal.prompt("Enter the text: ")
+        let dueDate = "-"
+        try {
+            await terminal.acceptPrompt("Do you want to add a due date?", false)
+            dueDate = await terminal.prompt("Due Date: ")
+        } catch {}
+        await TodoApi.addItem(args.name, newText, dueDate)
+
+        terminal.printSuccess(`Successfully added item to "${args.name}"`)
+        return
+
+    }
+
+    const outputElement = terminal.print("", undefined, {forceElement: true})
+
+    let updateCount = 0
+
+    const updateOutput = async () => {
+        const currUpdate = ++ updateCount
+        terminal.printLine("\nLoading...", undefined, {outputNode: outputElement})
+
+        try {
+            const todos = await TodoApi.getList(args.name)
+            outputElement.innerHTML = "<br>"
+            
+            for (let todo of todos) {
+                terminal.printClickable(todo.done == "1" ? "[x]" : "[ ]", async () => {
+                    if (currUpdate != updateCount) return
+                    await TodoApi.checkItem(todo.uid, todo.done == "1" ? "0" : "1")
+                    updateOutput()
+                }, Color.COLOR_1, {outputNode: outputElement})
+
+                const text = " " + todo.text_content + (todo.due_time != "-" ? ` (${todo.due_time})` : "")
+                terminal.printLine(text, undefined, {outputNode: outputElement})
             }
-            let maxItemLength = formattedData.reduce((max, item) => Math.max(max, item.item.length), 0)
-            for (let item of formattedData) {
-                terminal.print(item.check, Color.COLOR_1)
-                terminal.print(stringPadBack(item.item, maxItemLength + 1), Color.WHITE)
-                terminal.printLine(item.uid, Color.WHITE)
+
+            if (todos.length == 0) {
+                const text = `< no todo items found >`
+                terminal.printLine(text, undefined, {outputNode: outputElement})
             }
-        },
-        
-        "check": async function(uid) {
-            await TodoApi.checkItem(uid, true)
-        },
 
-        "uncheck": async function(uid) {
-            await TodoApi.checkItem(uid, false)
-        },
-
-        "add": async function(name, text, due_date="-") {
-            await TodoApi.addItem(name, text, due_date)
-        },
-
-        "edit": async function(uid, text) {
-            await TodoApi.editItem(uid, text)
-        },
-
-        "delete": async function(uid) {
-            await TodoApi.deleteItem(uid)
+            terminal.printLine("", undefined, {outputNode: outputElement})
+            terminal.printClickable("[Reload] ", () => {
+                updateOutput()
+            }, undefined, {outputNode: outputElement})
+            terminal.printCommand("[Add Item] ", `todo ${args.name} --add-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printCommand("[Remove Item] ", `todo ${args.name} --rm-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printCommand("[Edit Item] ", `todo ${args.name} --edit-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printLine("", undefined, {outputNode: outputElement})
+        } catch (e) {
+            console.error(e)
+            outputElement.innerHTML = "<br>"
+            terminal.printError(e.message, "Unexpected Error", {outputNode: outputElement})
         }
+
+        outputElement
     }
 
-    const command_args = {
-        "list": ["name"],
-        "check": ["uid"],
-        "uncheck": ["uid"],
-        "add": ["name", "text", "due_date"],
-        "edit": ["uid", "text"],
-        "delete": ["uid"]
-    }
-
-    function showAvailableCommand(command) {
-        terminal.print(`> '`, Color.COLOR_2)
-        terminal.print(`$ todo ${command} ${command_args[command].map(a => `<${a}>`).join(" ")}`, Color.WHITE)
-        terminal.printLine(`'`, Color.COLOR_2)
-    }
-
-    function showAvailableCommands() {
-        terminal.print(`'`, Color.COLOR_2)
-        terminal.print(`$ todo `, Color.WHITE)
-        terminal.print(`<command> [args...]`, Color.COLOR_1)
-        terminal.printLine(`'`, Color.COLOR_2)
-        for (let [command, _] of Object.entries(command_args)) {
-            showAvailableCommand(command)
-        }
-    }
-
-    if (parsedArgs.length == 0 || (parsedArgs.length == 1 && parsedArgs[0] == "help")) {
-        terminal.printLine(`You must supply at least 1 argument:`)
-        showAvailableCommands()
-        return
-    }
-
-    let command = parsedArgs[0]
-    let args = parsedArgs.slice(1)
-
-    if (!(command in commands)) {
-        terminal.printLine(`Unknown command! Available commands:`)
-        showAvailableCommands()
-        return
-    }
-
-    if (args.length != command_args[command].length) {
-        terminal.printLine(`Invalid number of arguments!`)
-        showAvailableCommand(command)
-        return
-    }
-
-    await commands[command](...args)
+    updateOutput()
 }, {
-    description: "manage a todo list",
-    rawArgMode: true
+    description: "show and manage a todo list",
+    args: {
+        "n=name:s": "name of the the todo list",
+        "?a=add-item:b": "add an item to the todo list",
+        "?r=rm-item:b": "remove an item from the todo list",
+        "?e=edit-item:b": "edit an item of the todo list",
+    }
 })

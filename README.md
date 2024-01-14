@@ -232,7 +232,7 @@ The following list can also be viewed using the `whatis *` command
 | `tictactoe` | play a game of tic tac toe against the computer. |
 | `time` | Shows the current time. |
 | `timer` | set a timer |
-| `todo` | manage a todo list |
+| `todo` | show and manage a todo list |
 | `touch` | create a file in the current directory |
 | `turing` | run a turing machine file |
 | `turtlo` | spawn turtlo |
