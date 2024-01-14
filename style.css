@@ -76,7 +76,7 @@ body {
     left: 0;
     opacity: 0.3;
     z-index: 3;
-    overflow: none;
+    overflow: hidden;
     white-space: pre-wrap;
 }
 

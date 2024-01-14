@@ -2273,8 +2273,8 @@ class Terminal {
 
             let tabIndex = 0
             let suggestions = []
-            keyListeners["Tab"] = event => {
-                event.preventDefault()
+
+            const completeSuggestion = () => {
                 if (!inputSuggestions) {
                     inputElement.value += "    "
                     inputElement.oninput()
@@ -2289,6 +2289,13 @@ class Terminal {
                 }
                 inputElement.oninput()
             }
+
+            keyListeners["Tab"] = event => {
+                event.preventDefault()
+                completeSuggestion()
+            }
+
+            suggestionElement.onclick = completeSuggestion
 
             let historyIndex = getHistory().length
             keyListeners["ArrowUp"] = event => {
@@ -2315,6 +2322,8 @@ class Terminal {
             }
 
             inputElement.oninput = async event => {
+                suggestions = this.getAutoCompleteOptions(inputElement.value)
+
                 if (!inputSuggestions) {
                     suggestionElement.textContent = ""
                     return
@@ -2345,6 +2354,11 @@ class Terminal {
                         this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
                     }
                 }
+
+                let textLength = Math.max(inputElement.value.length, suggestionElement.textContent.length)
+                // (textLength + 1) to leave room for the next character
+                let inputWidth = (textLength + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
             }
 
             inputElement.onselectionchange = () => {
@@ -2371,18 +2385,12 @@ class Terminal {
                     keyListeners[event.key](event)
                 else {
                     tabIndex = 0
-                    suggestions = this.getAutoCompleteOptions(inputValue)
                 }
 
                 if (event.key == "c" && event.ctrlKey) {
                     this.removeCurrInput()
                     this._interruptSTRGC()
                 }
-
-                let textLength = inputElement.value.length
-                // (textLength + 1) to leave room for the next character
-                let inputWidth = (textLength + 1) * this.charWidth
-                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
 
                 // call async to let selection be updated before event is fired
                 setTimeout(inputElement.onselectionchange, 0)
