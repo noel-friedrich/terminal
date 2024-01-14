@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 192 commands such as `ls`, `cd` and of course `cowsay`
+* 193 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -238,6 +238,7 @@ The following list can also be viewed using the `whatis *` command
 | `turtlo` | spawn turtlo |
 | `type-test` | test your typing speed |
 | `uname` | print the operating system name |
+| `unit` | convert numbers between units |
 | `upload` | upload a file from your computer |
 | `vigenere` | encrypt/decrypt a message using the vigenere cipher |
 | `visits` | Shows the number of page visits |
