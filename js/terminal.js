@@ -1186,12 +1186,13 @@ class TerminalParser {
             }
         }
 
-        const requiredCount = argOptions.filter(arg => !arg.optional).length
-        if (tempTokens.length - 1 < requiredCount) {
-            const missingArgOption = argOptions[Math.max(tempTokens.length - 1, 0)]
-            parsingError.message = `argument "${missingArgOption.name}" (${missingArgOption.type}) is missing`
-            parsingError.tokenIndex = 99999
-            return {argOptions, parsingError}
+        // check for missing required arguments
+        for (let arg of argOptions) {
+            if (!arg.optional && !arg.isManuallySetValue) {
+                parsingError.message = `argument "${arg.name}" (${arg.typeName}) is missing`
+                parsingError.tokenIndex = 99999
+                return {argOptions, parsingError}
+            }
         }
 
         return {argOptions, parsingError}
