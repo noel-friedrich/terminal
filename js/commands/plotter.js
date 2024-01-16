@@ -8,6 +8,7 @@ terminal.addCommand("plotter", async function(args) {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(1000)
 }, {
     description: "plot mathematical functions",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
