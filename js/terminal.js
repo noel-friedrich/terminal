@@ -1812,9 +1812,8 @@ class Terminal {
         }
 
         let fileMatches = configMatches(addApostrophes(allRelativeFiles))
-        let allMatches = configMatches(commandMatches.concat(fileMatches))
 
-        const {argOptions, parsingError} = this.parse(text)
+        const {argOptions} = this.parse(text)
 
         let currArgOption = {}
         if (text.slice(-1) == "-") {
