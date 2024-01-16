@@ -1,4 +1,12 @@
 terminal.addCommand("helloworld", async function() {
+    const printLinks = links => {
+        for (const {name, url} of links) {
+            terminal.printLink(name, url, undefined, false)
+            terminal.print(" ")
+        }
+        terminal.print(" ")
+    }
+
     const welcomeLineFuncs = [
         () => terminal.print("                  _    __      _          _      _      _       "),
         () => terminal.print("                 | |  / _|    (_)        | |    (_)    | |      "),
@@ -7,32 +15,40 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("| | | | (_) |  __/ |_| | | |  | |  __/ (_| | |  | | (__| | | |  "),
         () => terminal.print("|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|  "),
         () => terminal.print("                                                                "),
-        () => terminal.print("Welcome to my website! It's also a very interactive terminal!   "),
-        () => terminal.print("You may enter commands to navigate over 200 unique features.    "),
+        () => terminal.print("Welcome to my homepage. It's also a very interactive terminal.  "),
+        () => terminal.print("Enter commands to navigate over 200 unique tools and features.  "),
         () => {
             terminal.print("Start your adventure using the ")
             terminal.printCommand("help", "help", undefined, false)
             terminal.print(" command. Have lots of fun!  ")
         },
         () => terminal.print("                                                                "),
-        () => {
-            terminal.printLink("Blog", "https://noel-friedrich.de/blobber", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Github", "https://github.com/noel-friedrich/terminal", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Perli", "https://noel-friedrich.de/perli", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Compli", "https://play.google.com/store/apps/details?id=de.noelfriedrich.compli", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("AntiCookieBox", "https://noel-friedrich.de/anticookiebox", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Partycolo", "https://noel-friedrich.de/partycolo", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Spion", "https://noel-friedrich.de/spion", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("YouTube", "https://www.youtube.com/@noel.friedrich", undefined, false)
-            terminal.print("  ")
-        }
+
+        // --------------------------------------------------------------
+        // Instagram GitHub Perli Library AntiCookieBox Stray GUI YouTube
+        // Partycolo HR-Codes 3d Turtlo Coville Compli Spion Lettre Presi
+
+        () => printLinks([
+                {name: "Instagram", url: "https://instagram.com/noel.friedrich/"},
+                {name: "GitHub", url: "https://github.com/noel-friedrich/terminal"},
+                {name: "Perli", url: "https://noel-friedrich.de/perli"},
+                {name: "Library", url: "https://noel-friedrich.de/lol"},
+                {name: "AntiCookieBox", url: "https://noel-friedrich.de/anticookiebox"},
+                {name: "Stray", url: "https://noel-friedrich.de/stray"},
+                {name: "GUI", url: "https://noel-friedrich.de/terminal/gui"},
+                {name: "YouTube", url: "https://www.youtube.com/@noel.friedrich"}
+        ]),
+        () => printLinks([
+            {name: "Partycolo", url: "https://noel-friedrich.de/partycolo"},
+            {name: "HR-Codes", url: "https://noel-friedrich.de/hr-code"},
+            {name: "3d", url: "https://noel-friedrich.de/3d"},
+            {name: "Turtlo", url: "https://noel-friedrich.de/turtlo"},
+            {name: "Coville", url: "https://noel-friedrich.de/coville"},
+            {name: "Compli", url: "https://play.google.com/store/apps/details?id=de.noelfriedrich.compli"},
+            {name: "Spion", url: "https://noel-friedrich.de/spion"},
+            {name: "Lettre", url: "https://noel-friedrich.de/lettre"},
+            {name: "Presi", url: "https://noel-friedrich.de/presi"}
+        ])
     ]
 
     let size = {
@@ -40,7 +56,6 @@ terminal.addCommand("helloworld", async function() {
         y: welcomeLineFuncs.length
     }
 
-    const maxLineWidth = 64
     for (let i = 0; i < size.y; i++) {
 
         welcomeLineFuncs[i]()
