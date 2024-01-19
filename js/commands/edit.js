@@ -177,7 +177,7 @@ terminal.addCommand("edit", async function(args) {
 }, {
     description: "edit a file of the current directory",
     args: {
-        "?file": "the file to open",
+        "?file:f": "the file to open",
     }
 })
 

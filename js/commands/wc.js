@@ -27,7 +27,7 @@ terminal.addCommand("wc", function(args) {
 }, {
     description: "display word and line count of file",
     args: {
-        "?f=file": "file to open",
+        "?f=file:f": "file to open",
         "?s": "string to count instead of file"
     }
 })

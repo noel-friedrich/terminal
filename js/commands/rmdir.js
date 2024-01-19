@@ -8,6 +8,6 @@ terminal.addCommand("rmdir", async function(args) {
     await terminal.fileSystem.reload()
 }, {
     description: "remove a directory",
-    args: ["directory"]
+    args: ["directory:f"]
 })
 

@@ -18,6 +18,6 @@ terminal.addCommand("mv", async function(args) {
     await terminal.fileSystem.reload()
 }, {
     description: "move a file",
-    args: ["file", "directory"]
+    args: ["file:f", "directory:f"]
 })
 
