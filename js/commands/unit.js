@@ -19,7 +19,8 @@ terminal.addCommand("unit", async function(args) {
             {names: ["asf", "american-football-field", "american-football-fields"], factor: 91.44},
             {names: ["er", "earth-radius", "earth-radii"], factor: 6378e3}, // surprisingly hard to approximate!
             {names: ["cu", "cubit", "cubits"], factor: 0.5}, // approximation
-            {names: ["p", "palm", "palms"], factor: 0.075} // ancient egypt hand size (https://en.wikipedia.org/wiki/Palm_(unit))
+            {names: ["p", "palm", "palms"], factor: 0.075}, // ancient egypt hand size (https://en.wikipedia.org/wiki/Palm_(unit))
+            {names: ["lk", "lks", "look", "looks"], factor: 100_000} // number of looks from a helicopter 1km high (50km in each direction)
         ],
         
         "area": [
