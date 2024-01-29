@@ -1,6 +1,4 @@
 terminal.addCommand("factor", async function(args) {
-    console.log({a: args.n})
-
     function primeFactors(n) {
         let i = 2n
         let factors = []

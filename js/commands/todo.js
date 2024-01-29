@@ -54,7 +54,12 @@ terminal.addCommand("todo", async function(args) {
             const loadingElement = terminal.printLine("\nLoading...", undefined, {forceElement: true})
     
             try {
-                const todos = await TodoApi.getList(args.name)
+                let todos = await TodoApi.getList(args.name)
+
+                if (args.u) {
+                    todos = todos.filter(t => t.done == "0")
+                }
+
                 loadingElement.remove()
     
                 if (todos.length == 0) {
@@ -120,7 +125,12 @@ terminal.addCommand("todo", async function(args) {
         terminal.printLine("\nLoading...", undefined, {outputNode: outputElement})
 
         try {
-            const todos = await TodoApi.getList(args.name)
+            let todos = await TodoApi.getList(args.name)
+
+            if (args.u) {
+                todos = todos.filter(t => t.done == "0")
+            }
+
             outputElement.innerHTML = "<br>"
             
             for (let todo of todos) {
@@ -164,6 +174,7 @@ terminal.addCommand("todo", async function(args) {
     description: "show and manage a todo list",
     args: {
         "n=name:s": "name of the the todo list",
+        "?u=uncompleted-only:b": "only show the uncompleted todos",
         "?a=add-item:b": "add an item to the todo list",
         "?r=rm-item:b": "remove an item from the todo list",
         "?e=edit-item:b": "edit an item of the todo list",
