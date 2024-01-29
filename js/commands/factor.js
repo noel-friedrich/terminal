@@ -41,7 +41,7 @@ terminal.addCommand("factor", async function(args) {
             if (word.length == 0 || isNaN(word)) {
                 terminal.printLine(`${word}: Invalid number!`)
             } else {
-                let num = parseInt(word)
+                let num = BigInt(word)
                 printFactors(num)
             }
         }
