@@ -1865,8 +1865,7 @@ class Terminal {
         })
         text = text.replaceAll(/!!/g, () => {
             return terminal.data.history[terminal.data.history.length - 1] ?? ""
-        }) 
-        text = text.trim()
+        })
         for (let [alias, command] of Object.entries(terminal.data.aliases)) {
             text = text.replaceAll(RegExp(`^${alias}`, "g"), command)
         }
@@ -2283,20 +2282,19 @@ class Terminal {
             let tabIndex = 0
             let suggestions = []
 
+
+
             const completeSuggestion = () => {
                 if (!inputSuggestions) {
                     inputElement.value += "    "
                     inputElement.oninput()
                     return
                 }
-                if (suggestions.length == 0)
-                    suggestions = this.getAutoCompleteOptions(inputValue)
                 if (suggestions.length > 0) {
-                    inputElement.value = suggestions[tabIndex]
+                    inputElement.value = suggestions[tabIndex % suggestions.length]
                     tabIndex = (tabIndex + 1) % suggestions.length
                     inputValue = ""
                 }
-                inputElement.oninput()
             }
 
             keyListeners["Tab"] = event => {
