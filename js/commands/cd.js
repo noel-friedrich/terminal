@@ -1,7 +1,9 @@
 terminal.addCommand("cd", function(args) {
+    console.log(args)
     if (["-", ".."].includes(args.directory)) {
         if (terminal.fileSystem.currPath.length > 0) {
             terminal.fileSystem.currPath.pop()
+            terminal.updatePath()
             return
         } else {
             throw new Error("You are already at ground level")
@@ -22,7 +24,7 @@ terminal.addCommand("cd", function(args) {
 }, {
     helpVisible: true,
     args: {
-        "directory": "the directory relative to your current path"
+        "directory:s": "the directory relative to your current path"
     },
     description: "change current directory",
 })

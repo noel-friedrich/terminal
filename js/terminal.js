@@ -384,6 +384,7 @@ class TerminalData {
         "mobile": "2",
         "easterEggs": "[]",
         "sidepanel": "true",
+        "path": "[]",
         "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
     }
 
@@ -463,6 +464,14 @@ class TerminalData {
 
     set history(history) {
         this.set("history", JSON.stringify(history))
+    }
+
+    get path() {
+        return JSON.parse(this.get("path"))
+    }
+    
+    set path(path) {
+        this.set("path", JSON.stringify(path))
     }
 
     get easterEggs() {
@@ -1694,7 +1703,7 @@ class Terminal {
     }
 
     updatePath() {
-        // legacy
+        this.data.path = this.fileSystem.currPath
     }
 
     isValidFileName(name) {
@@ -2978,6 +2987,9 @@ class Terminal {
                 for (let startupCommand of this.data.startupCommands) {
                     await this.input(startupCommand, true)
                 }
+
+                // load path from localstorage
+                this.fileSystem.currPath = this.data.path
             }
 
             if (!ignoreMobile) {
