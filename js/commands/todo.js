@@ -87,7 +87,29 @@ terminal.addCommand("todo", async function(args) {
         })
     }
 
-    if (args["rm-item"]) {
+    if (args["rm-completed"]) {
+        await terminal.acceptPrompt(`Do you really want to delete all completed todos from "${args.name}"?`, false)
+        const progressModule = await terminal.modules.load("progressbar", terminal)
+        
+        const todos = await TodoApi.getList(args.name)
+        const completedTodos = todos.filter(t => t.done == "1")
+
+        if (completedTodos.length == 0) {
+            throw new Error(`Todo List "${args.name}" doesn't contain any completed todos`)
+        }
+
+        const progressBar = progressModule.printProgressBar({width: 62})
+
+        for (let i = 0; i < completedTodos.length; i++) {
+            await TodoApi.deleteItem(completedTodos[i].uid)
+            progressBar.update(i / completedTodos.length)
+        }
+
+        progressBar.finish()
+        terminal.printSuccess(`Successfully removed ${completedTodos.length} todos.`)
+        return
+
+    } else if (args["rm-item"]) {
         const choice = await getTodoItemChoice("Please choose an item to delete.")
         await TodoApi.deleteItem(choice.uid)
 
@@ -178,5 +200,6 @@ terminal.addCommand("todo", async function(args) {
         "?a=add-item:b": "add an item to the todo list",
         "?r=rm-item:b": "remove an item from the todo list",
         "?e=edit-item:b": "edit an item of the todo list",
+        "?rm-completed:b": "remove all completed todos from the todo list"
     }
 })
