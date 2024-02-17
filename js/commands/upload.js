@@ -39,15 +39,17 @@ terminal.addCommand("upload", async function(args) {
 
     const fileSize = file.computeSize()
 
-    const currSystemSize = terminal.rootDirectory.computeSize()
-    const maxSystemSize = terminal.data.storageSize
-    const overdo = (fileSize + currSystemSize) - maxSystemSize
-    if (overdo > 0) {
-        terminal.print(`You have used up ${terminal.fileSystem.filesizeStr(currSystemSize)}`)
-        terminal.print(`/${terminal.fileSystem.filesizeStr(maxSystemSize)} `)
-        terminal.printLine(`(${Math.ceil(currSystemSize / maxSystemSize * 100)}%) of your storage.`)
-        terminal.printLine(`Adding this file would exceed this limit by >${terminal.fileSystem.filesizeStr(overdo)}.`)
-        throw new Error("File upload failed.")
+    if (!terminal.fileSystem.inSessionMode) {
+        const currSystemSize = terminal.rootDirectory.computeSize()
+        const maxSystemSize = terminal.data.storageSize
+        const overdo = (fileSize + currSystemSize) - maxSystemSize
+        if (overdo > 0) {
+            terminal.print(`You have used up ${terminal.fileSystem.filesizeStr(currSystemSize)}`)
+            terminal.print(`/${terminal.fileSystem.filesizeStr(maxSystemSize)} `)
+            terminal.printLine(`(${Math.ceil(currSystemSize / maxSystemSize * 100)}%) of your storage.`)
+            terminal.printLine(`Adding this file would exceed this limit by >${terminal.fileSystem.filesizeStr(overdo)}.`)
+            throw new Error("File upload failed.")
+        }
     }
 
     terminal.rootDirectory.addChild(file)

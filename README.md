@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 193 commands such as `ls`, `cd` and of course `cowsay`
+* 194 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -208,6 +208,7 @@ The following list can also be viewed using the `whatis *` command
 | `sc` | manage the startup commands |
 | `scarpet` | draws the Sierpinski carpet using the chaos game |
 | `search` | search something via google.com |
+| `session` | manage a filesystem session |
 | `set` | set a value on the server |
 | `sha256` | calculate the SHA-256 hash of a message |
 | `shi` | calculate your SHI (stability height index) |

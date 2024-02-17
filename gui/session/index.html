@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>python (Terminal Command)</title>
+        <title>session (Terminal Command)</title>
         <link rel="stylesheet" href="../../style.css">
         <link rel="stylesheet" href="../style.css?t=0">
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lora">
@@ -21,11 +21,11 @@
         <main>
 
             <h1>
-                python
+                session
             </h1>
 
             <p class="subtitle">
-                run a script or open a python shell
+                manage a filesystem session
             </p>
 
             <div id="inputs-container"></div>
@@ -55,7 +55,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "run a script or open a python shell", "args": {"?f=file:f": "the script to run", "?c=code:s": "the code to run"}, "disableEqualsArgNotation": true, "name": "python"}
+            const command_data = {"description": "manage a filesystem session", "args": {"action:e:begin|reset|save|load|end": "<enum>"}, "name": "session"}
         </script>
 
         <script src="../main.js"></script>

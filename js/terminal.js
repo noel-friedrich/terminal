@@ -150,7 +150,7 @@ class TerminalFile {
         if (obj.type === "directory") {
             // compatability with previous versions of filesystem saving
             // that may still exist in some peoples localstorage!
-            if (typeof obj.content == "object" && obj.content !== null) {
+            if (typeof obj.content == "object" && obj.content !== null && !Array.isArray(obj.content)) {
                 obj.content = Object.entries(obj.content).map(([fname, fobj]) => {
                     fobj.name = fname
                     return fobj
@@ -319,7 +319,9 @@ class FileSystem {
     constructor() {
         this.root = new DirectoryFile().setName("root")
         this.currDirectory = this.root
-        this.type = "default"
+
+        // in session mode, changes don't get saved to local storage
+        this.inSessionMode = false
     }
 
     get pathStr() {
@@ -416,8 +418,10 @@ class FileSystem {
     }
 
     toJSON() {
-        let fileSizeLimit = terminal.data.storageSize
-        this.dumpTooLargeFiles(this.root, fileSizeLimit)
+        if (!this.inSessionMode) {
+            let fileSizeLimit = terminal.data.storageSize
+            this.dumpTooLargeFiles(this.root, fileSizeLimit)
+        }
         return JSON.stringify(this.root.toObject())
     }
 
@@ -428,16 +432,35 @@ class FileSystem {
     }
 
     reset() {
-        localStorage.removeItem("terminal-filesystem")
+        if (!this.inSessionMode) {
+            localStorage.removeItem("terminal-filesystem")
+        }
+
         this.root = new DirectoryFile().setName("root")
         this.currDirectory = this.root
     }
 
+    beginSession() {
+        this.inSessionMode = true
+    }
+
+    endSession() {
+        this.inSessionMode = false
+    }
+
     save() {
+        if (this.inSessionMode) {
+            return
+        }
+
         localStorage.setItem("terminal-filesystem", this.toJSON())
     }
 
     async load(jsonVal=undefined) {
+        if (this.inSessionMode) {
+            return
+        }
+
         let json = jsonVal ?? localStorage.getItem("terminal-filesystem")
         if (json) {
             this.loadJSON(json)
@@ -1006,19 +1029,25 @@ class TerminalParser {
                 argOptions.type = argOptions.typeName = "square-matrix"
             } else if (type == "m") {
                 argOptions.type = argOptions.typeName = "matrix"
+            } else if (type == "e") {
+                argOptions.type = argOptions.typeName = "enum"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
 
             if (parts.length > 2) {
-                let range = parts[2]
-                if (range.includes("~")) {
-                    let rangeParts = range.split("~")
-                    argOptions.min = parseFloat(rangeParts[0])
-                    argOptions.max = parseFloat(rangeParts[1])
-                } else {
-                    argOptions.min = parseFloat(range)
-                    argOptions.max = parseFloat(range)
+                if (argOptions.type == "number") {
+                    let range = parts[2]
+                    if (range.includes("~")) {
+                        let rangeParts = range.split("~")
+                        argOptions.min = parseFloat(rangeParts[0])
+                        argOptions.max = parseFloat(rangeParts[1])
+                    } else {
+                        argOptions.min = parseFloat(range)
+                        argOptions.max = parseFloat(range)
+                    }
+                } else if (argOptions.type == "enum") {
+                    argOptions.enumOptions = parts[2].split("|")
                 }
             }
         }
@@ -1183,6 +1212,11 @@ class TerminalParser {
                 error(`Command not found: "${value}"`)
             }
             addVal(value)
+        } else if (argOption.type == "enum") {
+            if (!argOption.enumOptions.includes(value)) {
+                error(`Invalid Option: "${value}"`)
+            }
+            addVal(value)
         } else if (argOption.type == "matrix" || argOption.type == "square-matrix") {
             // please consider me a regex god for this:
             // (matches any valid matrices)
@@ -1244,6 +1278,10 @@ class TerminalParser {
         if (args.toString() == "[object Object]")
             Object.entries(args).map(([arg, description], i) => {
                 argOptions[i].description = description
+                if (argOptions[i].type == "enum") {
+                    const enumOptionStr = argOptions[i].enumOptions.join(" | ")
+                    argOptions[i].description = argOptions[i].description.replaceAll("<enum>", enumOptionStr)
+                }
             })
         
         const ignoreIndeces = this.parseNamedArgs(tempTokens, argOptions, parsingError)
@@ -1460,6 +1498,24 @@ class Command {
 }
 
 const UtilityFunctions = {
+
+    downloadFile(file) {
+        if (file.isDirectory) {
+            throw new Error("Cannot download directories")
+        }
+
+        let element = document.createElement('a')
+        if (file.type == FileType.DATA_URL)
+            var dataURL = file.content
+        else
+            var dataURL = 'data:text/plain;charset=utf-8,' + encodeURIComponent(file.content)
+        element.setAttribute('href', dataURL)
+        element.setAttribute('download', file.name)
+        element.style.display = 'none'
+        document.body.appendChild(element)
+        element.click()
+        document.body.removeChild(element)
+    },
 
     mulberry32(a) {
         return function() {
@@ -1939,6 +1995,10 @@ class Terminal {
             if (currArgOption.type == "command") {
                 return exportMatches(commandMatches)
             }
+
+            if (currArgOption.type == "enum") {
+                return exportMatches(configMatches(currArgOption.enumOptions))
+            }
         }
 
         return []
@@ -2183,6 +2243,11 @@ class Terminal {
         }
 
         const makeArgumentInfo = argOption => {
+            if (argOption.type == "enum") {
+                // just show options for enum
+                return argOption.description
+            }
+
             let out = ""
             if (argOption.name.length == 1) {
                 out += `-`
