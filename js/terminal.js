@@ -148,7 +148,7 @@ class TerminalFile {
         if (obj.type === "directory") {
             // compatability with previous versions of filesystem saving
             // that may still exist in some peoples localstorage!
-            if (typeof a == "object" && a !== null) {
+            if (typeof obj.content == "object" && obj.content !== null) {
                 obj.content = Object.entries(obj.content).map(([fname, fobj]) => {
                     fobj.name = fname
                     return fobj
