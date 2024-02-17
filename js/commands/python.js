@@ -99,7 +99,7 @@ terminal.addCommand("python", async function(args) {
 }, {
     description: "run a script or open a python shell",
     args: {
-        "?f=file:s": "the script to run",
+        "?f=file:f": "the script to run",
         "?c=code:s": "the code to run"
     },
     disableEqualsArgNotation: true
