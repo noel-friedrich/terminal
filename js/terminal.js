@@ -101,6 +101,8 @@ class TerminalFile {
             case FileType.DIRECTORY:
                 return DirectoryFile
             case FileType.PLAIN_TEXT:
+            case "text": // compatability
+            case "executable": // same here
                 return PlainTextFile
             case FileType.DATA_URL:
                 return DataURLFile
