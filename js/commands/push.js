@@ -2,7 +2,7 @@ terminal.addCommand("push", async function(args) {
     if (!terminal.isValidFileName(args.file))
         throw new Error("invalid file name")
     let file = terminal.getFile(args.file)
-    let content = JSON.stringify(file.toJSON())
+    let content = JSON.stringify(file.toObject())
 
     await terminal.modules.load("cliapi", terminal)
     let result = await terminal.modules.cliapi.pushFile(args.file, content)
@@ -14,6 +14,6 @@ terminal.addCommand("push", async function(args) {
 }, {
     description: "push a file to the server",
     args: {
-        "file": "file to push"
+        "file:f": "file to push"
     }
 })

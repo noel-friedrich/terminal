@@ -1,7 +1,5 @@
 terminal.addCommand("ls", function(args) {
-    let targetFolder = terminal.getFile(!!args.folder ? args.folder : "", FileType.FOLDER)
-
-    let recursive = args.r
+    let targetFolder = terminal.getFile(args.folder || "", FileType.DIRECTORY)
 
     const CHARS = {
         LINE: "│",
@@ -10,24 +8,24 @@ terminal.addCommand("ls", function(args) {
         DASH: "─",
     }
 
-    function listFolder(folder, indentation="") {
+    function listFolder(directory, indentation="") {
         let i = 0
         let printedL = false
-        for (let [fileName, file] of Object.entries(folder.content)) {
+        for (let file of directory.children) {
             i++
             if (indentation.length > 0) {
                 terminal.print(indentation)
             }
-            if (i == Object.keys(folder.content).length) {
+            if (i == directory.children.length) {
                 terminal.print(CHARS.L)
                 printedL = true
             } else {
                 terminal.print(CHARS.T)
             }
             terminal.print(CHARS.DASH.repeat(2) + " ")
-            if (file.type == FileType.FOLDER) {
-                terminal.printCommand(`${fileName}/`, `cd ${file.path}/`)
-                if (recursive) {
+            if (file.isDirectory) {
+                terminal.printCommand(`${file.name}/`, `cd ${file.path}`)
+                if (args.recursive) {
                     let indentAddition = `${CHARS.LINE}   `
                     if (printedL) {
                         indentAddition = "    "
@@ -35,14 +33,14 @@ terminal.addCommand("ls", function(args) {
                     listFolder(file, indentation + indentAddition)
                 }
             } else {
-                terminal.printLine(fileName)
+                terminal.printLine(file.name)
             }
         }
     }
 
     listFolder(targetFolder)
 
-    if (Object.entries(targetFolder.content).length == 0)
+    if (targetFolder.children.length == 0)
         terminal.printLine(`this directory is empty`)
 
 }, {
@@ -50,7 +48,7 @@ terminal.addCommand("ls", function(args) {
     description: "list all files of current directory",
     args: {
         "?folder:f": "folder to list",
-        "?r:b": "list recursively",
+        "?r=recursive:b": "list recursively",
     },
     standardVals: {
         folder: ""

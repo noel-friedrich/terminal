@@ -1,14 +1,16 @@
 terminal.addCommand("mkdir", async function(args) {
-    if (args.directory_name.match(/[\\\/\.\s]/))
-        throw new Error("File may not contain '/' or '\\'")
-    if (terminal.fileExists(args.directory_name))
+    if (!terminal.isValidFileName(args.name))
+        throw new Error("Invalid filename")
+    if (terminal.fileExists(args.name))
         throw new Error("File/Directory already exists")
-    let newFolder = new Directory({})
-    terminal.currFolder.content[args.directory_name] = newFolder
-    await terminal.fileSystem.reload()
-    terminal.printLine(`Created ${terminal.fileSystem.pathStr}/${args.directory_name}/`)
+
+    let newFolder = new DirectoryFile().setName(args.name)
+    terminal.currDirectory.addChild(newFolder)
+    terminal.printLine(`Created ${newFolder.path}`)
 }, {
     description: "create a new directory",
-    args: ["directory_name"]
+    args: {
+        "name:s": "name for your shiny new directory"
+    }
 })
 

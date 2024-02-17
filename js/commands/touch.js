@@ -3,16 +3,13 @@ terminal.addCommand("touch", async function(args) {
         throw new Error("Invalid filename")
     if (terminal.fileExists(args.filename))
         throw new Error("File already exists")
-    if (args.filename.endsWith(".url"))
-        var newFile = new ExecutableFile("")
-    else
-        var newFile = new TextFile("")
-    terminal.currFolder.content[args.filename] = newFile
-    await terminal.fileSystem.reload()
+
+    const file = new PlainTextFile().setName(args.filename)
+    terminal.currDirectory.addChild(file)
 }, {
     description: "create a file in the current directory",
     args: {
-        "filename": "the name of the file"
+        "filename:s": "the name of the file"
     }
 })
 

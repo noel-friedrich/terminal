@@ -1,31 +1,120 @@
-function classFromType(type) {
-    switch (type) {
-        case "directory":
-            return Directory
-        case "text":
-            return TextFile
-        case "executable":
-            return ExecutableFile
-        case "dataurl":
-            return DataURLFile
-        default:
-            throw new Error("Unknown type: " + type);
-    }
-}
-
 let uniqueFileIdCount = 0
 
-class File {
+const FileType = {
+    RAW: "raw",
+    DIRECTORY: "directory",
+    PLAIN_TEXT: "plaintext",
+    DATA_URL: "dataurl"
+}
 
-    constructor(type, content, {
-        isTemp = false
+class FilePath {
+
+    static from(obj) {
+        if (typeof obj == "string") {
+            return this.fromString(obj)
+        } else if (obj instanceof FilePath) {
+            return obj
+        } else if (Array.isArray(obj)) {
+            return new FilePath({items: obj})
+        } else {
+            return new Error(`Can't construct FilePath from "${typeof obj}"`)
+        }
+    }
+
+    static fromString(str) {
+        let parts = str.split(/[\\\/]/g).filter(part => part !== "")
+        return new FilePath({items: parts})
+    }
+
+    constructor({
+        items = [],
+        relativeTo = null,
     }={}) {
-        this.type = type || "file"
+        this.items = items
+        this.relativeTo = relativeTo
+    }
+
+    prependFile(file) {
+        this.items.unshift(file.name)
+    }
+
+    addFile(file) {
+        this.items.push(file.name)
+    }
+
+    prependItem(str) {
+        this.items.unshift(str)
+    }
+
+    addItem(str) {
+        this.items.push(str)
+    }
+
+    pop() {
+        return this.files.pop()
+    }
+
+    concat(otherFilePath) {
+        return new FilePath({items: this.items.concat(otherFilePath.items)})
+    }
+
+    get isFilePath() {
+        return true
+    }
+
+    slice(start, end) {
+        return new FilePath({items: this.items.slice(start, end)})
+    }
+
+    fromRoot() {
+        if (this.relativeTo == null) {
+            return this
+        } else {
+            return this.relativeTo.path.concat(this)
+        }
+    }
+
+    toString() {
+        if (this.relativeTo == null) {
+            if (this.items[0] === "root") {
+                return this.items.join("/") + "/"
+            } else {
+                return "root/" + this.items.join("/") + "/"
+            }
+        } else {
+            return this.relativeTo.path.concat(this).toString()
+        }
+    }
+
+    get length() {
+        return this.items.length
+    }
+
+}
+
+class TerminalFile {
+
+    static classFromType(type) {
+        switch (type) {
+            case FileType.RAW:
+                return TerminalFile
+            case FileType.DIRECTORY:
+                return DirectoryFile
+            case FileType.PLAIN_TEXT:
+                return PlainTextFile
+            case FileType.DATA_URL:
+                return DataURLFile
+            default:
+                throw new Error("Unknown Filetype: " + type)
+        }
+    }
+
+    constructor(content) {
+        this.type = FileType.RAW
         this.content = content
         this.parent = null
-        this.name = null
-        this.isTemp = isTemp
         this.id = uniqueFileIdCount++
+        this.name = `unnamed-${this.id}`
     }
 
     setName(name) {
@@ -34,53 +123,20 @@ class File {
     }
 
     computeSize() {
-        return JSON.stringify(this.toJSON()).length
+        return JSON.stringify(this.toObject()).length
     }
 
     copy() {
-        return File.fromObject(this.toJSON())
+        return TerminalFile.fromObject(this.toObject())
     }
 
     get path() {
-        let tempPath = this.name ?? "root"
-        let tempParent = this.parent
-        while (tempParent) {
-            let parentName = tempParent.name ?? "root"
-            tempPath = parentName + "/" + tempPath
-            tempParent = tempParent.parent
-        }
-        return tempPath
+        return new FilePath({relativeTo: this.parent, items: [this.name]})
     }
 
-    get pathArray() {
-        let path = this.path.split("/")
-        path.shift()
-        return path
-    }
-
-    get relativeChildPaths() {
-        let paths = []
-        
-        function getPaths(file, currPath) {
-            paths.push(currPath)
-            if (file.isDirectory) {
-                for (let [key, value] of Object.entries(file.content)) {
-                    getPaths(value, currPath + "/" + key)
-                }
-            }
-        }
-
-        getPaths(this, "")
-
-        return paths.filter(path => path !== "").map(path => path.slice(1))
-    }
-
-    get isDirectory() {
-        return false
-    }
-
-    toJSON() {
+    toObject() {
         return {
+            name: this.name,
             type: this.type,
             content: this.content
         }
@@ -90,33 +146,38 @@ class File {
         let children = []
         let content = obj.content
         if (obj.type === "directory") {
-            for (let [key, value] of Object.entries(obj.content)) {
-                content[key] = File.fromObject(value)
-                children.push(content[key])
-                content[key].name = key
-            }
+            children = obj.content.map(c => TerminalFile.fromObject(c))
+            content = children
         }
-        let file = new (classFromType(obj.type))(content)
+
+        const file = new (TerminalFile.classFromType(obj.type))(content)
         for (let child of children) {
             child.parent = file
         }
+
+        if (obj.name) {
+            file.name = obj.name
+        }
+
         return file
-    }
-
-    append() {
-        throw new Error("Cannot append to uninitialized file")
-    }
-
-    write() {
-        throw new Error("Cannot write to uninitialized file")
     }
 
 }
 
-class TextFile extends File {
+class PlainTextFile extends TerminalFile {
 
     constructor(content) {
-        super("text", content)
+        content ??= ""
+        super(content)
+        this.type = FileType.PLAIN_TEXT
+    }
+
+    get text() {
+        return this.content
+    }
+
+    set text(newText) {
+        this.content = newText
     }
 
     append(text) {
@@ -127,62 +188,113 @@ class TextFile extends File {
         this.content = text
     }
 
-}
-
-class ExecutableFile extends File {
-
-    constructor(content) {
-        super("executable", content)
+    get isPlainText() {
+        return true
     }
 
 }
 
-class DataURLFile extends File {
+class DataURLFile extends TerminalFile {
 
     constructor(content) {
-        super("dataurl", content)
+        content ??= ""
+        super(content)
+        this.type = FileType.DATA_URL
+    }
+
+    get dataUrl() {
+        return this.content
+    }
+
+    set dataUrl(newUrl) {
+        this.content = newUrl
+    }
+
+    get isDataUrl() {
+        return true
     }
 
 }
 
-class MelodyFile extends File {
+class DirectoryFile extends TerminalFile {
 
     constructor(content) {
-        super("melody", content)
+        content ??= []
+        super(content)
+        this.type = FileType.DIRECTORY
     }
 
-}
-
-class Directory extends File {
-
-    constructor(content) {
-        super("directory", content)
+    get children() {
+        return this.content
     }
 
-    toJSON() {
+    toObject() {
         return {
             type: this.type,
-            content: Object.fromEntries(Object.entries(this.content)
-                .filter(([fileName, file]) => !file.isTemp)
-                .map(([fileName, file]) => [fileName, file.toJSON()]))
+            name: this.name,
+            content: this.children.map(file => file.toObject()),
         }
     }
 
-    addFile(file) {
-        this.content[file.name] = file
-        file.parent = this
+    addChild(child) {
+        this.content.push(child)
+        child.parent = this
     }
 
     deleteChild(child) {
-        delete this.content[child.name]
+        this.content = this.children.filter(f => f.id != child.id)
     }
 
-    fileExists(name) {
-        return name in this.content
+    fileExists(path) {
+        return !!this.getFile(path)
     }
 
-    getFile(name) {
-        return this.content[name]
+    findChildByName(name) {
+        return this.children.find(c => c.name == name)
+    }
+
+    getFile(path) {
+        path = FilePath.from(path)
+        let currDirectory = this
+
+        for (let name of path.items) {
+            let child = undefined
+
+            if (name == ".") {
+                continue
+            } else if (name == "..") {
+                if (!currDirectory.parent) {
+                    return undefined
+                } else {
+                    currDirectory = currDirectory.parent
+                }
+            } else if (name == "~") {
+                while (currDirectory.parent) {
+                    currDirectory = currDirectory.parent
+                }
+            } else {
+                child = currDirectory.findChildByName(name)
+                if (!child) {
+                    return undefined
+                }
+                currDirectory = child
+            }
+        }
+        
+        return currDirectory
+    }
+
+    get allChildren() {
+        let files = []
+        let stack = [this]
+        while (stack.length > 0) {
+            let file = stack.pop()
+            files.push(file)
+            if (file.isDirectory) {
+                stack.push(...file.children)
+            }
+        }
+        return files
     }
 
     get isDirectory() {
@@ -194,21 +306,34 @@ class Directory extends File {
 class FileSystem {
 
     constructor() {
-        this.root = new Directory("root", {})
-        this.currPath = []
-        this.tempSave = undefined
-    }
-
-    get currFolder() {
-        return this.getFile(this.pathStr)
-    }
-
-    _pathToString(path) {
-        return "root/" + path.join("/")
+        this.root = new DirectoryFile().setName("root")
+        this.currDirectory = this.root
+        this.type = "default"
     }
 
     get pathStr() {
-        return this._pathToString(this.currPath)
+        return this.currDirectory.path.toString()
+    }
+
+    get path() {
+        return this.currDirectory.path.fromRoot()
+    }
+
+    allFiles() {
+        return this.root.allChildren
+    }
+
+    getFile(path) {
+        path = FilePath.from(path)
+        if (path.items[0] == "root") {
+            return this.root.getFile(path.slice(1))
+        } else {
+            return this.currDirectory.getFile(path)
+        }
+    }
+
+    fileExists(path) {
+        return !!this.getFile(path)
     }
 
     filesizeStr(numBytes) {
@@ -217,29 +342,6 @@ class FileSystem {
         if (numBytes < 1e9 ) return `${Math.floor(numBytes / 1e6 * 10) / 10} MB`
         if (numBytes < 1e12) return `${Math.floor(numBytes / 1e9 * 10) / 10} GB`
         return `${Math.floor(numBytes / 1e12 * 10 / 10)} TB`
-    }
-
-    _parsePath(path) {
-        let parts = path.split(/[\\\/]/g).filter(part => part !== "")
-        if (parts[0] === "root") {
-            parts.shift()
-        } else {
-            parts = this.currPath.concat(parts)
-        }
-        return parts
-    }
-
-    getFile(path) {
-        let parsedPath = this._parsePath(path)
-        let temp = this.root
-        for (let part of parsedPath) {
-            if (temp.isDirectory && part in temp.content) {
-                temp = temp.content[part]
-            } else {
-                return null
-            }
-        }
-        return temp
     }
 
     dumpTooLargeFiles(file, fileSizeLimit) {
@@ -305,19 +407,19 @@ class FileSystem {
     toJSON() {
         let fileSizeLimit = terminal.data.storageSize
         this.dumpTooLargeFiles(this.root, fileSizeLimit)
-        return JSON.stringify(this.root.toJSON())
+        return JSON.stringify(this.root.toObject())
     }
 
     loadJSON(jsonString) {
         let parsed = JSON.parse(jsonString)
-        this.root = File.fromObject(parsed)
+        this.root = TerminalFile.fromObject(parsed).setName("root")
+        this.currDirectory = this.root
     }
 
     reset() {
         localStorage.removeItem("terminal-filesystem")
-        this.root = new Directory({})
-        this.root.name = "root"
-        this.currPath = []
+        this.root = new DirectoryFile().setName("root")
+        this.currDirectory = this.root
     }
 
     save() {
@@ -335,26 +437,9 @@ class FileSystem {
         }
     }
 
-    reloadSync() {
-        this.loadJSON(this.toJSON())
-    }
-
     async reload() {
         this.save()
         await this.load()
-    }
-
-    allFiles(startPoint=this.root) {
-        let files = []
-        let stack = [startPoint]
-        while (stack.length > 0) {
-            let file = stack.pop()
-            files.push(file)
-            if (file.isDirectory) {
-                stack.push(...Object.values(file.content))
-            }
-        }
-        return files
     }
 
     saveTemp() {
@@ -1422,15 +1507,14 @@ const UtilityFunctions = {
         return string.toString().repeat(count)
     },
 
-    Color: Color,
+    Color,
 
-    FileType: {
-        FOLDER: "directory",
-        READABLE: "text",
-        PROGRAM: "executable",
-        MELODY: "melody",
-        DATA_URL: "dataurl"
-    },
+    FileType,
+    FilePath,
+    TerminalFile,
+    DataURLFile,
+    DirectoryFile,
+    PlainTextFile,
 
     async playFrequency(f, ms, volume=0.5, destination=null, returnSleep=true) {
         if (!terminal.audioContext) {
@@ -1471,11 +1555,6 @@ const UtilityFunctions = {
     },
 
     TerminalParser: TerminalParser,
-    File: File,
-    TextFile: TextFile,
-    Directory: Directory,
-    ExecutableFile: ExecutableFile,
-    DataURLFile: DataURLFile,
     Command: Command,
     IntendedError: IntendedError,
 
@@ -1674,7 +1753,6 @@ class Terminal {
 
     getFile(path, fileType=undefined) {
         // throws error if file not found
-        if (path == ".") path = ""
         let file = this.fileSystem.getFile(path)
         if (file == null) {
             throw new Error(`File "${path}" not found`)
@@ -1691,23 +1769,22 @@ class Terminal {
             throw new Error("File already exists")
         let newFile = new (fileType)(data)
         if (!terminal.inTestMode) {
-            terminal.currFolder.content[fileName] = newFile
+            terminal.currDirectory.content[fileName] = newFile
             await terminal.fileSystem.reload()
         }
         return newFile
     }
 
     fileExists(path) {
-        if (path == ".") path = ""
-        return this.fileSystem.getFile(path) != null
+        return !!this.fileSystem.getFile(path)
     }
 
     updatePath() {
-        this.data.path = this.fileSystem.currPath
+        this.data.path = this.fileSystem.path.items
     }
 
     isValidFileName(name) {
-        return name.match(/^[a-zA-Z0-9_\-\.]{1,30}$/)
+        return name.match(/^[a-zA-Z0-9_\-\.]{1,100}$/)
     }
 
     async copy(text, {printMessage=false}={}) {
@@ -1784,8 +1861,8 @@ class Terminal {
     getAutoCompleteOptions(text) {
         let lastWord = text.split(/\s/g).pop()
         const allRelativeFiles = this.fileSystem.allFiles()
-            .map(file => file.path)
-            .concat(this.fileSystem.currFolder.relativeChildPaths)
+            .map(file => file.path.toString())
+            .concat(this.fileSystem.currDirectory.allChildren.map(c => c.path.toString().slice(this.fileSystem.pathStr.length)))
 
         const configMatches = ms => ms.filter(f => f.startsWith(lastWord))
             .sort().sort((a, b) => a.length - b.length)
@@ -2750,15 +2827,15 @@ class Terminal {
             })
     }
 
-    get currFolder() {
-        return this.fileSystem.currFolder
+    get currDirectory() {
+        return this.fileSystem.currDirectory
     }
 
     get lastPrintedChar() {
         return this.parentNode.textContent[this.parentNode.textContent.length - 1]
     }
 
-    get rootFolder() {
+    get rootDirectory() {
         return this.fileSystem.root
     }
 
@@ -2874,6 +2951,7 @@ class Terminal {
         this.tempCommandInputHistory = []
 
         this.fileSystem.save()
+        this.updatePath()
 
         this.standardInputPrompt()
     }
@@ -2917,23 +2995,26 @@ class Terminal {
             .replace("MSG", msg)
 
 
-        let lines = terminal.logFile.content.split("\n")
+        let lines = terminal.logFile.text.split("\n")
                     .filter(line => line.length > 0)
         while (lines.length > terminal.logFileMaxLines - 1) {
             lines.shift()
         }
+
         lines.push(logText)
-        terminal.logFile.content = lines.join("\n")
+        terminal.logFile.text = lines.join("\n")
+    }
+
+    get logFilePath() {
+        return "root/" + this.logFileName
     }
 
     get logFile() {
-        if (this.fileExists(this.logFileName)) {
-            return this.getFile("root/" + this.logFileName)
+        if (this.fileExists(this.logFilePath)) {
+            return this.getFile(this.logFilePath)
         } else {
-            let logFile = new TextFile("")
-                            .setName(this.logFileName)
-            this.rootFolder.addFile(logFile)
-            this.fileSystem.reloadSync()
+            let logFile = new PlainTextFile().setName(this.logFileName)
+            this.rootDirectory.addChild(logFile)
             return logFile
         }
     }
@@ -2967,6 +3048,7 @@ class Terminal {
     async init({
         runInput=true,
         runStartupCommands=true,
+        loadPath=true,
         loadSidePanel=true,
         ignoreMobile=false
     }={}) {
@@ -2985,9 +3067,16 @@ class Terminal {
                 for (let startupCommand of this.data.startupCommands) {
                     await this.input(startupCommand, true)
                 }
+            }
 
+            if (loadPath) {
                 // load path from localstorage
-                this.fileSystem.currPath = this.data.path
+                let filePath = FilePath.from(this.data.path)
+                if (this.fileExists(filePath)) {
+                    this.fileSystem.currDirectory = this.getFile(filePath)
+                } else {
+                    this.updatePath()
+                }
             }
 
             if (!ignoreMobile) {

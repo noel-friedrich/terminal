@@ -6,23 +6,14 @@ terminal.addCommand("rename", async function(args) {
         throw new Error("file already exists in folder")
 
     let file = terminal.getFile(args.file)
-    if (terminal.rootFolder.id == file.id)
+    if (terminal.rootDirectory.id == file.id)
         throw new Error("cannot rename root folder")
-    let renamingCurrentFolder = file.id == terminal.currFolder.id
-    delete file.parent.content[file.name]
-    file.parent.content[args.name] = file
-    terminal.log(`renamed ${file.path} to ${args.name}`)
-    file.name = args.name
 
-    if (renamingCurrentFolder) {
-        terminal.fileSystem.currPath = file.pathArray
-    }
-
-    await terminal.fileSystem.reload()
+    file.setName(args.name)
 }, {
     description: "rename a file or folder",
     args: {
-        "file": "the file or folder to rename",
-        "name": "the new name of the file or folder"
+        "file:f": "the file or folder to rename",
+        "name:s": "the new name of the file or folder"
     }
 })

@@ -19,5 +19,5 @@ terminal.addCommand("download", function(args) {
     downloadFile(file.name, file)
 }, {
     description: "download a file",
-    args: {"file": "the file to download"}
+    args: {"file:f": "the file to download"}
 })

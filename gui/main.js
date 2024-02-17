@@ -221,6 +221,7 @@ async function main() {
         runInput: false,
         loadSidePanel: false,
         runStartupCommands: false,
+        loadPath: false,
         ignoreMobile: true
     })
 

@@ -7,14 +7,18 @@ terminal.addCommand("du", function(args) {
         if (size < 10 ** 6) return `${Math.ceil(size / 1024)}kB`
         return `${Math.ceil(size / (1024 ** 2))}mB`
     }
+
     let targetFolder = terminal.getFile("")
     if (args.folder) {
         targetFolder = terminal.getFile(args.folder)
     }
-    for (let [fileName, file] of Object.entries(targetFolder.content)) {
-        let fileContent = JSON.stringify(file.toJSON())
-        totalSize += fileContent.length
-        let fileSize = getSizeStr(fileContent.length)
+
+    for (let file of targetFolder.children) {
+        let fileBytes = file.computeSize()
+        totalSize += fileBytes
+        let fileSize = getSizeStr(fileBytes)
+
+        let fileName = file.name
         if (file.type == FileType.FOLDER)
             fileName += "/"
         fileNames.push(fileName)
@@ -37,7 +41,7 @@ terminal.addCommand("du", function(args) {
 }, {
     description: "display storage of current directory",
     args: {
-        "?folder": "folder to display storage of"
+        "?folder:f": "folder to display storage of"
     },
 })
 

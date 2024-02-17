@@ -55,7 +55,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "copy a file", "args": ["file", "directory"], "name": "cp"}
+            const command_data = {"description": "copy a file", "args": {"file:f": "file to copy", "?d=directory:f": "directory to copy to", "?n=name:s": "new filename"}, "defaultValues": {"directory": "."}, "name": "cp"}
         </script>
 
         <script src="../main.js"></script>
