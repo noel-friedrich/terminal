@@ -1093,7 +1093,7 @@ class TerminalParser {
                     parsingError.tokenIndex = i
                 } else if (!argOption.optional) {
                     argOption.tokenIndex = i
-                    parsingError.message = `Property "${name}" is not optional, must be passed directly`
+                    parsingError.message = `Property "${argOption.name}" is not optional, must be passed directly`
                     parsingError.tokenIndex = i
                     parsingError.tokenSpan = 1
                 } else if (argOption.type == "boolean") {
@@ -1106,7 +1106,7 @@ class TerminalParser {
                         argOption.tokenSpan = 1
                         this._parseArgumentValue(argOption, nextToken, parsingError)
                     } else {
-                        parsingError.message = `property "${name}" (${argOption.typeName}) expects a value`
+                        parsingError.message = `property "${argOption.name}" (${argOption.typeName}) expects a value`
                         parsingError.tokenIndex = i + 1
                     }
                 }
@@ -1174,55 +1174,56 @@ class TerminalParser {
             let num = parseFloat(value)
             if (argOption.numtype == "integer") {
                 if (!Number.isInteger(num)) {
-                    error(`At property "${argOption.name}": Expected an integer`)
+                    return error(`At property "${argOption.name}": Expected an integer`)
                 }
             }
 
             if (isNaN(num) || isNaN(value)) {
-                error(`At property "${argOption.name}": Expected a number`)
+                return error(`At property "${argOption.name}": Expected a number`)
             }
 
             if (argOption.min != null && num < argOption.min) {
-                error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
+                return error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
             }
 
             if (argOption.max != null && num > argOption.max) {
-                error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
+                return error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
             }
 
             addVal(num)
         } else if (argOption.type == "boolean") {
-            if (value != "true" && value != "false" && value !== true && value !== false) {
-                error(`At property "${argOption.name}": Expected a boolean`)
+            const trueForms = ["true", true, "1"]
+            const falseForms = ["false", false, "0"]
+            if (!trueForms.concat(falseForms).includes(value)) {
+                return error(`At property "${argOption.name}": Expected a boolean`)
             }
-            addVal(value == "true" || value === true)
+            addVal(trueForms.includes(value))
         } else if (argOption.type == "bigint") {
             try {
                 addVal(BigInt(value))
             } catch {
-                error(`At property "${argOption.name}": Expected an integer`)
+                return error(`At property "${argOption.name}": Expected an integer`)
             }
         } else if (argOption.type == "file") {
             if (!terminal.fileExists(value)) {
-                error(`File not found: "${value}"`)
+                return error(`File not found: "${value}"`)
             }
             addVal(value)
         } else if (argOption.type == "command") {
             if (!terminal.commandExists(value)) {
-                error(`Command not found: "${value}"`)
+                return error(`Command not found: "${value}"`)
             }
             addVal(value)
         } else if (argOption.type == "enum") {
             if (!argOption.enumOptions.includes(value)) {
-                error(`Invalid Option: "${value}"`)
+                return error(`Invalid Option: "${value}"`)
             }
             addVal(value)
         } else if (argOption.type == "matrix" || argOption.type == "square-matrix") {
             // please consider me a regex god for this:
             // (matches any valid matrices)
             if (!/^\[((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*(\/((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*)*\]$/.test(value)) {
-                error(`Invalid matrix. Use syntax: [1,2/a,4]`)
-                return
+                return error(`Invalid matrix. Use syntax: [1,2/a,4]`)
             }
 
             let str = value.slice(1, value.length - 1)
@@ -1237,12 +1238,12 @@ class TerminalParser {
             })
 
             if (rows.some(row => row.length != rows[0].length)) {
-                error(`Matrix must have equal sized rows.`)
+                return error(`Matrix must have equal sized rows.`)
             }
 
             if (argOption.type == "square-matrix") {
                 if (rows.length != rows[0].length) {
-                    error(`Matrix must be square.`)
+                    return error(`Matrix must be square.`)
                 }
             }
 
@@ -1969,10 +1970,7 @@ class Terminal {
         const {argOptions} = this.parse(text)
 
         let currArgOption = {}
-        if (text.slice(-1) == "-") {
-            return exportMatches(argOptions.filter(o => !o.isManuallySetValue)
-                .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`))
-        } else if (text.slice(-1) == " ") {
+        if (text.slice(-1) == " ") {
             const nextArgOption = argOptions.filter(o => !o.isManuallySetValue)[0]
             if (nextArgOption !== undefined) {
                 currArgOption = nextArgOption
@@ -1984,8 +1982,8 @@ class Terminal {
         // if an argOption is currently being edited
         if (currArgOption.name) {
             if (currArgOption.type == "boolean") {
-                let numTicks = currArgOption.name.length > 1 ? 2 : 1
-                return exportMatches([`${"-".repeat(numTicks)}${currArgOption.name}`])
+                return exportMatches(configMatches(argOptions.filter(o => !o.isManuallySetValue)
+                    .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`)))
             }
 
             if (currArgOption.type == "file") {
@@ -2445,6 +2443,8 @@ class Terminal {
                 }
                 if (suggestions.length > 0) {
                     inputElement.value = suggestions[tabIndex % suggestions.length]
+                    suggestionElement.textContent = ""
+                    
                     tabIndex = (tabIndex + 1) % suggestions.length
                     inputValue = ""
                 }
