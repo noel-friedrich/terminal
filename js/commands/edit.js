@@ -7,7 +7,7 @@ terminal.addCommand("edit", async function(args) {
         textarea.style.background = "var(--background)"
         textarea.style.color = "var(--foreground)"
         textarea.style.marginTop = `calc(var(--font-size) * 0.8)`
-        textarea.style.padding = `calc(var(--font-size) * 0.5)`
+        textarea.style.padding = `calc(var(--font-size) * 0.8)`
         textarea.style.border = "1px solid var(--foreground)"
         textarea.style.borderRadius = `calc(var(--font-size) * 0.5)`
 
