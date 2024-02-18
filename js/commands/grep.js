@@ -9,15 +9,15 @@ terminal.addCommand("grep", async function(args) {
 
     let matches = []
 
-    function processFile(file, filename, allowRecursionOnce=false) {
-        if (file.type == FileType.FOLDER) {
+    function processFile(file, allowRecursionOnce=false) {
+        if (file.type == FileType.DIRECTORY) {
             if (recursive || allowRecursionOnce) {
-                for (let [newName, newFile] of Object.entries(file.content)) {
-                    if (!recursive && newFile.type == FileType.FOLDER) continue
-                    processFile(newFile, newName)
+                for (let newFile of file.children) {
+                    if (!recursive && newFile.type == FileType.DIRECTORY) continue
+                    processFile(newFile)
                 }
             } else {
-                throw new Error(`File ${filename} is a directory!`)
+                throw new Error(`File ${file.name} is a directory!`)
             }
         } else {
             for (let line of file.content.split("\n")) {
@@ -38,7 +38,7 @@ terminal.addCommand("grep", async function(args) {
                         var offset = line.indexOf(args.pattern)
                     }
                     matches.push({
-                        filename: filename,
+                        filename: file.name,
                         filepath: file.path,
                         line: line,
                         offset: offset,
@@ -49,7 +49,7 @@ terminal.addCommand("grep", async function(args) {
     }
 
     if (args.file == "*") {
-        processFile(terminal.currFolder, ".", true)
+        processFile(terminal.currDirectory, true)
     } else {
         for (let filename of args.file.split(" ")) {
             let file = terminal.getFile(filename)
