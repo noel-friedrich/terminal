@@ -2,11 +2,6 @@ terminal.addCommand("du", function(args) {
     let fileNames = []
     let fileSizes = []
     let totalSize = 0
-    function getSizeStr(size) {
-        if (size < 10 ** 3) return `${size}B`
-        if (size < 10 ** 6) return `${Math.ceil(size / 1024)}kB`
-        return `${Math.ceil(size / (1024 ** 2))}mB`
-    }
 
     let targetFolder = terminal.getFile("")
     if (args.folder) {
@@ -16,7 +11,7 @@ terminal.addCommand("du", function(args) {
     for (let file of targetFolder.children) {
         let fileBytes = file.computeSize()
         totalSize += fileBytes
-        let fileSize = getSizeStr(fileBytes)
+        let fileSize = terminal.fileSystem.filesizeStr(fileBytes)
 
         let fileName = file.name
         if (file.type == FileType.FOLDER)
@@ -24,8 +19,9 @@ terminal.addCommand("du", function(args) {
         fileNames.push(fileName)
         fileSizes.push(fileSize)
     }
+    
     fileNames.unshift("TOTAL")
-    fileSizes.unshift(getSizeStr(totalSize))
+    fileSizes.unshift(terminal.fileSystem.filesizeStr(totalSize))
     let longestSizeLength = fileSizes.reduce((a, e) => Math.max(a, e.length), 0) + 2
     let paddedFileSizes = fileSizes.map(s => stringPadBack(s, longestSizeLength))
     for (let i = 0; i < fileNames.length; i++) {

@@ -498,10 +498,11 @@ class TerminalData {
         "accentColor1": "#ffff00",
         "accentColor2": "#8bc34a",
         "history": "[]",
-        "storageSize": "300000",
+        "storageSize": "1000000",
         "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
         "mobile": "2",
         "easterEggs": "[]",
+        "maxHistoryLength": "100",
         "sidepanel": "true",
         "path": "[]",
         "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
@@ -660,6 +661,14 @@ class TerminalData {
         this.set("storageSize", size)
     }
 
+    get maxHistoryLength() {
+        return parseInt(this.get("maxHistoryLength"))
+    }
+
+    set maxHistoryLength(length) {
+        this.set("maxHistoryLength", length)
+    }
+
     get lastItemOfHistory() {
         return this.history[this.history.length - 1]
     }
@@ -677,6 +686,9 @@ class TerminalData {
         let lastItem = history[history.length - 1]
         if (lastItem == command) return
         history.push(command)
+        if (history.length > this.maxHistoryLength) {
+            history.shift()
+        }
         this.history = history
     }
 
