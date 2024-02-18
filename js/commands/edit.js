@@ -52,13 +52,21 @@ terminal.addCommand("edit", async function(args) {
     terminal.scroll()
     textarea.focus()
 
-    saveButton.onclick = save
-
     function removeElements() {
         textarea.remove()
         saveButton.remove()
         cancelButton.remove()
         br.remove()
+    }
+
+    function cancel() {
+        if (!editingActive) {
+            return
+        }
+
+        editingActive = false
+        removeElements()
+        terminal.printLine("[Pressed Cancel]")
     }
 
     function save() {
@@ -71,6 +79,9 @@ terminal.addCommand("edit", async function(args) {
         removeElements()
         terminal.printSuccess(`Changes saved at ${file.path}`)
     }
+
+    saveButton.onclick = save
+    cancelButton.onclick = cancel
 
     textarea.onkeydown = function(event) {
         if (!editingActive) {
