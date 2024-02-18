@@ -172,7 +172,9 @@ terminal.addCommand("edit", async function(args) {
             throw new Error("cannot edit a folder")
         file.content = getText()
     } else {
-        terminal.createFile(tempFileName, TextFile, getText())
+        terminal.currDirectory.addChild(
+            new PlainTextFile(getText()).setName(tempFileName)
+        )
     }
 }, {
     description: "edit a file of the current directory",
