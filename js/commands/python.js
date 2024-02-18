@@ -76,7 +76,7 @@ terminal.addCommand("python", async function(args) {
 
     if (args.file) {
         let file = terminal.getFile(args.file)
-        if (file instanceof Directory) {
+        if (file.isDirectory) {
             throw new Error("Cannot run a directory")
         }
         let code = file.content

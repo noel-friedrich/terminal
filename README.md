@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 196 commands such as `ls`, `cd` and of course `cowsay`
+* 197 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -105,7 +105,7 @@ The following list can also be viewed using the `whatis *` command
 | `du` | display storage of current directory |
 | `easter-eggs` | open easter egg hunt |
 | `echo` | print a line of text |
-| `edit` | edit a file of the current directory |
+| `edit` | edit a file |
 | `enigma` | Simulate an Enigma machine |
 | `error404` | Display a 404 error |
 | `eval` | evaluate javascript code |
@@ -177,6 +177,7 @@ The following list can also be viewed using the `whatis *` command
 | `neural-rocket` | trains neural networks to fly rockets |
 | `nsolve` | solve an equation using the newton-raphson method |
 | `number-guess` | guess a random number |
+| `old-edit` | edit a file of the current directory (old version of editor) |
 | `particle` | start a particle simulation |
 | `pascal` | print a pascal triangle |
 | `password` | Generate a random password |

@@ -2474,7 +2474,10 @@ class Terminal {
                 completeSuggestion()
             }
 
-            suggestionElement.onclick = completeSuggestion
+            suggestionElement.onclick = () => {
+                completeSuggestion()
+                inputElement.oninput()
+            }
 
             let historyIndex = getHistory().length
             keyListeners["ArrowUp"] = event => {

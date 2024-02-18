@@ -11,7 +11,7 @@ terminal.addCommand("pull", async function(args) {
     }
 
     try {
-        let file = File.fromObject(JSON.parse(content))
+        let file = TerminalFile.fromObject(JSON.parse(content)).setName(args.file)
         terminal.currDirectory.addChild(file)
         terminal.printSuccess("pulled file from server")
     } catch (e) {

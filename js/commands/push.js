@@ -5,7 +5,7 @@ terminal.addCommand("push", async function(args) {
     let content = JSON.stringify(file.toObject())
 
     await terminal.modules.load("cliapi", terminal)
-    let result = await terminal.modules.cliapi.pushFile(args.file, content)
+    let result = await terminal.modules.cliapi.pushFile(file.name, content)
     if (result.ok) {
         terminal.printSuccess("pushed file to server")
     } else {

@@ -1,185 +1,108 @@
-const cssCode = {
-    ".editor-parent": {
-        "width": "100%",
-        "resize": "both",
-        "display": "grid",
-        "grid-template-rows": "auto 1fr",
-        "grid-template-columns": "1fr",
-    },
-
-    ".editor-header-title": {
-        "width": "fit-content",
-        "color": "var(--background)",
-        "background": "var(--foreground)",
-    },
-
-    ".editor-body": {
-        "display": "grid",
-        "grid-template-rows": "1fr",
-        "grid-template-columns": "auto 1fr",
-    },
-
-    ".editor-sidebar": {
-        "color": "var(--background)",
-        "background": "var(--foreground)",
-        "padding-right": "0.1em",
-        "padding-left": "0.1em",
-    },
-
-    ".editor-content": {
-        "outline": "none",
-        "padding-right": "0.5em",
-        "padding-left": "0.5em",
-    },
-
-    ".editor-content > div:focus-visible": {
-        "outline": "none",
-        "background": "#1d1d1d",
-    },
-}
-
-function createEditorHTML() {
-    let parent = createElement("div", {className: "editor-parent"})
-    let header = createElement("div", {className: "editor-header"}, parent)
-    let headerTitle = createElement("div", {className: "editor-header-title"}, header)
-    let body = createElement("div", {className: "editor-body"}, parent)
-    let sidebar = createElement("div", {className: "editor-sidebar"}, body)
-    let contentScroll = createElement("div", {className: "editor-content-scroll"}, body)
-    let content = createElement("div", {
-        className: "editor-content",
-        contentEditable: true,
-    }, contentScroll)
-
-    return {
-        parent, header, headerTitle, body, sidebar, content, contentScroll
-    }
-}
-
-function implementCSS(code) {
-    let style = document.createElement("style")
-    for (const [selector, properties] of Object.entries(code)) {
-        let css = selector + " {"
-        for (const [property, value] of Object.entries(properties))
-            css += property + ": " + value + ";"
-        css += "}"
-        style.innerHTML += css
-    }
-    terminal.document.head.appendChild(style)
-}
-
-let tempFileContent = null
-let tempFileName = null
-let elements = null
-let lineCount = null
-let prevLineCount = null
-let currentlyEditing = false
-
-function updateLineNums() {
-    lineCount = elements.content.childNodes.length
-
-    if (lineCount == 0) {
-        elements.sidebar.textContent = "1"
-        prevLineCount = lineCount
-    } else if (prevLineCount !== lineCount) {
-        elements.sidebar.textContent = ""
-        for (let i = 0; i < lineCount; i++) {
-            let line = createElement("div", {className: "editor-line-num"}, elements.sidebar)
-            line.textContent = i + 1
-        }
-        prevLineCount = lineCount
-    }
-}
-
-function createElement(tag, props, parent=null) {
-    const element = document.createElement(tag)
-    for (const [key, value] of Object.entries(props))
-        element[key] = value
-    if (parent)
-        parent.appendChild(element)
-    return element
-}
-
-function getText() {
-    let text = ""
-    for (let line of elements.content.querySelectorAll("div")) {
-        text += line.textContent + "\n"
-    }
-    return text.slice(0, -1)
-}
-
-function loadContent() {
-    let lastElement = null
-    for (let line of tempFileContent.split("\n")) {
-        let lineElement = createElement("div", {}, elements.content)
-        lineElement.textContent = line
-        if (lineElement.textContent.trim() == "")
-            lineElement.appendChild(document.createElement("br"))
-        lastElement = lineElement
-    }
-    if (lastElement)
-        setTimeout(() => lastElement.focus(), 100)
-    lineCount = tempFileContent.split("\n").length
-    updateLineNums()
-}
-
 terminal.addCommand("edit", async function(args) {
-    if (terminal.inTestMode) return
+    function makeTextarea(textContent) {
+        const textarea = document.createElement("textarea")
+        textarea.value = textContent
+        
+        textarea.style.position = "relative"
+        textarea.style.background = "var(--background)"
+        textarea.style.color = "var(--foreground)"
+        textarea.style.marginTop = `calc(var(--font-size) * 0.8)`
+        textarea.style.padding = `calc(var(--font-size) * 0.5)`
+        textarea.style.border = "1px solid var(--foreground)"
+        textarea.style.borderRadius = `calc(var(--font-size) * 0.5)`
 
-    tempFileContent = ""
-    tempFileName = "Untitled File"
-    currentlyEditing = true
-    prevLineCount = null
-    elements = createEditorHTML()
-    
-    if (args.file) {
-        let file = terminal.getFile(args.file)
-        if (file.type == FileType.FOLDER)
-            throw new Error("cannot edit a folder")
-        tempFileContent = file.content
-        tempFileName = file.path
+        textarea.style.width = `calc(var(--font-size) * 35)`
+        textarea.style.minWidth = `calc(var(--font-size) * 15)`
+        textarea.style.maxWidth = `calc(var(--font-size) * 100)`
+
+        textarea.rows = 20
+
+        return textarea
     }
 
-    implementCSS(cssCode)
-    terminal.parentNode.appendChild(elements.parent)
+    function makeButton(text) {
+        const button = terminal.createTerminalButton({text})
 
-    elements.headerTitle.textContent = tempFileName
-    elements.content.addEventListener("input", updateLineNums)
-    loadContent()
+        button.style.marginTop = `calc(var(--font-size) * -0.5)`
+        button.style.marginRight = `calc(var(--font-size) * 0.2)`
+        button.style.padding = `calc(var(--font-size) * 0.5)`
+        button.style.border = "1px solid var(--foreground)"
+        button.style.borderRadius = `0 0 calc(var(--font-size) * 0.5) calc(var(--font-size) * 0.5)`
+        button.style.width = "5em"
 
-    terminal.document.addEventListener("keydown", event => {
-        // save
-        if (event.ctrlKey && event.key == "s") {
-            currentlyEditing = false
-            event.preventDefault()
+        return button
+    }
+
+    const file = terminal.getFile(args.file)
+
+    if (file.isDirectory) {
+        throw new Error("Cannot edit directory data")
+    }
+
+    const textarea = makeTextarea(file.content)
+    const saveButton = makeButton("Save")
+    const cancelButton = makeButton("Cancel")
+    const br = document.createElement("br")
+    let editingActive = true
+
+    terminal.parentNode.appendChild(textarea)
+    terminal.parentNode.appendChild(br)
+    terminal.parentNode.appendChild(saveButton)
+    terminal.parentNode.appendChild(cancelButton)
+    terminal.scroll()
+    textarea.focus()
+
+    saveButton.onclick = save
+
+    function removeElements() {
+        textarea.remove()
+        saveButton.remove()
+        cancelButton.remove()
+        br.remove()
+    }
+
+    function save() {
+        if (!editingActive) {
+            return
         }
+
+        file.content = textarea.value
+        editingActive = false
+        removeElements()
+        terminal.printSuccess(`Changes saved at ${file.path}`)
+    }
+
+    textarea.onkeydown = function(event) {
+        if (!editingActive) {
+            return
+        }
+
+        if (event.key == "Tab") {
+            event.preventDefault()
+            let start = this.selectionStart
+            let end = this.selectionEnd
+        
+            this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
+        
+            this.selectionStart = this.selectionEnd = start + 1;
+        }
+
+        if (event.key == "s" && event.ctrlKey) {
+            event.preventDefault()
+            save()
+        }
+    }
+
+    terminal.onInterrupt(() => {
+        removeElements()
     })
 
-    while (currentlyEditing) {
-        await sleep(100)
-    }
-
-    while (tempFileName == "" || tempFileName == "Untitled File") {
-        tempFileName = await terminal.prompt("file name: ")
-        while (!terminal.isValidFileName(tempFileName)) {
-            terminal.printError("invalid file name")
-            tempFileName = await terminal.prompt("file name: ")
-        }
-    }
-
-    if (terminal.fileExists(tempFileName)) {
-        let file = terminal.getFile(tempFileName)
-        if (file.type == FileType.FOLDER)
-            throw new Error("cannot edit a folder")
-        file.content = getText()
-    } else {
-        terminal.currDirectory.addChild(
-            new PlainTextFile(getText()).setName(tempFileName)
-        )
+    while (editingActive) {
+        await sleep(1000)
     }
 }, {
-    description: "edit a file of the current directory",
+    description: "edit a file",
     args: {
-        "?file:f": "the file to open",
+        "file:f": "file to edit",
     }
 })
-

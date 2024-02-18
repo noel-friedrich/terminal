@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>edit (Terminal Command)</title>
+        <title>old-edit (Terminal Command)</title>
         <link rel="stylesheet" href="../../style.css">
         <link rel="stylesheet" href="../style.css?t=0">
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lora">
@@ -21,11 +21,11 @@
         <main>
 
             <h1>
-                edit
+                old-edit
             </h1>
 
             <p class="subtitle">
-                edit a file
+                edit a file of the current directory (old version of editor)
             </p>
 
             <div id="inputs-container"></div>
@@ -55,7 +55,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "edit a file", "args": {"file:f": "file to edit"}, "name": "edit"}
+            const command_data = {"description": "edit a file of the current directory (old version of editor)", "args": {"?file:f": "the file to open"}, "isSecret": true, "name": "old-edit"}
         </script>
 
         <script src="../main.js"></script>
