@@ -70,7 +70,7 @@ class FilePath {
         if (this.relativeTo == null) {
             return this
         } else {
-            return this.relativeTo.path.concat(this)
+            return this.relativeTo.path.fromRoot().concat(this)
         }
     }
 
@@ -82,7 +82,7 @@ class FilePath {
                 return "root/" + this.items.join("/") + "/"
             }
         } else {
-            return this.relativeTo.path.concat(this).toString()
+            return this.fromRoot().toString()
         }
     }
 
