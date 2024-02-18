@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 195 commands such as `ls`, `cd` and of course `cowsay`
+* 196 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -88,6 +88,7 @@ The following list can also be viewed using the `whatis *` command
 | `collatz` | Calculate the Collatz Sequence (3x+1) for a given Number |
 | `color-test` | test the color capabilities of the terminal |
 | `compliment` | get info about yourself |
+| `config` | manage the terminal configuration |
 | `contact` | Open contact form |
 | `copy` | copy the file content to the clipboard |
 | `coville` | interactive virus simulation (in german) |
