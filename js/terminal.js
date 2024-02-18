@@ -2182,7 +2182,7 @@ class Terminal {
             if (message == "") return {text: ""}
 
             const inputOffset = this.fileSystem.pathStr.length
-            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(length - 1) + "\n"
+            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(Math.max(length - 1, 0)) + "\n"
             out += " ".repeat(inputOffset + startIndex) + "|\n"
             
             let lines = message.split("\n").filter(l => !!l)
@@ -2422,16 +2422,25 @@ class Terminal {
         this.currInputContainer = inputContainer
         this.focusInput({options: {preventScroll: true}})
 
+        function getInputValueSanetized() {
+            // IOS produces special characters instead of ascii ("-", "'", etc)
+            // ~ Since we don't want em, we replace em ~
+            return inputElement.value
+                .replaceAll(/[\u2018\u2019\u201B\u2032\u2035]/g, "'")
+                .replaceAll(/[\u201C\u201D\u201F\u2033\u2036]/g, '"')
+                .replaceAll(/[\u2013\u2014]/g, "-")
+        }
+
         return new Promise(resolve => {
             let inputValue = ""
             let keyListeners = {}
 
             keyListeners["Enter"] = event => {
-                let text = inputElement.value
+                let text = getInputValueSanetized()
                 if (printInputAfter)
                     this.printLine(password ? "•".repeat(text.length) : text)
                 if (inputCleaning) {
-                    text = this.sanetizeInput(inputElement.value)
+                    text = this.sanetizeInput(getInputValueSanetized())
                 }
                 if (text !== lastItemOfHistory() && text.length > 0)
                     addToHistory(text)
@@ -2444,8 +2453,6 @@ class Terminal {
 
             let tabIndex = 0
             let suggestions = []
-
-
 
             const completeSuggestion = () => {
                 if (!inputSuggestions) {
@@ -2494,7 +2501,7 @@ class Terminal {
             }
 
             inputElement.oninput = async event => {
-                suggestions = this.getAutoCompleteOptions(inputElement.value)
+                suggestions = this.getAutoCompleteOptions(getInputValueSanetized())
 
                 if (!inputSuggestions) {
                     suggestionElement.textContent = ""
@@ -2520,10 +2527,10 @@ class Terminal {
                 }
 
                 if (affectCorrectness) {
-                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
                     if (correctnessOutput) {
-                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                        this.updateCorrectnessText(getInputValueSanetized(), correctnessOutput, inputElement)
                     }
                 }
 
@@ -2535,10 +2542,10 @@ class Terminal {
 
             inputElement.onselectionchange = () => {
                 if (affectCorrectness) {
-                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
                     if (correctnessOutput) {
-                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                        this.updateCorrectnessText(getInputValueSanetized(), correctnessOutput, inputElement)
                     }
                 }
             }
@@ -2546,11 +2553,11 @@ class Terminal {
             inputElement.onkeydown = async (event, addToVal=true) => {
                 if (addToVal) {
                     if (event.key.length == 1) // a, b, c, " "
-                        inputValue = inputElement.value + event.key
+                        inputValue = getInputValueSanetized() + event.key
                     else if (event.key == "Backspace")
-                        inputValue = inputElement.value.slice(0, -1)
+                        inputValue = getInputValueSanetized().slice(0, -1)
                     else // Tab, Enter, etc.
-                        inputValue = inputElement.value
+                        inputValue = getInputValueSanetized()
                 }
 
                 if (keyListeners[event.key])
@@ -2582,7 +2589,7 @@ class Terminal {
                 this.mobileKeyboard.show()
                 this.mobileKeyboard.oninput = event => {
                     if (event.key == "Backspace")
-                        inputElement.value = inputElement.value.slice(0, -1)
+                        inputElement.value = getInputValueSanetized().slice(0, -1)
 
                     if (!event.isFunctionKey) {
                         inputElement.value += event.keyValue
