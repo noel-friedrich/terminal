@@ -499,7 +499,7 @@ class TerminalData {
         "accentColor2": "#8bc34a",
         "history": "[]",
         "storageSize": "1000000",
-        "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
+        "startupCommands": "[\"helloworld\"]",
         "mobile": "2",
         "easterEggs": "[]",
         "maxHistoryLength": "100",
