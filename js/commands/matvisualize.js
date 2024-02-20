@@ -296,11 +296,11 @@ terminal.addCommand("matvisualize", async function(args) {
     async function playAnimation() {
         let animationProgress = 0
         while (animationProgress < 1 && !endAnimationFlag) {
-            await sleep(1000 / 60)
             animationProgress = Math.min(animationProgress + 0.005, 1)
             const t = easeInOut(animationProgress)
             slider.value = Math.round(t * 500)
             updateDrawing()
+            await sleep(1000 / 60)
         }
     }
 
