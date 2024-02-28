@@ -316,6 +316,9 @@ terminal.addCommand("matvisualize", async function(args) {
 
     playAnimation()
 
+    terminal.printLine("\n- Use the slider to go through the animation")
+    terminal.printLine("- Use your mouse wheel / buttons to zoom in & out")
+
 }, {
     description: "visualize a given 2x2 matrix transformation",
     args: {
