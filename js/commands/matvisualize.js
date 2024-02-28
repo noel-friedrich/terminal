@@ -10,21 +10,27 @@ terminal.addCommand("matvisualize", async function(args) {
         terminal.addLineBreak()
     }
 
+    if (!matrix.containsOnlyNumbers()) {
+        throw new Error("Matrix may not contain any variables")
+    }
+
     if (matrix.nRows != 2 || matrix.nCols != 2) {
         throw new Error("Matrix must be 2x2")
     }
 
-    function makeCanvas({widthChars=60}={}) {
+    function makeCanvas({widthChars=30}={}) {
         const container = document.createElement("div")
         container.style.position = "relative"
 
         const canvas = document.createElement("canvas")
-        const sizePx = terminal.charWidth * widthChars
-        canvas.width = sizePx
-        canvas.height = sizePx
+        canvas.style.width = `calc(var(--font-size) * ${widthChars})`
+        canvas.style.height = `calc(var(--font-size) * ${widthChars})`
 
         container.appendChild(canvas)
         terminal.parentNode.appendChild(container)
+        canvas.width = canvas.clientWidth
+        canvas.height = canvas.clientHeight
+
         return {canvas, container}
     }
 
@@ -63,7 +69,7 @@ terminal.addCommand("matvisualize", async function(args) {
     slider.max = 500
 
     slider.style.display = "block"
-    slider.style.width = `${canvas.width}px`
+    slider.style.width = canvas.style.width
     terminal.parentNode.appendChild(slider)
 
     let viewCenter = new Vector2d(args.x, args.y)
@@ -174,6 +180,8 @@ terminal.addCommand("matvisualize", async function(args) {
 
     function updateDrawing() {
         const t = slider.value / slider.max
+        canvas.width = canvas.clientWidth
+        canvas.height = canvas.clientHeight
 
         context.clearRect(0, 0, canvas.width, canvas.height)
         context.fillStyle = terminal.data.background.toString()
@@ -258,14 +266,16 @@ terminal.addCommand("matvisualize", async function(args) {
         dragStartPoint = null
     }
 
-    canvas.onwheel = event => {
+    canvas.onwheel = (event, steps=1) => {
         const delta = Math.sign(event.deltaY)
-        if (delta > 0) {
-            zoomFactor /= 0.9
-        } else if (delta < 0) {
-            zoomFactor *= 0.9
-        } else {
-            return
+        for (let i = 0; i < steps; i++) {
+            if (delta > 0) {
+                zoomFactor /= 0.95
+            } else if (delta < 0) {
+                zoomFactor *= 0.95
+            } else {
+                return
+            }
         }
 
         zoomFactor = Math.max(Math.min(zoomFactor, maxZoomFactor), minZoomFactor)
@@ -275,8 +285,8 @@ terminal.addCommand("matvisualize", async function(args) {
         updateDrawing()
     }
 
-    zoomInButton.onclick = () => canvas.onwheel({deltaY: -1})
-    zoomOutButton.onclick = () => canvas.onwheel({deltaY: 1})
+    zoomInButton.onclick = () => canvas.onwheel({deltaY: -1}, 6)
+    zoomOutButton.onclick = () => canvas.onwheel({deltaY: 1}, 6)
 
     terminal.scroll()
 

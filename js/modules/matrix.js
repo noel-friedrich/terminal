@@ -554,6 +554,7 @@ async function inputMatrix(dimensions) {
     const goodColor = "rgba(0, 255, 0, 0.5)"
 
     let inputs = []
+    let elements = []
     let finishButton = null
 
     const updateInputWidth = () => {
@@ -562,13 +563,19 @@ async function inputMatrix(dimensions) {
 
         for (let input of inputs) {
             input.style.width = `${inputWidth * terminal.charWidth}px`
-        } 
-        finishButton.style.width = `${(dimensions.columns * (inputWidth + 1) + 1) * terminal.charWidth}px`
+            input.style.marginTop = "5px"
+            input.style.marginBottom = "5px"
+        }
+
+        const finishButtonWidth = Math.max(
+            (dimensions.columns * (inputWidth + 1) + 1) * terminal.charWidth, 9 * terminal.charWidth)
+
+        finishButton.style.width = `${finishButtonWidth}px`
     }
 
     for (let ri = 0; ri < dimensions.rows; ri++) {
         for (let ci = 0; ci < dimensions.columns; ci++) {
-            terminal.print(ci == 0 ? "[" : " ")
+            elements.push(terminal.print(ci == 0 ? "[" : " ", undefined, {forceElement: true}))
             let input = terminal.createStyledInput()
 
             const setBad = () => {
@@ -580,6 +587,12 @@ async function inputMatrix(dimensions) {
                 input.style.backgroundColor = goodColor
                 input.dataset.valid = true
             }
+
+            input.addEventListener("keydown", event => {
+                if (event.ctrlKey && event.key == "c") {
+                    terminal.interrupt()
+                }
+            })
 
             input.style.textAlign = "center"
             setBad()
@@ -607,33 +620,47 @@ async function inputMatrix(dimensions) {
 
             inputs.push(input)
         }
-        terminal.printLine("]")
+        elements.push(terminal.printLine("]", undefined, {forceElement: true}))
     }
 
     inputs[0].focus()
 
-    return new Promise(resolve => {
-        finishButton = terminal.createTerminalButton({
-            text: "Submit",
-            charWidth: dimensions.columns * (inputWidth + 1) + 1,
-            onPress: () => {
-                if (inputs.find(inp => inp.dataset.valid == "false")) {
-                    return
-                }
+    let finished = false
 
-                for (let input of inputs) {
-                    input.style.backgroundColor = "transparent"
-                    input.oninput = () => {}
-                }
-
-                finishButton.remove()
-
-                resolve(matrix)
+    finishButton = terminal.createTerminalButton({
+        text: "Submit",
+        charWidth: dimensions.columns * (inputWidth + 1) + 1,
+        onPress: () => {
+            if (inputs.find(inp => inp.dataset.valid == "false")) {
+                return
             }
-        })
-    
-        terminal.parentNode.appendChild(finishButton)
+
+            for (let input of inputs) {
+                input.style.backgroundColor = "transparent"
+                input.oninput = () => {}
+            }
+
+            for (let element of elements) {
+                element.remove()
+            }
+
+            terminal.printLine(matrix.toString())
+
+            finished = true
+        }
     })
+
+    terminal.parentNode.appendChild(finishButton)
+    updateInputWidth()
+
+    elements.push(finishButton)
+    elements.push(...inputs)
+
+    while (!finished) {
+        await terminal.sleep(500)
+    }
+
+    return matrix
 }
 
 terminal.modules.matrix = {
