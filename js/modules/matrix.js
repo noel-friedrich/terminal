@@ -72,26 +72,27 @@ class MatrixCell {
             return new MatrixCell(f(this.value, other.value))
         } else {
             let str = `(${templateString})`
-                .replace("x", this.value)
-                .replace("y", other.value)
+                .replace("$1", this.value)
+                .replace("$2", other.value)
+            console.log(str)
             return new MatrixCell(str)
         } 
     }
 
     mul(other) {
-        return this._arithmeticFunc(other, (x, y) => x * y, "x*y")
+        return this._arithmeticFunc(other, (x, y) => x * y, "$1*$2")
     }
 
     add(other) {
-        return this._arithmeticFunc(other, (x, y) => x + y, "x+y")
+        return this._arithmeticFunc(other, (x, y) => x + y, "$1+$2")
     }
 
     sub(other) {
-        return this._arithmeticFunc(other, (x, y) => x - y, "x-y")
+        return this._arithmeticFunc(other, (x, y) => x - y, "$1-$2")
     }
 
     div(other) {
-        return this._arithmeticFunc(other, (x, y) => x / y, "x/y")
+        return this._arithmeticFunc(other, (x, y) => x / y, "$1/$2")
     }
 
     copy() {
@@ -116,6 +117,9 @@ class MatrixCell {
                     .replaceAll(/-1\*([a-zA-Z])/g, "-$1")
                     .replaceAll(/\(([a-zA-Z])\*1\)/g, "$1")
                     .replaceAll(/\(1\*([a-zA-Z])\)/g, "$1")
+                    .replaceAll(/\(([a-zA-Z])\*0\)/g, "0")
+                    .replaceAll(/\(0\*([a-zA-Z])\)/g, "0")
+                    .replaceAll(/\(([a-zA-Z0-9])\)/g, "$1")
                     .replaceAll(/\(\(([a-zA-Z])\*([a-zA-Z])\)\*([a-zA-Z])\)/g, "($1*$2*$3)")
                     .replaceAll(/\(([a-zA-Z])\*\(([a-zA-Z])\*([a-zA-Z])\)\)/g, "($1*$2*$3)")
                     .replaceAll(/\(\(([a-zA-Z])\+([a-zA-Z])\)\+([a-zA-Z])\)/g, "($1*$2*$3)")

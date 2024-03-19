@@ -24,7 +24,7 @@ terminal.addCommand("matmul", async function(args) {
         throw new Error("Matrix dimensions are not compatible.")
     }
 
-    const matrixC = matrixA.multiply(matrixB)
+    const matrixC = matrixA.multiply(matrixB).simplify()
 
     terminal.printLine(`Resulting Matrix [${matrixC.dimensions}]:`)
     terminal.printLine(matrixC.toString())
