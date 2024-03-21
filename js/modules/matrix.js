@@ -47,6 +47,8 @@ class MatrixCell {
 
         let bestFraction = null
         let bestError = Infinity
+        let bestNumerator = null
+        let bestDenominator = null
         for (let denominator = 1; denominator < 10000; denominator++) {
             let numerator = Math.round(this.value * denominator)
             const newValue = numerator / denominator
@@ -60,7 +62,17 @@ class MatrixCell {
             if (error < bestError) {
                 bestError = error
                 bestFraction = `${numerator}/${denominator}`
+                bestNumerator = numerator
+                bestDenominator = denominator
             }
+        }
+
+        if (bestNumerator == 0) {
+            return "0"
+        }
+
+        if (bestDenominator == 1) {
+            return bestNumerator.toString()
         }
 
         return bestFraction
