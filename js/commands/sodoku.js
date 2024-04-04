@@ -737,7 +737,7 @@ terminal.addCommand("sodoku", async function(args) {
 }, {
     description: "Solve or generate a sodoku puzzle",
     args: {
-        "?mode:s": "the mode to run in (play, solve)",
+        "?mode:e:play|solve": "the mode to run in (play, solve)",
         "?fen:s": "a FEN string to load",
         "?give-fen:b": "output the FEN string for the inputted puzzle"
     },
