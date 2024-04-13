@@ -70,23 +70,30 @@ terminal.addCommand("polyrythm", async function(args) {
     context.lineWidth = 2
 
     const startTime = Date.now()
+    
+    function frequencyFromNoteOffset(n) {
+        return 220.0 * 2 ** (n / 12)
+    }
 
-    const noteFrequencies = [
-        523.25,
-        587.33,
-        659.25,
-        698.46,
-        783.99,
-        880.00,
-        987.77,
-        1046.50,
-        1174.66,
-        1318.51,
-        1396.91,
-        1567.98,
-        1760.00,
-        1975.53
-    ]
+    const notePlayers = polyrythms.map((_, index) => {
+        const context = new AudioContext()
+        const osc = context.createOscillator()
+        const gain = context.createGain()
+
+        osc.connect(gain)
+        gain.connect(context.destination)
+
+        osc.frequency.value = frequencyFromNoteOffset(index * 2 + 8)
+        osc.start()
+        terminal.onInterrupt(() => osc.stop())
+
+        gain.gain.setValueAtTime(0, context.currentTime)
+
+        return () => {
+            gain.gain.setValueAtTime(1, context.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 2)
+        }
+    })
 
     let running = true
 
@@ -104,7 +111,7 @@ terminal.addCommand("polyrythm", async function(args) {
             fillCircle(position)
 
             if (deltaSideProgress > 0.5) {
-                playFrequency(noteFrequencies[i % noteFrequencies.length], args.beepMs)
+                notePlayers[i]()
             }
 
             polyrythmPrevSideProgress[i] = sideProgress
@@ -128,10 +135,8 @@ terminal.addCommand("polyrythm", async function(args) {
     args: {
         "*numbers": "numbers (e.g. \"3 4 5\")",
         "?t=time:n:10~99999": "time in miliseconds for full rotation",
-        "?b=beepMs:n": "time in miliseconds that they beep for" 
     },
     defaultValues: {
-        time: 4000,
-        beepMs: 150
+        time: 4000
     }
 })

@@ -12,10 +12,6 @@ terminal.addCommand("sounds", async function(args) {
     osc.connect(gain)
     gain.connect(context.destination)
 
-    function frequencyFromNoteOffset(n) {
-        return 220.0 * 2 ** (n / 12)
-    }
-
     const alphabet = " abcdefghijklmnopqrstuvwxyz.,\n"
     const frequencies = []
 
