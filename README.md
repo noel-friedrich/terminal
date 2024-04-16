@@ -131,7 +131,7 @@ The following list can also be viewed using the `whatis *` command
 | `helloworld` | display the hello-world text |
 | `help` | shows this help menu |
 | `hi` | say hello to the terminal |
-| `highscore-admin` | Login as Admin |
+| `highscore-admin` | Highscore Admin Management |
 | `highscore-remove` | Remove a highscore |
 | `highscores` | Show global highscores for a game |
 | `history` | print the command history |

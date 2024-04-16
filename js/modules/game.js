@@ -377,8 +377,12 @@ class HighscoreApi {
         await this.req("upload_highscore", {game, name, score})
     }
 
-    static async removeHighscore(password, uid) {
-        await this.req("remove_highscore", {password, uid})
+    static async removeHighscore(uid) {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied [E2]")
+        }
+
+        await this.req("remove_highscore", {password: this.savedPassword, uid})
     }
     
     static async getUsername() {
@@ -456,6 +460,28 @@ class HighscoreApi {
         return highscores[0]
     }
 
+    static get savedPassword() {
+        return localStorage.getItem("highscore_password")
+    }
+
+    static async getUnconfirmedHighscores() {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied")
+        }
+
+        let data = await this.req("get_unconfirmed_highscores", {password: this.savedPassword})
+        return JSON.parse(data)
+    }
+
+    static async confirmHighscore(uid, value=1) {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied")
+        }
+
+        await this.req("confirm_highscore",
+            {uid, password: this.savedPassword, value})
+    }
+
     static async loginAdmin(silent=false) {
         if (this.tempPassword != null) return
 
@@ -476,7 +502,7 @@ class HighscoreApi {
             localStorage.setItem("highscore_password", password)
         } else {
             localStorage.removeItem("highscore_password")
-            throw new Error("Incorrect password")
+            throw new Error("Permission denied [E1]")
         }
     }
 

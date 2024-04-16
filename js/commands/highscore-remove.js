@@ -3,7 +3,7 @@ terminal.addCommand("highscore-remove", async function(args) {
     await terminal.modules.import("game", window)
     await HighscoreApi.loginAdmin(true)
     if (args.uid) {
-        await HighscoreApi.removeHighscore(HighscoreApi.tempPassword, args.uid)
+        await HighscoreApi.removeHighscore(args.uid)
         terminal.printSuccess("Removed highscore #" + args.uid)
         return
     }
