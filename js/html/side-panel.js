@@ -20,8 +20,8 @@ function getAllPanelButtons() {
 const putLegalLinksInOrder = (noAnimate=false) => {
     if (currPanelVisible) {
         legalLinkContainer.animate([
-            { transform: "translateX(-50px)" },
-            { transform: "translateX(-400px)" }
+            { transform: "translateX(-50px)", paddingRight: "0px" },
+            { transform: "translateX(-400px)", paddingRight: "40px" }
         ], {
             duration: noAnimate ? 0 : 300,
             easing: "ease-in-out",
@@ -29,8 +29,8 @@ const putLegalLinksInOrder = (noAnimate=false) => {
         })
     } else {
         legalLinkContainer.animate([
-            { transform: "translateX(-400px)" },
-            { transform: "translateX(-50px)" }
+            { transform: "translateX(-400px)", paddingRight: "40px" },
+            { transform: "translateX(-50px)", paddingRight: "0px" }
         ], {
             duration: noAnimate ? 0 : 300,
             easing: "ease-out",
@@ -42,7 +42,7 @@ const putLegalLinksInOrder = (noAnimate=false) => {
 function togglePanel() {
     if (currPanelVisible) {
         panelContainer.animate([
-            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)", height: "100%" },
+            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 0.7)", height: "100%" },
             { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)", height: "50px" }
         ], {
             duration: 200,
@@ -72,7 +72,7 @@ function togglePanel() {
     } else {
         panelContainer.animate([
             { transform: "translateX(350px)", backgroundColor: "rgba(0, 0, 0, 0)", height: "50px" },
-            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 1)", height: "100%" }
+            { transform: "translateX(0)", backgroundColor: "rgba(0, 0, 0, 0.7)", height: "100%" }
         ], {
             duration: 300,
             easing: "ease-out",

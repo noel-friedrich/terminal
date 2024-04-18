@@ -258,6 +258,7 @@ body {
     z-index: 999;
     text-align: right;
     padding: 30px;
+    margin-right: -20px;
 }
 
 .legal-links > a {
