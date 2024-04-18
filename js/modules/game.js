@@ -370,7 +370,6 @@ class HighscoreApi {
 
     static async getHighscores(game) {
         let data = await this.req("get_highscores", {game})
-        console.log(data)
         try {
             return JSON.parse(data)
         } catch (e) {
