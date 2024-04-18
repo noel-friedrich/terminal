@@ -2,7 +2,7 @@
 > simulating a terminal as my homepage  
 > available at [noel-friedrich.de/terminal](https://noel-friedrich.de/terminal/)  
 
-[![Screenshot of Website](https://raw.githubusercontent.com/noel-friedrich/terminal/main/res/img/screenshots/website-screenshot.png)](https://noel-friedrich.de/terminal/)
+[![Screenshot of Website](https://raw.githubusercontent.com/noel-friedrich/terminal/main/res/img/screenshots/readme-screenshot.png)](https://noel-friedrich.de/terminal/)
 
 ## Table of contents
 * [Introduction](#introduction)
