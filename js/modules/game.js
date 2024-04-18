@@ -370,7 +370,16 @@ class HighscoreApi {
 
     static async getHighscores(game) {
         let data = await this.req("get_highscores", {game})
-        return JSON.parse(data)
+        console.log(data)
+        try {
+            return JSON.parse(data)
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                throw new Error("Highscore-Api returned invalid data. Are you hosting the website locally?")
+            } else {
+                throw e
+            }
+        }
     }
 
     static async addHighscore(game, name, score) {
