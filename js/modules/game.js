@@ -456,7 +456,8 @@ class HighscoreApi {
             terminal.printSuccess("You got rank " + rank)
         }
 
-        terminal.print("You can view the highscores using ")
+        terminal.printLine("[highscores] The highscore won't be public until approved (to prevent abuse).")
+        terminal.print("You can view the public highscores using ")
         terminal.printCommand("highscores " + this.tempGame)
 
         this.tempGame = null
