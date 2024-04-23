@@ -40,4 +40,3 @@ terminal.addCommand("du", function(args) {
         "?folder:f": "folder to display storage of"
     },
 })
-

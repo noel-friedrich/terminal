@@ -7,7 +7,8 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.foreground.toString(),
             edit: v => terminal.data.foreground = v,
             reset: () => terminal.data.resetProperty("foreground"),
-            regex: /^#[0-9a-f]{6}$/
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
         },
         {
             id: "background",
@@ -16,7 +17,8 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.background.toString(),
             edit: v => terminal.data.background = v,
             reset: () => terminal.data.resetProperty("background"),
-            regex: /^#[0-9a-f]{6}$/
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
         },
         {
             id: "font",
@@ -26,6 +28,7 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.font,
             edit: v => terminal.data.font = v,
             reset: () => terminal.data.resetProperty("font"),
+
         },
         {
             id: "color1",
@@ -34,7 +37,8 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.accentColor1.toString(),
             edit: v => terminal.data.accentColor1 = v,
             reset: () => terminal.data.resetProperty("accentColor1"),
-            regex: /^#[0-9a-f]{6}$/
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
         },
         {
             id: "color2",
@@ -43,7 +47,8 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.accentColor2.toString(),
             edit: v => terminal.data.accentColor2 = v,
             reset: () => terminal.data.resetProperty("accentColor2"),
-            regex: /^#[0-9a-f]{6}$/
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
         },
         {
             id: "storage",
@@ -53,7 +58,8 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.fileSystem.filesizeStr(terminal.data.storageSize),
             edit: v => terminal.data.storageSize = v,
             reset: () => terminal.data.resetProperty("storageSize"),
-            regex: /^[0-9]+$/
+            regex: /^[0-9]+$/,
+            unitComment: "in bytes"
         },
         {
             id: "history",
@@ -63,7 +69,7 @@ terminal.addCommand("config", async function(args) {
             prettyValue: () => terminal.data.maxHistoryLength + " items",
             edit: v => terminal.data.maxHistoryLength = v,
             reset: () => terminal.data.resetProperty("maxHistoryLength"),
-            regex: /^[0-9]+$/
+            regex: /^[0-9]+$/,
         },
     ]
 
@@ -101,10 +107,11 @@ terminal.addCommand("config", async function(args) {
         let value = undefined
         terminal.printLine("Type \"<default>\" to set it to the default value")
         while (true) {
-            value = await terminal.prompt("New Value: ")
+            const promptUnit = property.unitComment ? `(${property.unitComment})` : ""
+            value = await terminal.prompt(`New Value ${promptUnit}: `)
             if (value == "<default>") {
                 property.reset()
-                terminal.printSuccess("Successfully reset the value to it's default.")
+                terminal.printSuccess(`Successfully reset the value to it's default (${property.value()}).`)
                 return
             }
 
@@ -121,7 +128,7 @@ terminal.addCommand("config", async function(args) {
     } else {
         terminal.printTable(properties.map(p => [p.id, p.name, p.prettyValue()]), ["id", "name", "value"])
         terminal.print("\nTo edit a property, use ")
-        terminal.printLine("config --edit <id>", Color.COLOR_1)
+        terminal.printLine("config <id>", Color.COLOR_1)
     }
 }, {
     description: "manage the terminal configuration",
