@@ -108,8 +108,14 @@ class Vector2d {
     }
 
     set(x, y) {
-        this.x = x
-        this.y = y
+        if (x instanceof Vector2d && y == undefined) {
+            this.x = x.x
+            this.y = x.y
+        } else {
+            this.x = x
+            this.y = y
+        }
+        
     }
 
     addX(x) {
