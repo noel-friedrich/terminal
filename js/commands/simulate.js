@@ -30,7 +30,7 @@ terminal.addCommand("simulate", async function(args) {
 
             let friction = 0.001
 
-            const k = 0.001 // spring stiffness
+            let k = 0.001 // spring stiffness
 
             const v1 = new Vector2d(0, 0)
             const v2 = new Vector2d(0, 0)
@@ -128,6 +128,12 @@ terminal.addCommand("simulate", async function(args) {
                     const newIndex = (springLengths.indexOf(springLength) ?? 0) + 1
                     springLength = springLengths[newIndex % springLengths.length]
                 }
+
+                if (event.key == "k") {
+                    const ks = [0.1, 0.01, 0.001, 0.0001, 0.00001]
+                    const newIndex = (ks.indexOf(k) ?? 0) + 1
+                    k = ks[newIndex % ks.length]
+                }
             })
 
             let focusedBallPos = null
@@ -191,11 +197,13 @@ terminal.addCommand("simulate", async function(args) {
                     "f     : change friction",
                     "m     : change mass ratio",
                     "l     : change spring length",
+                    "k     : change spring constant",
                     "space : (un)follow mass",
                     "",
                     `friction=${friction}`,
                     `mass_ratio=${m1}`,
-                    `spring_length=${springLength / 10}`
+                    `spring_length=${springLength / 10}`,
+                    `spring_const=${k}`
                 ]
 
                 context.font = "20px monospace"
@@ -281,14 +289,14 @@ terminal.addCommand("simulate", async function(args) {
 
                 drawInstructions()
 
-                drawSpring(screenPos(r1), screenPos(r2), "black")
-                drawBall(screenPos(r1), "#a5a1ff", 20 * Math.sqrt(m1)) // light blue
-                drawBall(screenPos(r2), "#ffa1a1", 20) // light red
-                drawBall(screenPos(R()), "#eea3ff", 5) // light violet
-
                 drawPath(p1Path, "blue")
                 drawPath(p2Path, "red")
                 drawPath(RPath, "violet")
+
+                drawSpring(screenPos(r1), screenPos(r2), "black", Math.floor(springLength / 10))
+                drawBall(screenPos(r1), "#a5a1ff", 20 * Math.sqrt(m1)) // light blue
+                drawBall(screenPos(r2), "#ffa1a1", 20) // light red
+                drawBall(screenPos(R()), "#eea3ff", 5) // light violet
 
                 if (focusedBallPos && currMousePos) {
                     if (focusedBallPos == r1) {
