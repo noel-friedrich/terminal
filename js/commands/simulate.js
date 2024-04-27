@@ -26,6 +26,7 @@ terminal.addCommand("simulate", async function(args) {
             const RPath = [R()]
 
             const viewCentre = new Vector2d(0, 0)
+            const viewCentreTarget = new Vector2d(0, 0)
 
             let friction = 0.001
 
@@ -96,11 +97,7 @@ terminal.addCommand("simulate", async function(args) {
 
             function mousePos(clickEvent) {
                 const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
-                const rect = canvas.getBoundingClientRect()
-                return new Vector2d(
-                    clickEvent.clientX - rect.left,
-                    clickEvent.clientY - rect.top
-                ).sub(viewCentre).sub(middle)
+                return Vector2d.fromEvent(clickEvent, canvas).sub(viewCentre).sub(middle)
             }
 
             let cameraFollowing = true
@@ -108,6 +105,18 @@ terminal.addCommand("simulate", async function(args) {
             addEventListener("keydown", event => {
                 if (event.key == " ") {
                     cameraFollowing = !cameraFollowing
+                    viewCentreTarget.set(viewCentre)
+                }
+
+                const cameraSpeed = 100
+                if (event.key == "ArrowUp") {
+                    viewCentreTarget.iadd(new Vector2d(0, 1).scale(cameraSpeed))
+                } else if (event.key == "ArrowDown") {
+                    viewCentreTarget.iadd(new Vector2d(0, 1).scale(-cameraSpeed))
+                } else if (event.key == "ArrowLeft") {
+                    viewCentreTarget.iadd(new Vector2d(1, 0).scale(cameraSpeed))
+                } else if (event.key == "ArrowRight") {
+                    viewCentreTarget.iadd(new Vector2d(1, 0).scale(-cameraSpeed))
                 }
 
                 if (event.key == "f") {
@@ -155,14 +164,18 @@ terminal.addCommand("simulate", async function(args) {
             canvas.onmouseup = event => {
                 if (focusedBallPos && currMousePos) {
                     if (focusedBallPos == r1) {
-                        v1.set(currMousePos.sub(r1).scale(0.05))
+                        v1.iadd(currMousePos.sub(r1).scale(0.03))
                     } else {
-                        v2.set(currMousePos.sub(r2).scale(0.05))
+                        v2.iadd(currMousePos.sub(r2).scale(0.03))
                     }
                 }
 
                 focusedBallPos = null
             }
+
+            canvas.ontouchstart = event => canvas.onmousedown(event)
+            canvas.ontouchmove = event => canvas.onmousemove(event)
+            canvas.ontouchend = event => canvas.onmouseup(event)
 
             function drawArrow(headPos, tailPos, color) {
                 const delta = headPos.sub(tailPos)
@@ -197,7 +210,7 @@ terminal.addCommand("simulate", async function(args) {
                     "m     : change mass ratio",
                     "l     : change spring length",
                     "k     : change spring constant",
-                    "space : (un)follow mass",
+                    "space : toggle camera",
                     "",
                     `friction=${friction}`,
                     `mass_ratio=${m1}`,
@@ -205,11 +218,15 @@ terminal.addCommand("simulate", async function(args) {
                     `spring_const=${k}`
                 ]
 
-                context.font = "20px monospace"
+                if (!cameraFollowing) {
+                    lines.splice(6, 0, "arrow : move camera")
+                }
+
+                context.font = "15px monospace"
                 context.fillStyle = "black"
                 context.textBaseline = "top"
                 for (let i = 0; i < lines.length; i++) {
-                    context.fillText(lines[i], 10, i * 30 + 10)
+                    context.fillText(lines[i], 10, i * 20 + 10)
                 }
             }
 
@@ -240,11 +257,11 @@ terminal.addCommand("simulate", async function(args) {
                 addToPath(p2Path, r2)
                 addToPath(RPath, R())
 
-                // update view centre
                 if (cameraFollowing) {
-                    const idealPos = R().scale(-1)
-                    viewCentre.iadd(idealPos.sub(viewCentre).scale(0.05))
+                    viewCentreTarget.set(R().scale(-1))
                 }
+
+                viewCentre.iadd(viewCentreTarget.sub(viewCentre).scale(0.05))
             }
 
             function drawBall(pos, color, radius) {

@@ -184,6 +184,27 @@ class Vector2d {
         return [this.x, this.y]
     }
 
+    static fromEvent(event, element) {
+        let x = 0, y = 0
+
+        if (event.touches && event.touches[0]) {
+            x = event.touches[0].clientX
+            y = event.touches[0].clientY
+        } else if (event.originalEvent && event.originalEvent.changedTouches[0]) {
+            x = event.originalEvent.changedTouches[0].clientX
+            y = event.originalEvent.changedTouches[0].clientY
+        } else if (event.clientX !== undefined && event.clientY !== undefined) {
+            x = event.clientX
+            y = event.clientY
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            x = event.changedTouches[0].clientX
+            y = event.changedTouches[0].clientY
+        }
+
+        const rect = element.getBoundingClientRect()
+        return new Vector2d(x - rect.left, y - rect.top)
+    }
+
 }
 
 class Vector3d {
