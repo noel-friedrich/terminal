@@ -647,7 +647,7 @@ terminal.addCommand("simulate", async function(args) {
     terminalWindow.close()
 
 }, {
-    description: "run an implemented simulation",
+    description: "Run an implemented simulation. Doesn't work well on phones.",
     args: {
         "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs": "simulation to run",
         "?f=fullscreen:b": "run application in fullscreen"

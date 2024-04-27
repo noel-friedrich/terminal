@@ -218,7 +218,7 @@ The following list can also be viewed using the `whatis *` command
 | `shi` | calculate your SHI (stability height index) |
 | `shoot` | Play a game of Shoot against another player locally |
 | `shutdown` | shutdown the terminal |
-| `simulate` | run an implemented simulation |
+| `simulate` | Run an implemented simulation. Doesn't work well on phones. |
 | `sl` | Steam Locomotive |
 | `sleep` | sleep for a number of seconds |
 | `slime` | Start a slime simulation |
