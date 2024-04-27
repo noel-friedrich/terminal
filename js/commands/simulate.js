@@ -215,7 +215,8 @@ terminal.addCommand("simulate", async function(args) {
                     `friction=${friction}`,
                     `mass_ratio=${m1}`,
                     `spring_length=${springLength / 10}`,
-                    `spring_const=${k}`
+                    `spring_const=${k}`,
+                    `camera=${cameraFollowing ? "follow" : "manual"}`
                 ]
 
                 if (!cameraFollowing) {
@@ -237,7 +238,7 @@ terminal.addCommand("simulate", async function(args) {
                 }
             }
 
-            function update() {
+            function update(dt) {
                 const displacement = r1.distance(r2) - springLength
                 const f1 = -k * displacement
                 const f2 = -k * displacement
@@ -245,10 +246,10 @@ terminal.addCommand("simulate", async function(args) {
                 a1.set(r1.sub(r2).normalized.scale(f1 / m1))
                 a2.set(r2.sub(r1).normalized.scale(f2 / m2))
 
-                v1.iadd(a1)
-                v2.iadd(a2)
-                r1.iadd(v1)
-                r2.iadd(v2)
+                v1.iadd(a1.scale(dt / 16))
+                v2.iadd(a2.scale(dt / 16))
+                r1.iadd(v1.scale(dt / 16))
+                r2.iadd(v2.scale(dt / 16))
 
                 v1.iscale(1 - friction)
                 v2.iscale(1 - friction)
@@ -323,7 +324,7 @@ terminal.addCommand("simulate", async function(args) {
                 }
             }
 
-            return {render, update, fps: 60}
+            return {render, update}
         }
     }[args.simulation]()
 
@@ -331,12 +332,28 @@ terminal.addCommand("simulate", async function(args) {
 
     terminal.onInterrupt(() => {
         terminalWindow.close()
+        simulationRunning = false
     })
 
-    while (simulationRunning) {
-        simulation.update()
+    let lastLoopTime = null
+
+    function loop() {
+        if (!simulationRunning) {
+            return
+        }
+
+        const now = performance.now()
+        const deltaTime = lastLoopTime ? (now - lastLoopTime) : (1000 / 60)
+
+        simulation.update(deltaTime)
         simulation.render()
-        await sleep(1000 / (simulation.fps ?? 60))
+
+        terminal.window.requestAnimationFrame(loop)
+    }
+
+    loop()
+    while (simulationRunning) {
+        await sleep(1000)
     }
 
     terminalWindow.close()
