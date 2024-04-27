@@ -125,8 +125,10 @@ async function createHTML() {
         input.dataset.value = ""
         input.dataset.name = argOptions.name
 
+        let select = null
+
         if (argOptions.type == "enum") {
-            const select = document.createElement("select")
+            select = document.createElement("select")
 
             if (argOptions.optional) {
                 const option = document.createElement("option")
@@ -217,10 +219,12 @@ async function createHTML() {
             if (argOptions.type == "boolean" && urlParamValue == "true") {
                 input.checked = true
                 setTimeout(() => input.onclick(), 0)
+            } else if (argOptions.type == "enum") {
+                select.value = urlParamValue
+                setTimeout(() => select.onchange(), 0)
             } else {
                 setTimeout(() => input.oninput(), 0)
             }
-
             
         }
 

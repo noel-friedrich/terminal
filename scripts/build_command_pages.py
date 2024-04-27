@@ -18,6 +18,7 @@ def main(commands):
 
     for command, info in commands.items():
         info["name"] = command
+        info["code-url"] = f"https://github.com/noel-friedrich/terminal/blob/main/js/commands/{command}.js"
         info["json"] = json.dumps(info)
         with open(command_template_html, "r") as template_file:
             content = template_file.read()
