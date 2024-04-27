@@ -15,6 +15,10 @@ function makeCommand() {
         let inputValue = input.dataset.value
         if (!inputValue || (argOption.type == "boolean" && inputValue == "false")) continue
 
+        if (argOption.optional && argOption.type == "enum" && inputValue == "< no selection >") {
+            continue
+        }
+
         let brackets = inputValue.includes('"') ? "'" : '"'
         if (argOption.optional) {
             commandText += ` ${argOption.name.length > 1 ? "--" : "-"}${argOption.name}`
@@ -119,8 +123,32 @@ async function createHTML() {
         input.title = description
         input.dataset.value = ""
         input.dataset.name = argOptions.name
-        
-        if (argOptions.type == "boolean") {
+
+        if (argOptions.type == "enum") {
+            const select = document.createElement("select")
+
+            if (argOptions.optional) {
+                const option = document.createElement("option")
+                option.textContent = "< no selection >"
+                option.value = "< no selection >"
+                select.appendChild(option)
+            }
+
+            for (let optionText of argOptions.enumOptions) {
+                const option = document.createElement("option")
+                option.textContent = optionText
+                option.value = optionText
+                select.appendChild(option)
+            }
+            inputsContainer.appendChild(select)
+
+            select.onchange = () => {
+                input.dataset.value = select.value
+            }
+
+            input.dataset.value = select.value
+
+        } else if (argOptions.type == "boolean") {
 
             const checkboxContainer = document.createElement("div")
             checkboxContainer.classList.add("checkbox-container")

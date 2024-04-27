@@ -99,6 +99,7 @@ main input[type="checkbox"] {
 
 main input:not([type="checkbox"]),
 main button,
+main select,
 a.linkbutton {
     width: 100%;
     box-sizing: border-box;
