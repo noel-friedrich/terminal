@@ -3,10 +3,11 @@
 terminal.addCommand("simulate", async function(args) {
     await terminal.modules.import("game", window)
     await terminal.modules.load("window", terminal)
-
     const simulationName = {
-        "two-masses-spring": "2 Mass 1 Spring Simulation",
-        "planets-gravity": "Planets Gravity Simulation"
+        "2-masses-1-spring": "2 Masses 1 Spring Simulation",
+        "planets-gravity": "Planets Gravity Simulation",
+        "3-masses-3-springs": "3 Masses 3 Springs Simulation",
+        "1d-3-masses-2-springs": "1d 3 Masses 2 Springs Simulation"
     }[args.simulation]
 
     let terminalWindow = terminal.modules.window.make({
