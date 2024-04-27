@@ -46,6 +46,8 @@ terminal.modules.window = {
             windowContainer.style.margin = "0"
             windowContainer.style.position = "fixed"
             windowContainer.style.transform = "translate(0, 0)"
+
+            windowContainer.style.setProperty("--border-radius", "0px")
 		}
 
         if (iframeUrl) {

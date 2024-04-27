@@ -206,23 +206,26 @@ body {
 }
 
 .terminal-window-header {
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
     width: 100%;
     padding: calc(var(--header-height) / 4);
-    font-size: calc(var(--header-height) / 2);
+    font-size: calc(var(--header-height) / 2.3);
     box-sizing: border-box;
     position: relative;
+    background-color: rgb(245, 245, 245);
+    border-bottom: 1px solid #ccc;
 }
 
 .terminal-window-title {
     width: calc(100% - 20px);
     position: absolute;
     font-family: "Quicksand";
-    font-weight: bold;
     text-align: center;
 }
 
 .terminal-window-exit {
-    width: calc(100% - 20px);
+    width: calc(100% - 30px);
     position: absolute;
     cursor: pointer;
     text-align: right;
@@ -230,6 +233,7 @@ body {
     font-weight: bold;
     transition: 300ms;
     font-size: 0.8em;
+    right: 15px;
 }
 
 .terminal-window-exit:hover {
