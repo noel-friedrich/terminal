@@ -16,7 +16,9 @@ terminal.addCommand("simulate", async function(args) {
             let springLength = 200
             const r1 = new Vector2d(springLength / -2, 0)
             const r2 = r1.scale(-1)
-            const R = () => r1.add(r2).scale(0.5)
+            const R = () => r1.scale(m1).add(r2.scale(m2)).scale(1 / (m1 + m2))
+            let m1 = 1
+            let m2 = 1
 
             const maxPathLength = 500
             const p1Path = [r1.copy()]
@@ -24,9 +26,6 @@ terminal.addCommand("simulate", async function(args) {
             const RPath = [R()]
 
             const viewCentre = new Vector2d(0, 0)
-
-            let m1 = 1
-            let m2 = 1
 
             let friction = 0.001
 
