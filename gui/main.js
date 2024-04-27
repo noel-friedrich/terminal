@@ -19,7 +19,8 @@ function makeCommand() {
             continue
         }
 
-        let brackets = inputValue.includes('"') ? "'" : '"'
+
+        let brackets = inputValue.includes(" ") ? (inputValue.includes('"') ? "'" : '"') : ""
         if (argOption.optional) {
             commandText += ` ${argOption.name.length > 1 ? "--" : "-"}${argOption.name}`
         }
