@@ -511,8 +511,6 @@ terminal.addCommand("simulate", async function(args) {
             const m3 = new PointMass(1, m1Pos.rotate(Math.PI * -2 / 3),
                 {color: "#a1ff9a", drawPath: true, pathColor: "#00ff00"})
 
-            console.log(m1.pos.distance(m2.pos))
-
             setup.addParameter(frictionParam)
                 .addParameter(springConstantParam)
                 .addParameter(springLengthParam)
@@ -633,8 +631,15 @@ terminal.addCommand("simulate", async function(args) {
         const now = performance.now()
         const deltaTime = lastLoopTime ? (now - lastLoopTime) : (1000 / 60)
 
-        simulation.update(deltaTime)
+        if (deltaTime < 200) {
+            // with too large delays, the deltaTime approximation
+            // doesn't make sense anymore
+            simulation.update(deltaTime)
+        }
+
         simulation.render()
+
+        lastLoopTime = now
 
         terminal.window.requestAnimationFrame(loop)
     }
