@@ -10,6 +10,20 @@ terminal.addCommand("simulate", async function(args) {
         "1d-3-masses-2-springs": "1d 3 Masses 2 Springs Simulation"
     }[args.simulation]
 
+    // my professor shared these simulations with the class.
+    // so here's a 10% chance to encounter a rickroll!
+    // (but only once per device and only when simulating gravity)
+    if (
+        !localStorage.getItem("gravity-rickroll")
+        && Math.random() < 0.1
+        && args.simulation == "planets-gravity"
+    ) {
+        localStorage.setItem("gravity-rickroll", true)
+        terminal.printLine("It's your unlucky day!")
+        await sleep(1000)
+        terminal.href("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    }
+
     let terminalWindow = terminal.modules.window.make({
         name: simulationName ?? "Simulation", fullscreen: args.fullscreen})
     const canvas = terminalWindow.CANVAS
