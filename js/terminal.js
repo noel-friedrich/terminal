@@ -505,7 +505,7 @@ class TerminalData {
         "maxHistoryLength": "100",
         "sidepanel": "true",
         "path": "[]",
-        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
+        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3"}'
     }
 
     localStoragePrepend = "terminal-"
@@ -1642,6 +1642,18 @@ const UtilityFunctions = {
         if (terminal.inTestMode) return
         terminal.data.addAlias(alias, command)
         terminal.log(`Added alias "${alias}" for command "${command}"`)
+    },
+
+    shuffle(array) {
+        // shuffles the array in-place and returns it using
+        // the fischer-yates shuffle algorithm
+        let cI = array.length
+        while (cI != 0) {
+            const rI = Math.floor(Math.random() * cI)
+            cI--
+            [array[cI], array[rI]] = [array[rI], array[cI]]
+        }
+        return array
     }
 
 }

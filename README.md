@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 201 commands such as `ls`, `cd` and of course `cowsay`
+* 202 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -180,6 +180,7 @@ The following list can also be viewed using the `whatis *` command
 | `nsolve` | solve an equation using the newton-raphson method |
 | `number-guess` | guess a random number |
 | `old-edit` | edit a file of the current directory (old version of editor) |
+| `panik` | [german command] m‰ﬂige hilfe bei einer panikattacke |
 | `particle` | start a particle simulation |
 | `pascal` | print a pascal triangle |
 | `password` | Generate a random password |
