@@ -45,5 +45,6 @@ terminal.addCommand("changes", async function(args) {
     defaultValues: {
         branch: "main",
         limit: 10
-    }
+    },
+    isSecret: true,
 })

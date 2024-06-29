@@ -95,6 +95,9 @@ terminal.addCommand("simulate", async function(args) {
             this.updateRules = []
             this.initRules = []
 
+            this.currMousePos = null
+            this.viewCentre = new Vector2d(0, 0)
+
             this.friction = 0
             this.drawCOM = false
             this.COMColor = "#ed9bff"
@@ -160,7 +163,6 @@ terminal.addCommand("simulate", async function(args) {
     }
 
     function make2dSimulation(setup) {
-        const viewCentre = new Vector2d(0, 0)
         const viewCentreTarget = new Vector2d(0, 0)
         const COMPath = []
 
@@ -177,7 +179,7 @@ terminal.addCommand("simulate", async function(args) {
 
         function screenPos(pos) {
             const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
-            return pos.add(middle).add(viewCentre)
+            return pos.add(middle).add(setup.viewCentre)
         }
 
         function drawPath(path, color) {
@@ -205,8 +207,8 @@ terminal.addCommand("simulate", async function(args) {
             context.fillStyle = "white"
             context.fillRect(0, 0, canvas.width, canvas.height)
 
-            const startX = viewCentre.x % gridSize
-            const startY = viewCentre.y % gridSize
+            const startX = setup.viewCentre.x % gridSize
+            const startY = setup.viewCentre.y % gridSize
 
             function drawGridLine(x1, y1, x2, y2) {
                 context.moveTo(x1, y1)
@@ -225,9 +227,9 @@ terminal.addCommand("simulate", async function(args) {
             }
         }
 
-        function mousePos(clickEvent) {
+        function screenPosToSimulationPos(screenPos) {
             const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
-            return Vector2d.fromEvent(clickEvent, canvas).sub(viewCentre).sub(middle)
+            return screenPos.sub(setup.viewCentre).sub(middle)
         }
 
         let cameraFollowing = true
@@ -235,7 +237,7 @@ terminal.addCommand("simulate", async function(args) {
         addEventListener("keydown", event => {
             if (event.key == " ") {
                 cameraFollowing = !cameraFollowing
-                viewCentreTarget.set(viewCentre)
+                viewCentreTarget.set(setup.viewCentre)
             }
 
             const cameraSpeed = 100
@@ -257,10 +259,11 @@ terminal.addCommand("simulate", async function(args) {
         })
 
         let focusedObj = null
-        let currMousePos = null
+        setup.currMousePos = null
 
         canvas.onmousedown = event => {
-            const mouse = mousePos(event)
+            setup.currMousePos = Vector2d.fromEvent(event, canvas)
+            const mouse = screenPosToSimulationPos(setup.currMousePos)
 
             let closestObj = null
             let minDistance = Infinity
@@ -279,17 +282,18 @@ terminal.addCommand("simulate", async function(args) {
         }
 
         canvas.onmousemove = event => {
-            const mouse = mousePos(event)
-            currMousePos = mouse
+            const mouse = Vector2d.fromEvent(event, canvas)
+            setup.currMousePos = mouse
         }
 
         canvas.onmouseup = event => {
-            if (focusedObj && currMousePos) {
-                focusedObj.vel.iadd(currMousePos.sub(focusedObj.pos).scale(0.03))
+            if (focusedObj && setup.currMousePos) {
+                const mousePos = screenPosToSimulationPos(setup.currMousePos)
+                focusedObj.vel.iadd(mousePos.sub(focusedObj.pos).scale(0.03))
             }
 
             focusedObj = null
-            currMousePos = null
+            setup.currMousePos = null
         }
 
         canvas.ontouchstart = event => canvas.onmousedown(event)
@@ -386,7 +390,7 @@ terminal.addCommand("simulate", async function(args) {
                 viewCentreTarget.set(R().scale(-1))
             }
 
-            viewCentre.iadd(viewCentreTarget.sub(viewCentre).scale(0.05))
+            setup.viewCentre.iadd(viewCentreTarget.sub(setup.viewCentre).scale(0.05))
         }
 
         function drawBall(pos, color, radius) {
@@ -453,8 +457,8 @@ terminal.addCommand("simulate", async function(args) {
                 drawBall(screenPos(R()), setup.COMColor, setup.COMRadius)
             }
 
-            if (focusedObj && currMousePos) {
-                drawArrow(focusedObj.pos, currMousePos, focusedObj.pathColor)
+            if (focusedObj && setup.currMousePos) {
+                drawArrow(focusedObj.pos, screenPosToSimulationPos(setup.currMousePos), focusedObj.pathColor)
             }
         }
 
@@ -612,12 +616,18 @@ terminal.addCommand("simulate", async function(args) {
             setup.addSpring(new Spring(m1, m2, springConstantParam, springLengthParam))
             setup.addSpring(new Spring(m2, m3, springConstantParam, springLengthParam))
 
-            const startTime = performance.now()
+            let objY = 0
             setup.addUpdateRule(dt => {
+                objY += 0.03 * dt
+
                 for (const obj of setup.masses) {
-                    obj.pos.y = (performance.now() - startTime) * 0.03
+                    obj.pos.y = objY
                     obj.vel.y = 0
                     obj.acc.y = 0
+                }
+
+                if (setup.currMousePos) {
+                    setup.currMousePos.y = setup.masses[0].pos.y + setup.viewCentre.y + canvas.height / 2
                 }
             })
 
