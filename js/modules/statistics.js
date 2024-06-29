@@ -270,6 +270,10 @@ class Dataset {
         return Math.min(...this.numbers)
     }
 
+    addNumber(n) {
+        this.numbers.push(n)
+    }
+
     subset(start, end) {
         return new Dataset(this.numbers.slice(start, end))
     }

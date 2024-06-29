@@ -20,7 +20,7 @@ function getAllPanelButtons() {
 const putLegalLinksInOrder = (noAnimate=false) => {
     if (currPanelVisible) {
         legalLinkContainer.animate([
-            { transform: "translateX(-50px)", paddingRight: "0px" },
+            { transform: "translateX(-50px)", paddingRight: terminal.isMobile ? "10px" : "0px" },
             { transform: "translateX(-400px)", paddingRight: "40px" }
         ], {
             duration: noAnimate ? 0 : 300,
@@ -30,7 +30,7 @@ const putLegalLinksInOrder = (noAnimate=false) => {
     } else {
         legalLinkContainer.animate([
             { transform: "translateX(-400px)", paddingRight: "40px" },
-            { transform: "translateX(-50px)", paddingRight: "0px" }
+            { transform: "translateX(-50px)", paddingRight: terminal.isMobile ? "10px" : "0px" }
         ], {
             duration: noAnimate ? 0 : 300,
             easing: "ease-out",

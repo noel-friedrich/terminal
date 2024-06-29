@@ -257,13 +257,12 @@ body {
 }
 
 .legal-links {
-    position: absolute;
+    position: fixed;
     bottom: 0;
     right: 0;
     z-index: 999;
     text-align: right;
     padding: 30px;
-    margin-right: -20px;
 }
 
 .legal-links > a {
@@ -408,7 +407,7 @@ py-splashscreen {
     width: 100%;
     height: 100%;
     border: none;
-    background-color: #333;
+    background-color: black;
     color: white;
     font-size: 1.5rem;
     font-family: monospace;
@@ -416,7 +415,7 @@ py-splashscreen {
     cursor: pointer;
     user-select: none;
     height: 2.5rem;
-    outline: 1px solid black;
+    outline: 1px solid white;
 }
 
 .keyboard-button:active {
@@ -434,7 +433,7 @@ py-splashscreen {
     width: 50px;
     height: 50px;
     border: none;
-    background-color: #333;
+    background-color: black;
     color: white;
     font-size: 1.5rem;
     font-family: "Quicksand", monospace;
@@ -442,7 +441,11 @@ py-splashscreen {
     cursor: pointer;
     user-select: none;
     border-radius: 50%;
-    outline: 1px solid black;
+    border: 1px solid white;
+}
+
+.top-button:hover {
+    background-color: #393939;
 }
 
 .top-button:active {
