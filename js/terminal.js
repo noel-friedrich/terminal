@@ -2368,7 +2368,8 @@ class Terminal {
         inputCleaning=!this.commandIsExecuting,
         inputSuggestions=!this.commandIsExecuting,
         mobileLayout=undefined,
-        printInputAfter=true
+        printInputAfter=true,
+        makeClickCopy=true
     }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
@@ -2449,17 +2450,37 @@ class Terminal {
 
             keyListeners["Enter"] = event => {
                 let text = getInputValueSanetized()
-                if (printInputAfter)
-                    this.printLine(password ? "•".repeat(text.length) : text)
+
+                const printText = password ? "•".repeat(text.length) : text
+                if (printInputAfter) {
+                    if (makeClickCopy) {
+                        const outElement = this.printLine(printText, undefined, {forceElement: true})
+                        outElement.addEventListener("click", event => {
+                            if (this.currInputElement) {
+                                this.currInputElement.value += printText
+                                event.preventDefault()
+                            }
+                        })
+                        outElement.style.cursor = "pointer"
+                    } else {
+                        this.printLine(printText)
+                    }
+                }
+
                 if (inputCleaning) {
                     text = this.sanetizeInput(getInputValueSanetized())
                 }
-                if (text !== lastItemOfHistory() && text.length > 0)
+
+                if (text !== lastItemOfHistory() && text.length > 0) {
                     addToHistory(text)
+                }
+
                 this.removeCurrInput()
+
                 if (correctnessOutput) {
                     correctnessOutput.remove()
                 }
+
                 resolve(text)
             }
 
