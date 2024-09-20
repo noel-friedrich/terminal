@@ -53,6 +53,24 @@ terminal.addCommand("asteroids", async function(args) {
             this.score = 0
         }
 
+        copy() {
+            const ship = new Ship()
+            ship.pos = this.pos.copy()
+            ship.vel = this.vel.copy()
+            ship.rotation = this.rotation
+            ship.thrust = this.thrust
+            ship.size = this.size
+            ship.alive = this.alive
+            ship.score = this.score
+            return ship
+        }
+
+        copyAndMove(dx, dy) {
+            const ship = this.copy()
+            ship.pos.iadd(new Vector2d(dx, dy))
+            return ship
+        }
+
         die() {
             if (!this.alive) return
             this.alive = false
@@ -92,10 +110,10 @@ terminal.addCommand("asteroids", async function(args) {
             if (this.vel.length > this.maxSpeed)
                 this.vel.iscale(this.maxSpeed / this.vel.length)
 
-            if (this.pos.x < -this.size) this.pos.x += canvas.width + this.size * 2
-            if (this.pos.x > canvas.width + this.size) this.pos.x -= canvas.width + this.size * 2
-            if (this.pos.y < -this.size) this.pos.y += canvas.height + this.size * 2
-            if (this.pos.y > canvas.height + this.size) this.pos.y -= canvas.height + this.size * 2
+            if (this.pos.x < 0) this.pos.x += canvas.width
+            if (this.pos.x > canvas.width) this.pos.x -= canvas.width
+            if (this.pos.y < 0) this.pos.y += canvas.height
+            if (this.pos.y > canvas.height) this.pos.y -= canvas.height
 
             for (let asteroid of asteroids) {
                 if (this.pos.distance(asteroid.pos) < asteroid.size + this.size) {
@@ -371,7 +389,16 @@ terminal.addCommand("asteroids", async function(args) {
     function loop() {
         drawBackground()
         ship.update()
-        ship.draw()
+
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                const movedShip = ship.copyAndMove(
+                    i * canvas.width,
+                    j * canvas.height
+                )
+                movedShip.draw()
+            }
+        }
 
         for (let particle of particles) {
             particle.update()
