@@ -1,5 +1,13 @@
 terminal.addCommand("primes", async function() {
-    function sqrt(value) {
+    function newtonSqrtIteration(n, x0) {
+        const x1 = ((n / x0) + x0) >> 1n;
+        if (x0 === x1 || x0 === (x1 - 1n)) {
+            return x0;
+        }
+        return newtonIteration(n, x1);
+    }
+
+    function fastSqrt(value) {
         if (value < 0n) {
             throw 'square root of negative numbers is not supported'
         }
@@ -8,15 +16,7 @@ terminal.addCommand("primes", async function() {
             return value;
         }
     
-        function newtonIteration(n, x0) {
-            const x1 = ((n / x0) + x0) >> 1n;
-            if (x0 === x1 || x0 === (x1 - 1n)) {
-                return x0;
-            }
-            return newtonIteration(n, x1);
-        }
-    
-        return newtonIteration(value, 1n);
+        return newtonSqrtIteration(value, 1n);
     }
 
     function isPrime(n) {
@@ -26,7 +26,8 @@ terminal.addCommand("primes", async function() {
             return true
         if (n % 2n === 0n)
             return false
-        for (let i = 3n; i <= sqrt(n); i += 2n) {
+        const upperLimit = fastSqrt(n)
+        for (let i = 3n; i <= upperLimit; i += 2n) {
             if (n % i === 0n)
                 return false
         }
