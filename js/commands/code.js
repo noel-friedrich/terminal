@@ -77,11 +77,6 @@ X     \`-.....-------./ /
      (_/ (_/      ((_/`
 
 terminal.addCommand("code", async function(args) {
-    if (!terminal.commandExists(args.command))
-        throw new Error(`Command "${args.command}" does not exist`)
-    let command = await terminal.getCommand(args.command)
-    let code = command.callback.toString()
-
     // https://github.com/noel-friedrich/terminal/issues/6
     if (args.command == "cat") {
         terminal.printEasterEgg("Cat-Egg")
@@ -178,17 +173,28 @@ terminal.addCommand("code", async function(args) {
         }
     }
 
-    printJSCode(code)
-
-    printJSCode(", " + JSON.stringify(command.info, null, 4))
-    terminal.addLineBreak()
-
-    if (args.command == "code") {
-        terminal.printEasterEgg("Codeception-Egg")
+    if (args.command) {
+        let command = await terminal.getCommand(args.command)
+        let code = command.callback.toString()
+    
+        printJSCode(code)
+    
+        printJSCode(", " + JSON.stringify(command.info, null, 4))
+        terminal.addLineBreak()
+    
+        if (args.command == "code") {
+            terminal.printEasterEgg("Codeception-Egg")
+        }
+    } else if (args.string) {
+        printJSCode(args.string)
+        terminal.addLineBreak()
+    } else {
+        throw new Error("Must provide either command or string to print")
     }
 }, {
     description: "show the source code of a command",
     args: {
-        "command:c": "the command to show the source code of"
+        "?c=command:c": "the command to show the source code of",
+        "?s=string:s": "print a highlighted string"
     }
 })

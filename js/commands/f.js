@@ -1,23 +1,22 @@
 terminal.addCommand("f", async function(args) {
+    const round = (num, places) => Math.round(num * 10**places) / 10**places
+
     async function randomFriendScore(friendName) {
-        const round = (num, places) => Math.round(num * 10**places) / 10**places
-        let msgBuffer = new TextEncoder().encode(friendName)
-        let hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer)
-        let hashArray = Array.from(new Uint8Array(hashBuffer))
-        return round(hashArray[0] / 255 * 10, 2)
+        const msgBuffer = new TextEncoder().encode(friendName)
+        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const score = hashArray[0] * 256 + hashArray[1]
+        return round(score / (256 * 256) * 10, 2)
     }
 
-    let lowerCaseName = args.friend.toLowerCase()
+    const lowerCaseName = args.name.toLowerCase()
+    const friendScore = await randomFriendScore(lowerCaseName + "pXxThFnonv4Qtbzz")
 
-    // best salt was chosen by maximizing the average friendship score
-    // of the names of my best friends
-    const bestSalt = "oJOMDCVmMJ"
-
-    let friendScore = await randomFriendScore(lowerCaseName + bestSalt)
-
-    terminal.printLine(`Your friendship score with ${args.friend} is ${friendScore}/10.`)
+    terminal.printLine(`friendship score with ${args.name}: ${friendScore}/10`)
 }, {
     description: "calculate friendship score with a friend",
-    args: ["*friend"]
+    args: {
+        "*name": "name of friend"
+    }
 })
 
