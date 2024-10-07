@@ -4,7 +4,7 @@ terminal.addCommand("primes", async function() {
         if (x0 === x1 || x0 === (x1 - 1n)) {
             return x0;
         }
-        return newtonIteration(n, x1);
+        return newtonSqrtIteration(n, x1);
     }
 
     function fastSqrt(value) {
