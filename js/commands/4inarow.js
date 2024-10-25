@@ -3,23 +3,38 @@ terminal.addCommand("4inarow", async function(args) {
 
     const N = " ", X = "X", O = "O"
     let field = Array.from(Array(6)).map(() => Array(7).fill(N))
+    let printedElements = []
 
     let DEPTH = args.depth
 
+    function printDeletable(text, color, backgroundColor) {
+        const ele = terminal.print(text, color, {forceElement: true, background: backgroundColor})
+        printedElements.push(ele)
+        return ele
+    }
+
+    function clearPrinted() {
+        for (const element of printedElements) {
+            element.remove()
+        }
+        printedElements = []
+    }
+
     function printField(f=field) {
         const betweenRow = "+---+---+---+---+---+---+---+"
-        terminal.printLine("+-1-+-2-+-3-+-4-+-5-+-6-+-7-+")
+
+        printDeletable("+-1-+-2-+-3-+-4-+-5-+-6-+-7-+\n")
         for (let row of f) {
-            terminal.print("| ")
+            printDeletable("| ")
             for (let item of row) {
                 switch(item) {
-                    case X: terminal.print(X, Color.YELLOW); break;
-                    case O: terminal.print(O, Color.BLUE); break;
-                    case N: terminal.print(" ")
+                    case X: printDeletable(X, Color.rgb(255, 255, 0)); break;
+                    case O: printDeletable(O, Color.rgb(100, 100, 255)); break;
+                    case N: printDeletable(" ")
                 }
-                terminal.print(" | ")
+                printDeletable(" | ")
             }
-            terminal.printLine("\n" + betweenRow)
+            printDeletable("\n" + betweenRow + "\n")
         }
     }
 
@@ -327,28 +342,39 @@ terminal.addCommand("4inarow", async function(args) {
     let totalEvaluations = 0
 
     while (!isDraw() && !getWinner()) {
+        clearPrinted()
+
         printField()
         let userMove = await getUserMove()
         putIntoField(userMove, X)
         if (isDraw() || getWinner())
             break
+
         totalEvaluations = 0
         let evaluation = new Board(field).getBestMove(DEPTH)
         let computerMove = evaluation.move
         let moveScore = ~~evaluation.score
-        terminal.printLine(`(depth=${DEPTH}, eval=${moveScore})`)
-        if (totalEvaluations < 1000)
+
+        if (args.s) {
+            terminal.printLine(`(depth=${DEPTH}, eval=${moveScore})`)
+        }
+
+        if (totalEvaluations < 1000) {
             DEPTH += 4
-        else if (totalEvaluations < 10000)
+        } else if (totalEvaluations < 10000) {
             DEPTH++
+        }
+
         if (computerMove == null) {
             terminal.printLine("The computer resigns. You win!")
             terminal.printEasterEgg("4inarow-Master-Egg")
             return
         }
+
         putIntoField(computerMove, O)
     }
 
+    clearPrinted()
     let winner = getWinner()
     printField()
     if (winner) {
@@ -361,7 +387,8 @@ terminal.addCommand("4inarow", async function(args) {
 }, {
     description: "play a game of Connect Four against the computer",
     args: {
-        "?depth:i:1~100": "The depth of the search tree",
+        "?d=depth:i:1~100": "The depth of the search tree",
+        "?s=show-debug:b": "Show debug info about board eval"
     },
     standardVals: {
         depth: 4

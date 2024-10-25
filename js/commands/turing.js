@@ -194,7 +194,7 @@ class TuringMachine {
 			let tapeContent = this.tape[i]
 			writeLine(`  tape[${startIndex + i}] = "${tapeContent}";`)
 		}
-		writeLine(`  let state = ${this.state};`)
+		writeLine(`  let state = "${this.state}";`)
         writeLine(`  let i = 0;`)
         writeLine(`  let start = performance.now();`)
 		writeLine(`  for (;; i++) {`)
@@ -312,17 +312,17 @@ terminal.addCommand("turing", async function(args) {
 }, {
     description: "run a turing machine file",
     args: {
-        "file": "file to run",
-        "?t=startTape": "starting tape content",
+        "file:f": "file to run",
+        "?t=startTape:s": "starting tape content",
         "?s=sleep:i:0~10000": "sleep time between steps (in ms)",
-        "?d=startingState": "starting state",
+        "?d=startingState:s": "starting state",
         "?m=maxSteps:i:0~9999999999": "maximum number of steps to run",
         "?turbo:b": "run as fast as possible",
     },
     standardVals: {
         startTape: "",
-        s: 100,
-        d: "0",
-        m: 100000,
+        sleep: 100,
+        startingState: "0",
+        maxSteps: 100000,
     }
 })

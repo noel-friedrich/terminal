@@ -988,6 +988,7 @@ class TerminalParser {
             name: null,
             type: "string",
             typeName: "string",
+            stringType: null,
             optional: false,
             min: null,
             max: null,
@@ -1043,6 +1044,9 @@ class TerminalParser {
                 argOptions.type = argOptions.typeName = "matrix"
             } else if (type == "e") {
                 argOptions.type = argOptions.typeName = "enum"
+            } else if (type == "t") {
+                argOptions.type = argOptions.typeName = "string"
+                argOptions.stringType = "text"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
