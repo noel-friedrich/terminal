@@ -210,7 +210,7 @@ class TuringMachine {
 		writeLine(`  }`)
         writeLine(`  let ms = performance.now() - start;`)
 		writeLine(`  const output = tape.filter(t => t != "${this.standardTapeContent}").join("");`)
-		writeLine(`  postMessage([output, i, ms]);`)
+		writeLine(`  postMessage([output, state, i, ms]);`)
 		writeLine(`}`)
 		return code
 	}
@@ -220,9 +220,10 @@ class TuringMachine {
 		let worker = new Worker(URL.createObjectURL(blob))
 		let running = true
 		worker.onmessage = e => {
-            let [output, steps, ms] = e.data
+            let [output, state, steps, ms] = e.data
             terminal.printLine(`Finished ${steps} steps in ${ms.toFixed(2)}ms.`)
-			terminal.printLine(output)
+			terminal.printLine(`\nTerminal Tape Content (length=${output.length}):\n${output}`)
+            terminal.printLine(`\nTerminal State: ${state}`)
 			worker.terminate()
 			running = false
 		}
