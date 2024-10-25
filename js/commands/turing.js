@@ -292,7 +292,7 @@ terminal.addCommand("turing", async function(args) {
     terminal.machine = machine
     
     if (args.turbo) {
-		let compiledJS = machine.compile()
+		let compiledJS = machine.compile(args.turboTapeSize)
 		await machine.executeCompiled(compiledJS)
 		return
 	}
@@ -318,6 +318,7 @@ terminal.addCommand("turing", async function(args) {
         "?s=sleep:i:0~10000": "sleep time between steps (in ms)",
         "?d=startingState:s": "starting state",
         "?m=maxSteps:i:0~9999999999": "maximum number of steps to run",
+        "?p=turboTapeSize:i:0~9999999999": "size of turing machine tape",
         "?turbo:b": "run as fast as possible",
     },
     standardVals: {
@@ -325,5 +326,6 @@ terminal.addCommand("turing", async function(args) {
         sleep: 100,
         startingState: "0",
         maxSteps: 100000,
+        turboTapeSize: 10000,
     }
 })
