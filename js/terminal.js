@@ -1171,6 +1171,227 @@ class TerminalParser {
         return deleteIndeces
     }
 
+    static _parseNumber(numberString, argOption, error) {
+        // GRAMMAR:
+        // number: "-" number | decimal | number "/" number | "0x" hexint | "0x" hexdecimal |
+        //         "0b" binint | "0b" bindecimal | "sqrt(" number ")" |
+        //         "sin(" number ")" | "cos(" number ")" | "tan(" number ")" |
+        //         decimal "e" int | "pi" | "tau" | "phi" | "e" |
+        //         number "*" number | number "^" number | number "-" number | number "+" number
+        // decimal: int | int "." int
+        // int: "0" int | ... | "9" int | "0" | ... | "9"
+        // hexdecimal: hexint | hexint "." hexint
+        // hexint: "0" hexint | ... | "f" hexint | "0" | ... | "f"
+        // bindecimal: binint | binint "." binint
+        // binint: "0" binint | "1" binint | "0" | "1"
+
+        const constants = {
+            "pi": Math.PI,
+            "tau": 2 * Math.PI,
+            "phi": (1 + Math.sqrt(5)) / 2,
+            "e": Math.E
+        }
+
+        for (const [constant, value] of Object.entries(constants)) {
+            if (numberString == constant) {
+                return value
+            }
+        }
+
+        if (numberString == "inf") {
+            return error(`At property "${argOption.name}": Infinity is not a number`)
+        }
+
+        const decimalRegex = /^[0123456789]+\.[0123456789]+$/
+        const intRegex = /^[0123456789]+$/
+        const hexDecimalRegex = /^0x[0123456789abcdef]+\.[0123456789abcdef]+$/
+        const hexIntRegex = /^0x[0123456789abcdef]+$/
+        const binDecimalRegex = /^0b[01]+\.[01]+$/
+        const binIntRegex = /^0b[01]+$/
+        const scientificRegex = /^\-?[0123456789]+(\.[0123456789]+)?e[0123456789]+$/
+
+        if (numberString.startsWith("-")) {
+            const value = this._parseNumber(numberString.slice(1), argOption, error)
+            if (value == ParserError) {
+                return value
+            } else {
+                return -value
+            }
+        }
+
+        const allowedFunctions = {
+            "sqrt": {
+                compute: n => Math.sqrt(n),
+                constraints: [
+                    {
+                        if: n => (n < 0),
+                        err: () => error(`At property "${argOption.name}": sqrt is only defined on [0, inf)`)
+                    }
+                ]
+            },
+            "sin":     {compute: n => Math.sin(n)},
+            "cos":     {compute: n => Math.cos(n)},
+            "tan":     {compute: n => Math.tan(n)},
+            "arcsin":  {
+                compute: n => Math.asin(n),
+                constraints: [
+                    {
+                        if: n => (n < -1) || (n > 1),
+                        err: () => error(`At property "${argOption.name}": arcsin is only defined on [-1, 1]`)
+                    }
+                ]
+            },
+            "arccos":  {
+                compute: n => Math.acos(n),
+                constraints: [
+                    {
+                        if: n => (n < -1) || (n > 1),
+                        err: () => error(`At property "${argOption.name}": arccos is only defined on [-1, 1]`)
+                    }
+                ]
+            },
+            "arctan":  {compute: n => Math.atan(n)},
+            "sinh":    {compute: n => Math.sinh(n)},
+            "cosh":    {compute: n => Math.cosh(n)},
+            "tanh":    {compute: n => Math.tanh(n)},
+            "arcsinh": {compute: n => Math.asinh(n)},
+            "arccosh": {
+                compute: n => Math.acosh(n),
+                constraints: [
+                    {
+                        if: n => (n < 1),
+                        err: () => error(`At property "${argOption.name}": arccosh is only defined on [1, inf)`)
+                    }
+                ]
+            },
+            "arctanh": {
+                compute: n => Math.atanh(n),
+                constraints: [
+                    {
+                        if: n => (n <= -1) || (n >= 1),
+                        err: () => error(`At property "${argOption.name}": arctanh is only defined on (-1, 1)`)
+                    }
+                ]
+            },
+            "": {compute: n => n}
+        }
+
+        for (const [functionStr, func] of Object.entries(allowedFunctions)) {
+            if (numberString.startsWith(`${functionStr}(`)) {
+                // if we find that we closing bracket doesn't belong to opening bracket, abort
+                const numberPart = numberString.slice(functionStr.length + 1, -1)
+                let openCount = 0
+                let abortThisExecution = false
+                for (const char of numberPart) {
+                    if (char == "(") {
+                        openCount++
+                    } else if (char == ")") {
+                        openCount--
+                    }
+                    if (openCount < 0) {
+                        abortThisExecution = true
+                        break
+                    }
+                }
+                if (abortThisExecution) {
+                    continue
+                }
+
+                const value = this._parseNumber(numberPart, argOption, error)
+                if (value == ParserError) return value
+                for (const constraint of (func.constraints ?? [])) {
+                    if (constraint.if(value)) {
+                        return constraint.err()
+                    }
+                }
+                return func.compute(value)
+            }
+        }
+
+        if (intRegex.test(numberString)) {
+            return parseInt(numberString)
+        } else if (hexIntRegex.test(numberString)) {
+            return parseInt(numberString.slice(2), 16)
+        } else if (binIntRegex.test(numberString)) {
+            return parseInt(numberString.slice(2), 2)
+        }
+
+        if (decimalRegex.test(numberString)) {
+            return parseFloat(numberString)
+        } else if (binDecimalRegex.test(numberString)) {
+            const [before, after] = numberString.split(".")
+            const beforeVal = parseInt(before.slice(2), 2)
+            const afterVal = parseInt(after, 2)
+            return beforeVal + afterVal / (2 ** after.length)
+        } else if (hexDecimalRegex.test(numberString)) {
+            const [before, after] = numberString.split(".")
+            const beforeVal = parseInt(before.slice(2), 16)
+            const afterVal = parseInt(after, 16)
+            return beforeVal + afterVal / (16 ** after.length)
+        }
+
+        if (scientificRegex.test(numberString)) {
+            let [decimal, exponent] = numberString.split("e")
+            decimal = parseFloat(decimal)
+            exponent = parseInt(exponent)
+            return decimal * (10 ** exponent)
+        }
+
+        // in list of anti-precedence
+        const operators = [
+            ["+", (a, b) => a + b],
+            ["-", (a, b) => a - b],
+            ["*", (a, b) => a * b],
+            ["/", (a, b) => a / b],
+            ["^", (a, b) => a ** b],
+        ]
+
+        for (const [operatorName, operatorFunc] of operators) {
+            let currLevel = 0
+            let foundSplitIndex = null
+            for (let i = 0; i < numberString.length; i++) {
+                const char = numberString[i]
+                if (char == "(") currLevel++
+                if (char == ")") currLevel--
+                if (currLevel < 0) {
+                    return error(`At property "${argOption.name}": Unbalanced parentheses`)
+                }
+                if (char == operatorName && currLevel == 0) {
+                    foundSplitIndex = i
+                }
+            }
+
+            if (currLevel != 0) {
+                return error(`At property "${argOption.name}": Unbalanced parentheses`)
+            }
+
+            if (foundSplitIndex === null) {
+                continue
+            }
+
+            // split into two parts only
+            const parts = [
+                numberString.slice(0, foundSplitIndex),
+                numberString.slice(foundSplitIndex + 1)
+            ]
+
+            for (let i = 0; i < 2; i++) {
+                parts[i] = this._parseNumber(parts[i], argOption, error)
+                if (parts[i] == ParserError) {
+                    return parts[i]
+                }
+            }
+
+            if (parts[1] == 0 && operatorName == "/") {
+                return error(`At property "${argOption.name}": Can't divide by zero`)
+            }
+
+            return operatorFunc(parts[0], parts[1])
+        }
+
+        return error(`At property "${argOption.name}": Invalid number`)
+    }
+
     static _parseArgumentValue(argOption, value, parsingError) {
         function addVal(value) {
             if (argOption.expanding && argOption.value) {
@@ -1184,18 +1405,25 @@ class TerminalParser {
             parsingError.message = msg
             parsingError.tokenIndex = argOption.tokenIndex
             parsingError.tokenSpan = argOption.tokenSpan
+            return ParserError
         }
 
         if (argOption.type == "number") {
-            let num = parseFloat(value)
+            let num = this._parseNumber(value, argOption, error)
+            if (num == ParserError) {
+                return num
+            }
+
+            if (!Number.isFinite(num)) {
+                return error(`At property "${argOption.name}": Infinity isn't a number`)
+            } else if (Number.isNaN(num)) {
+                return error(`At property "${argOption.name}": Not a number`)
+            }
+
             if (argOption.numtype == "integer") {
                 if (!Number.isInteger(num)) {
                     return error(`At property "${argOption.name}": Expected an integer`)
                 }
-            }
-
-            if (isNaN(num) || isNaN(value)) {
-                return error(`At property "${argOption.name}": Expected a number`)
             }
 
             if (argOption.min != null && num < argOption.min) {

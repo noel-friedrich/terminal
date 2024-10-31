@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 203 commands such as `ls`, `cd` and of course `cowsay`
+* 204 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -106,6 +106,7 @@ The following list can also be viewed using the `whatis *` command
 | `du` | display storage of current directory |
 | `easter-eggs` | open easter egg hunt |
 | `echo` | print a line of text |
+| `echonum` | echo a given number |
 | `edit` | edit a file |
 | `enigma` | Simulate an Enigma machine |
 | `error404` | Display a 404 error |

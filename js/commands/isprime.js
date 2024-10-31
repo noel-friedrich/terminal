@@ -23,6 +23,9 @@ terminal.addCommand("isprime", async function(args) {
         return terminal.printLine("2 is prime (the only even prime!)")
     } else if (args.n.toString().includes("e+")) {
         return terminal.printLine("Honestly no idea, too large for me.")
+    } else if (args.n == 57) {
+        terminal.printEasterEgg("Grothendieck-Egg")
+        return terminal.printLine("57 looks prime, but isn't")
     }
 
     let primeResult = isPrime(args.n)
