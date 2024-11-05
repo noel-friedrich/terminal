@@ -16,7 +16,7 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|  "),
         () => terminal.print("                                                                "),
         () => terminal.print("Welcome to my homepage. It's also a very interactive terminal.  "),
-        () => terminal.print("Enter commands to navigate over 200 unique tools and features.  "),
+        () => terminal.print(`Enter commands to navigate over ${Object.keys(terminal.allCommands).length - 1} unique tools and features.  `),
         () => {
             terminal.print("Start your adventure using the ")
             terminal.printCommand("help", "help", undefined, false)

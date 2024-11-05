@@ -2056,9 +2056,16 @@ class Terminal {
     }
 
     removeCurrInput() {
-        if (this.currInputContainer)
+        if (this.currInputContainer) {
             this.currInputContainer.remove()
+        }
+
+        if (this.currCorrectnessOutput) {
+            this.currCorrectnessOutput.remove()
+        }
+
         this.currInputContainer = null
+        this.currCorrectnessOutput = null
         this.currInputElement = null
         this.currSuggestionElement = null
     }
@@ -2655,10 +2662,11 @@ class Terminal {
         }
         inputContainer.style.width = `${inputMinWidth()}px`
 
-        let correctnessOutput = null
+        this.currCorrectnessOutput = null
+        let thisIsActivePrompt = true
 
         if (affectCorrectness) {
-            correctnessOutput = terminal.print("", Color.ERROR, {forceElement: true})
+            this.currCorrectnessOutput = this.print("", Color.ERROR, {forceElement: true})
         }
 
         this.scroll("smooth", false)
@@ -2709,11 +2717,12 @@ class Terminal {
 
                 this.removeCurrInput()
 
-                if (correctnessOutput) {
-                    correctnessOutput.remove()
+                if (this.currCorrectnessOutput) {
+                    this.currCorrectnessOutput.remove()
                 }
 
                 resolve(text)
+                thisIsActivePrompt = true
             }
 
             let tabIndex = 0
@@ -2769,6 +2778,10 @@ class Terminal {
             }
 
             inputElement.oninput = async event => {
+                if (!thisIsActivePrompt) {
+                    return
+                }
+
                 suggestions = this.getAutoCompleteOptions(getInputValueSanetized())
 
                 if (!inputSuggestions) {
@@ -2797,8 +2810,8 @@ class Terminal {
                 if (affectCorrectness) {
                     let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
-                    if (correctnessOutput) {
-                        this.updateCorrectnessText(getInputValueSanetized(), correctnessOutput, inputElement)
+                    if (this.currCorrectnessOutput) {
+                        this.updateCorrectnessText(getInputValueSanetized(), this.currCorrectnessOutput, inputElement)
                     }
                 }
 
@@ -2809,16 +2822,24 @@ class Terminal {
             }
 
             inputElement.onselectionchange = () => {
+                if (!thisIsActivePrompt) {
+                    return
+                }
+
                 if (affectCorrectness) {
                     let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
-                    if (correctnessOutput) {
-                        this.updateCorrectnessText(getInputValueSanetized(), correctnessOutput, inputElement)
+                    if (this.currCorrectnessOutput) {
+                        this.updateCorrectnessText(getInputValueSanetized(), this.currCorrectnessOutput, inputElement)
                     }
                 }
             }
 
             inputElement.onkeydown = async (event, addToVal=true) => {
+                if (!thisIsActivePrompt) {
+                    return
+                }
+
                 if (addToVal) {
                     if (event.key.length == 1) // a, b, c, " "
                         inputValue = getInputValueSanetized() + event.key
@@ -2828,15 +2849,22 @@ class Terminal {
                         inputValue = getInputValueSanetized()
                 }
 
-                if (keyListeners[event.key])
-                    keyListeners[event.key](event)
-                else {
+                if (keyListeners[event.key]) {
+                    if (thisIsActivePrompt) {
+                        keyListeners[event.key](event)
+                    }
+                } else {
                     tabIndex = 0
                 }
 
                 if (event.key == "c" && event.ctrlKey) {
+                    if (this.currCorrectnessOutput) {
+                        this.currCorrectnessOutput.remove()
+                    }
+
                     this.removeCurrInput()
                     this._interruptSTRGC()
+                    thisIsActivePrompt = false
                 }
 
                 // call async to let selection be updated before event is fired
@@ -3394,14 +3422,14 @@ class Terminal {
     makeInputFunc(text) {
         return async () => {
             if (this.expectingFinishCommand) {
-                this.interrupt()
-                await new Promise(resolve => setTimeout(resolve, 500))
+                return
             }
 
             if (this.currInputElement) {
                 this.removeCurrInput()
             }
 
+            this.expectingFinishCommand = true
             await this.animatePrint(text, 5)
             this.data.addToHistory(text)
             this.input(text)
