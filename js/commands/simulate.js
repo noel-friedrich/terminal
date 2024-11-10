@@ -588,6 +588,54 @@ terminal.addCommand("simulate", async function(args) {
             return make2dSimulation(setup)
         },
 
+        "3-body-problem": () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                1000, [100, 300, 500, 750, 1000, 1500])
+
+            const massColors = [
+                {mass: "#94afff", path: "blue"},
+                {mass: "#ff9494", path: "red"},
+                {mass: "#97ff94", path: "#00ff00"}
+            ]
+
+            for (let i = 0; i < 3; i++) {
+                const angle = i / 3 * (Math.PI * 2)
+                const mass = new PointMass(1, Vector2d.fromAngle(angle).scale(200),
+                    {color: massColors[i].mass, drawPath: true, pathColor: massColors[i].path,
+                        vel: Vector2d.fromAngle(angle).rotate(Math.PI / 2)})
+                setup.addMass(mass)
+            }
+
+            setup.setFriction(frictionParam)
+            setup.addParameter(gravityParam)
+                 .addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 0.1)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        },
+
         "1d-3-masses-2-springs": () => {
             const setup = new SimulationSetup()
 
@@ -678,7 +726,7 @@ terminal.addCommand("simulate", async function(args) {
 }, {
     description: "Run a simulation. Doesn't work well on phones",
     args: {
-        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs": "simulation to run",
+        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|3-body-problem": "simulation to run",
         "?f=fullscreen:b": "run application in fullscreen"
     }
 })

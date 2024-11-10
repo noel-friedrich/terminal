@@ -2504,22 +2504,27 @@ class Terminal {
         }
 
         const makeArgumentInfo = argOption => {
-            if (argOption.type == "enum") {
-                // just show options for enum
-                return argOption.description
-            }
-
             let out = ""
             if (argOption.name.length == 1) {
                 out += `-`
             } else {
                 out += `--`
             }
-            out += `${argOption.name} (`
+            out += `${argOption.name}`
+
+            out += " ("
             if (argOption.optional) {
                 out += "optional, "
             }
-            out += `${argOption.typeName}) ${argOption.description}`
+            out += `${argOption.typeName}) `
+            
+            if (argOption.type == "enum") {
+                const optionStr = argOption.enumOptions.join(" | ")
+                return `${out}: ${optionStr.length > 30 ? (optionStr.slice(0, 40) + "...") : optionStr}`
+            }
+
+            out += argOption.description
+
             return out
         }
 
