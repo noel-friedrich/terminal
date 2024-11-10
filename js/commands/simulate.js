@@ -240,11 +240,16 @@ terminal.addCommand("simulate", async function(args) {
         }
 
         let cameraFollowing = true
+        let simulationActive = true
 
         addEventListener("keydown", event => {
             if (event.key == " ") {
                 cameraFollowing = !cameraFollowing
                 viewCentreTarget.set(setup.viewCentre)
+            }
+
+            if (event.key == "s") {
+                simulationActive = !simulationActive
             }
 
             const cameraSpeed = 100
@@ -367,6 +372,10 @@ terminal.addCommand("simulate", async function(args) {
         }
 
         function update(dt) {
+            if (!simulationActive) {
+                return
+            }
+
             for (const spring of setup.springs) {
                 const [m1, m2] = [spring.m1, spring.m2]
                 const displacement = m1.pos.distance(m2.pos) - getValue(spring.length)
@@ -723,7 +732,7 @@ terminal.addCommand("simulate", async function(args) {
         }
 
         const now = performance.now()
-        const deltaTime = lastLoopTime ? (now - lastLoopTime) : (1000 / 60)
+        const deltaTime = (1000 / 60)
 
         if (deltaTime < 200) {
             // with too large delays, the deltaTime approximation
