@@ -5,9 +5,16 @@ terminal.addCommand("simulate", async function(args) {
     await terminal.modules.load("window", terminal)
     const simulationName = {
         "2-masses-1-spring": "2 Masses 1 Spring Simulation",
-        "planets-gravity": "Planets Gravity Simulation",
+        "planets-gravity": "Planets Gravity Simulation (Legacy)",
         "3-masses-3-springs": "3 Masses 3 Springs Simulation",
-        "1d-3-masses-2-springs": "1d 3 Masses 2 Springs Simulation"
+        "1d-3-masses-2-springs": "1d 3 Masses 2 Springs Simulation",
+        "2-body-problem": "2 Body Problem Simulation",
+        "3-body-problem": "3 Body Problem Simulation",
+        "4-body-problem": "4 Body Problem Simulation",
+        "5-body-problem": "5 Body Problem Simulation",
+        "6-body-problem": "6 Body Problem Simulation",
+        "7-body-problem": "7 Body Problem Simulation",
+        "8-body-problem": "8 Body Problem Simulation",
     }[args.simulation]
 
     // my professor shared these simulations with the class.
@@ -469,6 +476,61 @@ terminal.addCommand("simulate", async function(args) {
         return {render, update}
     }
 
+    function makeNBodyProblem(numMasses) {
+        return () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                1000, [100, 300, 500, 750, 1000, 1500])
+
+            const massColors = []
+            let hueDegOffset = (numMasses == 3) ? 0 : Math.PI / 8
+            for (let i = 0; i < numMasses; i++) {
+                const hue = (i / numMasses + hueDegOffset) % 1
+                const mass = Color.hsl(hue, 0.8, 0.7).string.hex
+                const path = Color.hsl(hue, 1, 0.5).string.hex
+                massColors.push({mass, path})
+            }
+
+            for (let i = 0; i < numMasses; i++) {
+                const angle = i / numMasses * (Math.PI * 2)
+                const massColor = massColors[i % massColors.length]
+                const mass = new PointMass(1, Vector2d.fromAngle(angle).scale(200),
+                    {color: massColor.mass, drawPath: true, pathColor: massColor.path,
+                        vel: Vector2d.fromAngle(angle).rotate(Math.PI / 2)})
+                setup.addMass(mass)
+            }
+
+            setup.setFriction(frictionParam)
+            setup.addParameter(gravityParam)
+                 .addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 0.1)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        }
+    }
+
     const simulation = {
         "2-masses-1-spring": () => {
             const setup = new SimulationSetup()
@@ -588,53 +650,13 @@ terminal.addCommand("simulate", async function(args) {
             return make2dSimulation(setup)
         },
 
-        "3-body-problem": () => {
-            const setup = new SimulationSetup()
-
-            const frictionParam = new SimulationParameter(
-                "friction", "f", "change friction",
-                0, [0, 0.0001, 0.001, 0.01, 0.1])
-            const gravityParam = new SimulationParameter(
-                "gravity_const", "g", "change gravity const",
-                1000, [100, 300, 500, 750, 1000, 1500])
-
-            const massColors = [
-                {mass: "#94afff", path: "blue"},
-                {mass: "#ff9494", path: "red"},
-                {mass: "#97ff94", path: "#00ff00"}
-            ]
-
-            for (let i = 0; i < 3; i++) {
-                const angle = i / 3 * (Math.PI * 2)
-                const mass = new PointMass(1, Vector2d.fromAngle(angle).scale(200),
-                    {color: massColors[i].mass, drawPath: true, pathColor: massColors[i].path,
-                        vel: Vector2d.fromAngle(angle).rotate(Math.PI / 2)})
-                setup.addMass(mass)
-            }
-
-            setup.setFriction(frictionParam)
-            setup.addParameter(gravityParam)
-                 .addParameter(frictionParam)
-
-            setup.addUpdateRule(dt => {
-                for (const obj of setup.masses) {
-                    for (const other of setup.masses) {
-                        if (obj == other) {
-                            continue
-                        }
-
-                        const delta = other.pos.sub(obj.pos)
-                        const dir = delta.normalized
-
-                        // newtons universal law of gravity:
-                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 0.1)
-                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
-                    }
-                }
-            })
-
-            return make2dSimulation(setup)
-        },
+        "2-body-problem": makeNBodyProblem(2),
+        "3-body-problem": makeNBodyProblem(3),
+        "4-body-problem": makeNBodyProblem(4),
+        "5-body-problem": makeNBodyProblem(5),
+        "6-body-problem": makeNBodyProblem(6),
+        "7-body-problem": makeNBodyProblem(7),
+        "8-body-problem": makeNBodyProblem(8),
 
         "1d-3-masses-2-springs": () => {
             const setup = new SimulationSetup()
@@ -726,7 +748,7 @@ terminal.addCommand("simulate", async function(args) {
 }, {
     description: "Run a simulation. Doesn't work well on phones",
     args: {
-        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|3-body-problem": "simulation to run",
+        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem": "simulation to run",
         "?f=fullscreen:b": "run application in fullscreen"
     }
 })
