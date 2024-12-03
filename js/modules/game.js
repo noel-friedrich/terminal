@@ -1,5 +1,5 @@
 function angleDifference(a, b) {
-    var diff = a - b
+    let diff = a - b
     while (diff < -Math.PI/2) diff += Math.PI
     while (diff > Math.PI/2) diff -= Math.PI
     return diff
@@ -180,6 +180,10 @@ class Vector2d {
         return Math.max(...this.array)
     }
 
+    abs() {
+        return new Vector2d(Math.abs(this.x), Math.abs(this.y))
+    }
+
     toArray() {
         return [this.x, this.y]
     }
@@ -205,6 +209,38 @@ class Vector2d {
         return new Vector2d(x - rect.left, y - rect.top)
     }
 
+}
+
+function distancePointLineSegment(point, lineStart, lineEnd) {
+    const delta = lineEnd.sub(lineStart)
+    const deltaLength = delta.length
+    if (deltaLength == 0) {
+        return point.distance(lineStart)
+    }
+
+    const t = Math.max(0, Math.min(1, point.sub(lineStart).dot(delta) / deltaLength ** 2))
+    const projection = lineStart.add(delta.scale(t))
+    return point.distance(projection)
+}
+
+function calcLineIntersection(s1, e1, s2, e2) {
+    // get intersection point between two lines defined each
+    // by start and end position (start n, end n)
+    // algorithm found on https://paulbourke.net/geometry/pointlineplane/
+
+    const denominator = (e2.y - s2.y)*(e1.x - s1.x) - (e2.x - s2.x)*(e1.y - s1.y)
+    if (denominator == 0) {
+        return null
+    }
+
+    const ua = ((e2.x - s2.x) * (s1.y - s2.y) - (e2.y - s2.y) * (s1.x - s2.x)) / denominator
+    const ub = ((e1.x - s1.x) * (s1.y - s2.y) - (e1.y - s1.y) * (s1.x - s2.x)) / denominator
+
+    if (ua < 0 || ua > 1 || ub < 0 || ub > 1) return null
+    return new Vector2d(
+        s1.x + ua * (e1.x - s1.x),
+        s1.y + ua * (e1.y - s1.y),
+    )
 }
 
 class Vector3d {
@@ -378,6 +414,11 @@ class Vector3d {
     }
 
 }
+
+const ZeroVector2d = new Vector2d(0, 0)
+const UnitVector2d = new Vector2d(1, 1)
+const ZeroVector3d = new Vector3d(0, 0, 0)
+const UnitVector3d = new Vector3d(1, 1, 1)
 
 class HighscoreApi {
 
@@ -664,6 +705,9 @@ function printSquareCanvas({widthChars=60}={}) {
 terminal.modules.game = {
     Vector2d,
     Vector3d,
+    distancePointLineSegment,
+    calcLineIntersection,
+    UnitVector2d, UnitVector3d, ZeroVector2d, ZeroVector3d,
     angleDifference,
     HighscoreApi,
     CanvasDrawer,
