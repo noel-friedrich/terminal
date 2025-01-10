@@ -166,8 +166,6 @@ terminal.addCommand("2048", async function(args) {
             addRandomCell()
         }
         draw()
-        if (checkWin())
-            gameRunning = false
     }
 
     let listener = addEventListener("keydown", keydown)

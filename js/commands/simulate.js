@@ -16,6 +16,8 @@ terminal.addCommand("simulate", async function(args) {
         "7-body-problem": "7 Body Problem Simulation",
         "8-body-problem": "8 Body Problem Simulation",
     }[args.simulation]
+    
+    const defaultDeltaTime = 1000 / 60
 
     // my professor shared these simulations with the class.
     // so here's a 10% chance to encounter a rickroll!
@@ -44,7 +46,7 @@ terminal.addCommand("simulate", async function(args) {
             color = "#a5a1ff",
             drawPath = false,
             pathColor = "blue",
-            maxPathLength = 1000,
+            maxPathLength = 5000,
         }={}) {
             this.mass = mass
             this.pos = pos
@@ -482,6 +484,21 @@ terminal.addCommand("simulate", async function(args) {
             rule()
         }
 
+        if (args["skip-ticks"] != null) {
+            const skipTicks = args["skip-ticks"]
+            if (skipTicks < 0) {
+                terminalWindow.close()
+                simulationRunning = false
+                throw new Error("Can't skip negative number of ticks")
+            }
+            
+            for (let i = 0; i < skipTicks; i++) {
+                update(defaultDeltaTime)
+            }
+        }
+
+        simulationActive = !args["start-being-halted"]
+
         return {render, update}
     }
 
@@ -495,7 +512,7 @@ terminal.addCommand("simulate", async function(args) {
 
             const gravityParam = new SimulationParameter(
                 "gravity_const", "g", "change gravity const",
-                1000, [100, 300, 500, 750, 1000, 1500])
+                args.gravity ?? 1000, [100, 300, 500, 750, 1000, 1500])
 
             const massColors = []
             let hueDegOffset = (numMasses == 3) ? 0 : Math.PI / 8
@@ -724,25 +741,13 @@ terminal.addCommand("simulate", async function(args) {
         simulationRunning = false
     })
 
-    let lastLoopTime = null
-
     function loop() {
         if (!simulationRunning) {
             return
         }
 
-        const now = performance.now()
-        const deltaTime = (1000 / 60)
-
-        if (deltaTime < 200) {
-            // with too large delays, the deltaTime approximation
-            // doesn't make sense anymore
-            simulation.update(deltaTime)
-        }
-
+        simulation.update(defaultDeltaTime)
         simulation.render()
-
-        lastLoopTime = now
 
         terminal.window.requestAnimationFrame(loop)
     }
@@ -758,6 +763,9 @@ terminal.addCommand("simulate", async function(args) {
     description: "Run a simulation. Doesn't work well on phones",
     args: {
         "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem": "simulation to run",
-        "?f=fullscreen:b": "run application in fullscreen"
+        "?f=fullscreen:b": "run application in fullscreen",
+        "?g=gravity:n:0~99999999": "initial gravity constant in gravity based simulations",
+        "?s=skip-ticks:i": "ticks to simulate before rendering",
+        "?h=start-being-halted:b": "simulation will start being stopped"
     }
 })
