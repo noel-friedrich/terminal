@@ -25,10 +25,13 @@ terminal.addCommand("highscore-admin", async function(args) {
             i++
 
             terminal.printLine(`> Highscore #${i}/${highscores.length}:`)
+
+            const rank = HighscoreApi.getRank(s.game, s.score)
+
             try {
                 terminal.printTable([[
-                    s.id, s.game, s.name, s.score, s.time
-                ]], ["id", "game", "name", "score", "time"])
+                    rank, s.game, s.name, s.score, s.time
+                ]], ["rank", "game", "name", "score", "time"])
                 await terminal.acceptPrompt("Looks good?")
                 await HighscoreApi.confirmHighscore(s.uid, 1)
                 terminal.addLineBreak()

@@ -15,6 +15,7 @@ terminal.addCommand("simulate", async function(args) {
         "6-body-problem": "6 Body Problem Simulation",
         "7-body-problem": "7 Body Problem Simulation",
         "8-body-problem": "8 Body Problem Simulation",
+        "circle-gravity": "Circle Gravity Simulation"
     }[args.simulation]
     
     const defaultDeltaTime = 1000 / 60
@@ -244,10 +245,21 @@ terminal.addCommand("simulate", async function(args) {
         let cameraFollowing = true
         let simulationActive = true
 
+        let focusMassNumber = null
+
         addEventListener("keydown", event => {
             if (event.key == " ") {
+                focusMassNumber = null
                 cameraFollowing = !cameraFollowing
                 viewCentreTarget.set(setup.viewCentre)
+            }
+
+            if (event.key == "j") {
+                if (focusMassNumber === null) {
+                    focusMassNumber = 0
+                } else {
+                    focusMassNumber++
+                }
             }
 
             if (event.key == "s") {
@@ -404,7 +416,10 @@ terminal.addCommand("simulate", async function(args) {
                 addToPath(COMPath, R(), setup.COMMaxPathLength)
             }
 
-            if (cameraFollowing) {
+            if (focusMassNumber !== null) {
+                const mass = setup.masses[focusMassNumber % setup.masses.length]
+                viewCentreTarget.set(mass.pos.scale(-1))
+            } else if (cameraFollowing) { 
                 viewCentreTarget.set(R().scale(-1))
             }
 
@@ -530,6 +545,7 @@ terminal.addCommand("simulate", async function(args) {
                     {color: massColor.mass, drawPath: true, pathColor: massColor.path,
                         vel: Vector2d.fromAngle(angle).rotate(Math.PI / 2)})
                 setup.addMass(mass)
+                setup.enableCOM({radius: 5})
             }
 
             setup.setFriction(frictionParam)
@@ -684,6 +700,51 @@ terminal.addCommand("simulate", async function(args) {
         "7-body-problem": makeNBodyProblem(7),
         "8-body-problem": makeNBodyProblem(8),
 
+        "circle-gravity": () => {
+            
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+            const massParam = new SimulationParameter(
+                "mass_ratio", "m", "change mass ratio",
+                1, [1, 2, 5, 10, 30])
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                1000, [100, 300, 500, 750, 1000, 1500])
+
+            const m1 = new PointMass(massParam, new Vector2d(0, 0),
+                {color: "#94afff", drawPath: true, pathColor: "blue",
+                 vel: new Vector2d(0, 0)})
+            const m2 = new PointMass(1, new Vector2d(300, 0),
+                {color: "#ff9494", drawPath: true, pathColor: "red",
+                 vel: new Vector2d(0, 1)})
+
+            setup.setFriction(frictionParam)
+            setup.addMass(m1).addMass(m2)
+            setup.addParameter(gravityParam).addParameter(massParam).addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 2)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        },
+
         "1d-3-masses-2-springs": () => {
             const setup = new SimulationSetup()
 
@@ -762,7 +823,7 @@ terminal.addCommand("simulate", async function(args) {
 }, {
     description: "Run a simulation. Doesn't work well on phones",
     args: {
-        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem": "simulation to run",
+        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem|circle-gravity": "simulation to run",
         "?f=fullscreen:b": "run application in fullscreen",
         "?g=gravity:n:0~99999999": "initial gravity constant in gravity based simulations",
         "?s=skip-ticks:i": "ticks to simulate before rendering",
