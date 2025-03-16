@@ -26,7 +26,7 @@ terminal.addCommand("highscore-admin", async function(args) {
 
             terminal.printLine(`> Highscore #${i}/${highscores.length}:`)
 
-            const rank = HighscoreApi.getRank(s.game, s.score)
+            const rank = await HighscoreApi.getRank(s.game, s.score)
 
             try {
                 terminal.printTable([[
