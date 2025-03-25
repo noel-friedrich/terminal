@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 206 commands such as `ls`, `cd` and of course `cowsay`
+* 208 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -142,9 +142,11 @@ The following list can also be viewed using the `whatis *` command
 | `hr` | create a hr code |
 | `hr-draw` | turn drawings into bitmaps |
 | `href` | open a link in another tab |
+| `hyp-lines` | spawn a simulation of the hyperbolic disk and half-plane model |
 | `image-crop` | start image cropper program |
 | `img2ascii` | Convert an image to ASCII art |
 | `img2pdf` | convert image files to pdf |
+| `imgwarp` | warp an image using a geometric step-distance function |
 | `isprime` | Check if a number is prime |
 | `joke` | tell a joke |
 | `kaprekar` | display the kaprekar steps of a number |

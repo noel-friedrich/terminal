@@ -95,6 +95,10 @@ class Vector2d {
         return this.x * v.y - this.y * v.x
     }
 
+    round() {
+        return new Vector2d(Math.round(this.x), Math.round(this.y))
+    }
+
     static fromAngle(angle) {
         return new Vector2d(Math.cos(angle), Math.sin(angle))
     }

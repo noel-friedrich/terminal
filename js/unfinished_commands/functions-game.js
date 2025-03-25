@@ -1,3 +1,5 @@
+class 
+
 terminal.addCommand("functions-game", function(args) {
     function generateFunction() {
         return {func: x => x ** 2, funcString: "x^2"}
