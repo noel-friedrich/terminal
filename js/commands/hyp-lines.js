@@ -259,11 +259,10 @@ terminal.addCommand("hyp-lines", async function(args) {
     }
 
     let draggingPoint = null
-    const dragMaxDistancePx = 20
+    const dragMaxDistancePx = 30
 
     const pointFromEvent = (canvas, event) => {
-        const rect = canvas.canvas.getBoundingClientRect()
-        const screenPos = new Vector2d(event.clientX - rect.left, event.clientY - rect.top)
+        const screenPos = Vector2d.fromEvent(event, canvas.canvas)
         return canvas.screenPosToPoint(screenPos)
     }
 
@@ -299,6 +298,19 @@ terminal.addCommand("hyp-lines", async function(args) {
             }
         })
 
+        canvas.canvas.addEventListener("touchstart", event => {
+            const mousePos = pointInFunc(event)
+            const mouseScreenPos = pointOutFunc(mousePos)
+            for (const point of movablePoints) {
+                if (pointOutFunc(point).distance(mouseScreenPos) <= dragMaxDistancePx) {
+                    draggingPoint = point
+                    draggingPoint.set(mousePos)
+                    return redraw()
+                }
+            }
+            event.preventDefault()
+        })
+
         canvas.canvas.addEventListener("mousemove", event => {
             if (draggingPoint !== null) {
                 const mousePos = pointInFunc(event)
@@ -307,9 +319,24 @@ terminal.addCommand("hyp-lines", async function(args) {
             }
         })
 
+        canvas.canvas.addEventListener("touchmove", event => {
+            if (draggingPoint !== null) {
+                const mousePos = pointInFunc(event)
+                draggingPoint.set(mousePos)
+                redraw()
+                event.preventDefault()
+            }
+        })
+
         canvas.canvas.addEventListener("mouseup", event => {
             draggingPoint = null
             redraw()
+        })
+
+        canvas.canvas.addEventListener("touchend", event => {
+            draggingPoint = null
+            redraw()
+            event.preventDefault()
         })
     }
 
