@@ -229,7 +229,7 @@ terminal.addCommand("hyp-lines", async function(args) {
             const maxXY = planeCanvas.screenPosToPoint(new Vector2d(planeCanvas.canvas.width, 0))
 
             planeCanvas.connectPoints([
-                new Vector2d(z1.x, minXY.y),
+                new Vector2d(z1.x, 0),
                 new Vector2d(z1.x, maxXY.y),
             ], {color: "lightblue", width: 2})
 
