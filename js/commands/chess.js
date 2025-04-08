@@ -876,27 +876,88 @@ terminal.addCommand("chess", async function() {
         board.makeMove(bestMove.move)
     }
 
-    async function getPlayerMove() {
-        let inp = await terminal.prompt("Your Move: ")
-        if (!/^[abcdefgh][1-8]\-[abcdefgh][1-8]$/.test(inp)) {
-            terminal.printLine("Invalid move format!")
-            return getPlayerMove()
+    async function printClickableBoard(board, {selectedPosition=null, resolveDelete=false}) {
+        const horizontalSeperator = "+---+---+---+---+---+---+---+---+"
+
+        const markSquares = []
+        if (selectedPosition) {
+            const legalMoves = board.generateMoves(board.playerColor)
+            for (const move of legalMoves) {
+                if (move.start.equals(selectedPosition)) {
+                    markSquares.push(move.end)
+                }
+            }
         }
-        let move = Move.fromString(inp)
-        if (!board.generateMoves(board.playerColor).find(m => m.equals(move))) {
-            terminal.printLine("Illegal move!")
-            return getPlayerMove()
-        }
-        return move
+
+        return new Promise(resolve => {
+            const elements = []
+            elements.push(terminal.printLine(horizontalSeperator, undefined, {forceElement: true}))
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (j == 0) {
+                        elements.push(terminal.print("|", undefined, {forceElement: true}))
+                    }
+
+                    const currPosition = new Position(j, i)
+
+                    const isMarked = markSquares.some(p => currPosition.equals(p))
+                    const squareElement = terminal.print(
+                        isMarked ? `<${board.board[i][j]}>` : ` ${board.board[i][j]} `,
+                        undefined, {forceElement: true}
+                    )
+
+                    elements.push(terminal.print("|", undefined, {forceElement: true}))
+    
+                    if (!resolveDelete) {
+                        squareElement.style.cursor = "pointer"
+                        squareElement.addEventListener("click", () => {
+                            for (const element of elements) {
+                                element.remove()
+                            }
+                            resolve(currPosition)
+                        })
+                    }
+
+                    elements.push(squareElement)
+                }
+                elements.push(terminal.printLine(`\n${horizontalSeperator}`, undefined, {forceElement: true}))
+
+                if (resolveDelete) {
+                    resolve(() => {
+                        for (const element of elements) {
+                            element.remove()
+                        }
+                    })
+                }
+            }
+        })
     }
 
-    terminal.printLine("example move: 'd2-d4'")
+    async function getPlayerMove(board) {
+        let selectedPosition = null
+        const legalMoves = board.generateMoves(board.playerColor)
+
+        while (true) {
+            let newPosition = await printClickableBoard(board, {selectedPosition})
+
+            if (selectedPosition) {
+                const proposedMove = new Move().setStart(selectedPosition).setEnd(newPosition)
+                if (legalMoves.some(m => proposedMove.equals(m))) {
+                    return proposedMove
+                }
+            }
+
+            selectedPosition = newPosition
+        }
+    }
 
     while (board.generateMoves(board.movingColor).length != 0) {
-        terminal.printLine(board.toNiceString())
-        let playerMove = await getPlayerMove()
+        const playerMove = await getPlayerMove(board)
         board.makeMove(playerMove)
+        const removeBoard = await printClickableBoard(board, {resolveDelete: true})
+        await sleep(10)
         makeComputerMove()
+        removeBoard()
     }
     
 }, {
