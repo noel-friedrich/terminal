@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>imgwarp (Terminal Command)</title>
+        <title>construct (Terminal Command)</title>
         <link rel="stylesheet" href="../../style.css">
         <link rel="stylesheet" href="../style.css?t=0">
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lora">
@@ -21,11 +21,11 @@
         <main>
 
             <h1>
-                imgwarp
+                construct
             </h1>
 
             <p class="subtitle">
-                warp an image using a geometric step-distance function. <a href="https://github.com/noel-friedrich/terminal/blob/main/js/commands/imgwarp.js">View code</a>
+                animate the construction of a given number (using ruler and compass only). <a href="https://github.com/noel-friedrich/terminal/blob/main/js/commands/construct.js">View code</a>
             </p>
 
             <div id="inputs-container"></div>
@@ -53,7 +53,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "warp an image using a geometric step-distance function", "args": {"f=function:s": "step distance function"}, "isSecret": true, "name": "imgwarp", "code-url": "https://github.com/noel-friedrich/terminal/blob/main/js/commands/imgwarp.js"}
+            const command_data = {"description": "animate the construction of a given number (using ruler and compass only)", "args": {"number:s": "the number to construct (form: 'sqrt(20)+3')", "?f=fullscreen:b": "enable fullscreen mode", "?fps:i:1~99999": "fps of animation"}, "defaultValues": {"fps": 30}, "isSecret": true, "name": "construct", "code-url": "https://github.com/noel-friedrich/terminal/blob/main/js/commands/construct.js"}
         </script>
 
         <script src="../main.js"></script>

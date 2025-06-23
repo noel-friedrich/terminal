@@ -197,5 +197,6 @@ terminal.addCommand("imgwarp", async function(args) {
 	description: "warp an image using a geometric step-distance function",
     args: {
         "f=function:s": "step distance function",
-    }
+    },
+    isSecret: true
 })

@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 208 commands such as `ls`, `cd` and of course `cowsay`
+* 211 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -91,6 +91,7 @@ The following list can also be viewed using the `whatis *` command
 | `color-test` | test the color capabilities of the terminal |
 | `compliment` | get info about yourself |
 | `config` | manage the terminal configuration |
+| `construct` | animate the construction of a given number (using ruler and compass only) |
 | `contact` | Open contact form |
 | `copy` | copy the file content to the clipboard |
 | `coville` | interactive virus simulation (in german) |
@@ -256,7 +257,9 @@ The following list can also be viewed using the `whatis *` command
 | `upload` | upload a file from your computer |
 | `vigenere` | encrypt/decrypt a message using the vigenere cipher |
 | `visits` | Shows the number of page visits |
+| `voronoi` | create voronoi diagrams interactively |
 | `w` | print the current time elapsed |
+| `water` | compute solutions to the longest water problem |
 | `watti` | manage the walk to trinity database |
 | `wave` | play with a wave |
 | `wc` | display word and line count of file |
