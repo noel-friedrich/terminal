@@ -148,6 +148,11 @@ class Point extends Geometry2dObject {
         return this.add(delta.scale(t))
     }
 
+    ilerp(v, t) {
+        let delta = v.sub(this)
+        this.iadd(delta.scale(t))
+    }
+
     dot(v) {
         return this.x * v.x + this.y * v.y
     }

@@ -1,5 +1,5 @@
 terminal.addCommand("voronoi", async function(args) {
-    const NUM_RANDOM_POINTS = 8
+    const NUM_RANDOM_POINTS = args.n
     const POINT_RADIUS_PX = 8
     const LINES_COLOR = "white"
 
@@ -7,7 +7,7 @@ terminal.addCommand("voronoi", async function(args) {
     await terminal.modules.load("window", terminal)
 
     const terminalWindow = terminal.modules.window.make({
-        name: "Click and Drag Points",
+        name: args.r ? "Voronoi Diagram Animation" : "Click and Drag Points",
         fullscreen: args.fullscreen
     })
 
@@ -39,8 +39,8 @@ terminal.addCommand("voronoi", async function(args) {
 
     let lastHue = 0
     function randomColor() {
-        const color = Color.fromHSL(lastHue, 0.5, 0.5)
-        lastHue = (lastHue + 0.1) % 1
+        const color = Color.fromHSL(lastHue, 0.8, 0.5)
+        lastHue = (lastHue + Math.PI / 8) % 1
         return color
     }
 
@@ -134,7 +134,7 @@ terminal.addCommand("voronoi", async function(args) {
                     }
                     
                     const {h, s, l} = color.hsl
-                    context.fillStyle = Color.fromHSL(h / 360, s, 0.8).toString()
+                    context.fillStyle = Color.fromHSL(h / 360, s, 0.7).toString()
                     context.fill()
 
                     context.strokeStyle = LINES_COLOR
@@ -155,8 +155,10 @@ terminal.addCommand("voronoi", async function(args) {
     const voronoi = new VoronoiDiagram()
     const pointCloud = new GeometryObjectCollection()
 
+    const randomPointInCanvas = () => canvasSize().mul(Point.random().scale(0.8).add(Point.unit11.scale(0.1)))
+
     for (let i = 0; i < NUM_RANDOM_POINTS; i++) {
-        const randomPoint = canvasSize().mul(Point.random().scale(0.8).add(Point.unit11.scale(0.1)))
+        const randomPoint = randomPointInCanvas()
         const distance = pointCloud.distance(randomPoint)
 
         if (distance < 4 * POINT_RADIUS_PX) {
@@ -258,10 +260,51 @@ terminal.addCommand("voronoi", async function(args) {
     canvas.addEventListener("touchstart", beginDrag)
     canvas.addEventListener("touchmove", continueDrag)
     canvas.addEventListener("touchend", releaseDrag)
+    
+    // for debugging
+    terminal.window.voronoi = voronoi
+
+    if (args["random-move"]) {
+
+        function movePointsToTargets(points, targets, reset=false, speed=1) {
+            for (let i = 0; i < targets.length; i++) {
+                const point = points[i]
+                const target = targets[i]
+
+                const delta = target.sub(point)
+                if (delta.length > speed * 2) {
+                    point.iadd(delta.normalized.scale(speed))
+                } else if (reset) {
+                    targets[i].set(randomPointInCanvas())
+                }
+            }
+        }
+
+        const targetTargets = voronoi.points.map(p => p.copy())
+        const targets = voronoi.points.map(p => p.copy())
+
+        function loop() {
+            movePointsToTargets(targets, targetTargets, true, 1)
+            movePointsToTargets(voronoi.points, targets, false, .5)
+
+            voronoi.update()
+            voronoi.draw()
+
+            window.requestAnimationFrame(loop)
+        }
+
+        loop()
+        
+    }
 
 }, {
     description: "create voronoi diagrams interactively",
     args: {
-        "?f=fullscreen:b": "enable fullscreen mode"
+        "?n=num-points:i:0~100": "number of random initial points",
+        "?r=random-move:b": "make points wander randomly",
+        "?f=fullscreen:b": "enable fullscreen mode",
+    },
+    defaultValues: {
+        n: 8
     }
 })
