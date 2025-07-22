@@ -39,13 +39,17 @@ terminal.addCommand("wurzle-stats", async function(args) {
     const dataRows = jsonData.map(rowData => rowHeaders.map(h => rowData[h]))
 
     const totalStartCount = jsonData.map(r => r.start_count).reduce((p, c) => p + c, 0)
-    const totalFinishCount = jsonData.map(r => r.finish_count).reduce((p, c) => p + c, 0)    
+    const totalFinishCount = jsonData.map(r => r.finish_count).reduce((p, c) => p + c, 0)
+    const totalSuccessCount = jsonData.map(r => r.success_count).reduce((p, c) => p + c, 0)
 
     terminal.printTable(dataRows, rowHeaders)
     terminal.addLineBreak()
 
     terminal.printLine(`total starts: ${totalStartCount}`)    
-    terminal.printLine(`total finishes: ${totalFinishCount}`)
+    terminal.printLine(`total finishes: ${totalFinishCount}`) 
+
+    const successPercent = Math.round(totalSuccessCount / totalFinishCount * 10000) / 100
+    terminal.printLine(`total successes: ${totalSuccessCount} (${successPercent}%)`)
     
 }, {
     description: "show usage stats about wurzle (recmaths.ch/wurzle)",
