@@ -48,7 +48,7 @@ terminal.addCommand("wurzle-stats", async function(args) {
     terminal.printLine(`total finishes: ${totalFinishCount}`)
     
 }, {
-    description: "print a message repeatedly",
+    description: "show usage stats about wurzle (recmaths.ch/wurzle)",
     args: {
         "?d=date:s": "date to see the stats of",
         "?password": "admin password required to see stats",

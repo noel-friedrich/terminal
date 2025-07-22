@@ -269,7 +269,7 @@ The following list can also be viewed using the `whatis *` command
 | `whatday` | get the weekday of a date |
 | `whatis` | display a short description of a command |
 | `whoami` | get client info |
-| `wurzle-stats` | print a message repeatedly |
+| `wurzle-stats` | show usage stats about wurzle (recmaths.ch/wurzle) |
 | `yes` | print a message repeatedly |
 | `zip` | zip a file |
 
