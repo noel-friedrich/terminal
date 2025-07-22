@@ -284,8 +284,8 @@ terminal.addCommand("voronoi", async function(args) {
         const targets = voronoi.points.map(p => p.copy())
 
         function loop() {
-            movePointsToTargets(targets, targetTargets, true, 1)
-            movePointsToTargets(voronoi.points, targets, false, .5)
+            movePointsToTargets(targets, targetTargets, true, 0.6)
+            movePointsToTargets(voronoi.points, targets, false, 0.51)
 
             voronoi.update()
             voronoi.draw()

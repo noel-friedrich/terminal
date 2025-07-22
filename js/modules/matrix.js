@@ -75,6 +75,10 @@ class MatrixCell {
             return bestNumerator.toString()
         }
 
+        if (bestError > 1e-5) {
+            return this.toString()
+        }
+
         return bestFraction
     }
 
@@ -86,7 +90,6 @@ class MatrixCell {
             let str = `(${templateString})`
                 .replace("$1", this.value)
                 .replace("$2", other.value)
-            console.log(str)
             return new MatrixCell(str)
         } 
     }
@@ -210,6 +213,29 @@ class Matrix {
         return new Matrix(dimensions, arr)
     }
 
+    static vector(arr, transpose=false) {
+        const v = Matrix.fromFunc(arr.length, 1, i => arr[i])
+        if (transpose) {
+            return v.transpose()
+        } else {
+            return v
+        }
+    }
+
+    static fromFunc(n, m, f) {
+        return Matrix.fromArray(
+            Array.from({length: n}).map((_, i) => Array.from({length: m}).map((_, j) => f(i, j)))
+        )
+    }
+
+    static zero(n) {
+        return Matrix.fromFunc(n, n, () => 0)
+    }
+
+    static unit(n) {
+        return Matrix.fromFunc(n, n, (i, j) => i == j ? 1 : 0)
+    }
+
     get nRows() {
         return this.dimensions.rows
     }
@@ -270,11 +296,11 @@ class Matrix {
         )
     }
 
-    toStringArray() {
+    toStringArray(simplify=true) {
         return this._data.map(
             row => row.map(
                 element => {
-                    if (typeof element.value === "number") {
+                    if (typeof element.value === "number" && simplify) {
                         return element.toSimplifiedString()
                     }
                     return element.toString()
@@ -291,8 +317,8 @@ class Matrix {
         return this._data[i]
     }
 
-    toString() {
-        let stringArray = this.toStringArray()
+    toString(simplify=true) {
+        let stringArray = this.toStringArray(simplify)
         const getColumnWidth = ci => Math.max(...stringArray.map(row => row[ci].length))
         const columnWidths = Array.from({length: this.dimensions.columns}, (_, ci) => getColumnWidth(ci))
 
@@ -330,6 +356,27 @@ class Matrix {
             }
         }
         return result
+    }
+
+    norm(squared=false) {
+        if (this.dimensions.rows != 1 && this.dimensions.columns != 1) {
+            throw new Error("Can't take norm of non-vector")
+        }
+
+        let squaredSum = null
+        if (this.dimensions.rows == 1) {
+            squaredSum = this.getRow(0).map(v => v.mul(v)).reduce((p, c) => p.add(c), new MatrixCell(0))
+        } else if (this.dimensions.columns == 1) {
+            squaredSum = this.getColumn(0).map(v => v.mul(v)).reduce((p, c) => p.add(c), new MatrixCell(0))
+        } else {
+            throw new Error("Can't take norm of non-vector matrix")
+        }
+
+        if (squared) {
+            return squaredSum
+        } else {
+            return Math.sqrt(squaredSum.value)
+        }
     }
 
     transpose() {
@@ -408,6 +455,10 @@ class Matrix {
             }
         }
         return result
+    }
+
+    copy() {
+        return this.map(c => c.copy())
     }
 
     static RandomIntegers(n, m, maxInt=10) {

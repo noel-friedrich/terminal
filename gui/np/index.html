@@ -4,7 +4,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>time (Terminal Command)</title>
+        <title>np (Terminal Command)</title>
         <link rel="stylesheet" href="../../style.css">
         <link rel="stylesheet" href="../style.css?t=0">
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lora">
@@ -21,11 +21,11 @@
         <main>
 
             <h1>
-                time
+                np
             </h1>
 
             <p class="subtitle">
-                Shows the current time.. <a href="https://github.com/noel-friedrich/terminal/blob/main/js/commands/time.js">View code</a>
+                start a noelpy interpreter for calculations. <a href="https://github.com/noel-friedrich/terminal/blob/main/js/commands/np.js">View code</a>
             </p>
 
             <div id="inputs-container"></div>
@@ -53,7 +53,7 @@
         <script src="../../js/terminal.js"></script>
 
         <script>
-            const command_data = {"description": "Shows the current time.", "args": {"?no-hours:b": "Hide hours.", "?no-minutes:b": "Hide minutes.", "?no-seconds:b": "Hide seconds.", "?m=show-milli:b": "Show milliseconds.", "?f=size:n:0.1~99": "Font size in em.", "?s=start:b": "Start a stopwatch."}, "defaultValues": {"size": 3}, "name": "time", "code-url": "https://github.com/noel-friedrich/terminal/blob/main/js/commands/time.js"}
+            const command_data = {"description": "start a noelpy interpreter for calculations", "isSecret": false, "name": "np", "code-url": "https://github.com/noel-friedrich/terminal/blob/main/js/commands/np.js"}
         </script>
 
         <script src="../main.js"></script>

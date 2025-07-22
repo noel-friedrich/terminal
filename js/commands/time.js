@@ -28,7 +28,21 @@ terminal.addCommand("time", async function(args) {
             return num.toString().padStart(len, "0")
         }
 
-        return `${p(hours)}:${p(minutes)}:${p(seconds)}${args.m ? `:${p(milliseconds, 3)}` : ""}`
+        let str = ""
+        if (!args['no-hours']) str += `${p(hours)}:`
+        if (!args['no-minutes']) str += `${p(minutes)}:`
+        if (!args['no-seconds']) str += `${p(seconds)}`
+        if (args.m) str += `:${p(milliseconds, 3)}`
+
+        if (str.endsWith(":")) {
+            str = str.slice(0, -1) // remove trailing colon
+        }
+
+        if (str === "") {
+            throw new Error("You disabled all time components!")
+        }
+
+        return str
     }
 
     let running = true
@@ -54,6 +68,9 @@ terminal.addCommand("time", async function(args) {
 }, {
     description: "Shows the current time.",
     args: {
+        "?no-hours:b": "Hide hours.",
+        "?no-minutes:b": "Hide minutes.",
+        "?no-seconds:b": "Hide seconds.",
         "?m=show-milli:b": "Show milliseconds.",
         "?f=size:n:0.1~99": "Font size in em.",
         "?s=start:b": "Start a stopwatch.",

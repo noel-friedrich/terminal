@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 211 commands such as `ls`, `cd` and of course `cowsay`
+* 214 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -167,6 +167,7 @@ The following list can also be viewed using the `whatis *` command
 | `man` | show the manual page for a command |
 | `mandelbrot` | draws the mandelbrot set |
 | `matdet` | find the determinant of a matrix |
+| `mateig` | find the eigenvalues and eigenspaces of a given matrix |
 | `matinv` | find the inverse of a matrix |
 | `matmin` | find the matrix of minors of a given matrix |
 | `matmul` | multiply two matrices with each other |
@@ -183,6 +184,7 @@ The following list can also be viewed using the `whatis *` command
 | `ncr` | calculate binomial distribution value |
 | `neural-car` | start a neural car simulation |
 | `neural-rocket` | trains neural networks to fly rockets |
+| `np` | start a noelpy interpreter for calculations |
 | `nsolve` | solve an equation using the newton-raphson method |
 | `number-guess` | guess a random number |
 | `old-edit` | edit a file of the current directory (old version of editor) |
@@ -267,6 +269,7 @@ The following list can also be viewed using the `whatis *` command
 | `whatday` | get the weekday of a date |
 | `whatis` | display a short description of a command |
 | `whoami` | get client info |
+| `wurzle-stats` | print a message repeatedly |
 | `yes` | print a message repeatedly |
 | `zip` | zip a file |
 
