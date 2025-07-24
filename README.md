@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 214 commands such as `ls`, `cd` and of course `cowsay`
+* 215 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -269,6 +269,7 @@ The following list can also be viewed using the `whatis *` command
 | `whatday` | get the weekday of a date |
 | `whatis` | display a short description of a command |
 | `whoami` | get client info |
+| `wurzle-admin` | manage wurzles (recmaths.ch/wurzle) |
 | `wurzle-stats` | show usage stats about wurzle (recmaths.ch/wurzle) |
 | `yes` | print a message repeatedly |
 | `zip` | zip a file |
