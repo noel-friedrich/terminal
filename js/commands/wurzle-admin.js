@@ -30,7 +30,8 @@ terminal.addCommand("wurzle-admin", async function(args) {
 
     if (args.action == "show") {
         const jsonData = await apiGet("get_all_wurzles")
-        terminal.printTable(Object.entries(jsonData), ["date", "term"])
+        const headerColumns = Array.from(Object.keys(jsonData[0]))
+        terminal.printTable(jsonData.map(r => headerColumns.map(h => r[h])), headerColumns)
     }
 
     else if (args.action == "set") {
@@ -38,7 +39,7 @@ terminal.addCommand("wurzle-admin", async function(args) {
             throw new Error("No date or term provided to set.")
         }
 
-        const jsonData = await apiGet("insert_wurzle", {date: args.date, term: args.term})
+        const jsonData = await apiGet("insert_wurzle", {date: args.date, term: args.term, author: args.author})
         terminal.printLine(`success=${jsonData.success} action=${jsonData.action}`)
     }
 
@@ -59,7 +60,11 @@ terminal.addCommand("wurzle-admin", async function(args) {
         "action:e:show|set|delete": "<enum>",
         "?d=date:s": "date to set or delete",
         "?t=term:s": "term to set",
-        "?password:s": "admin password required to see stats",
+        "?a=author:s": "author of wurzle",
+        "?password:s": "admin password required to see stats"
+    },
+    defaultValues: {
+        author: "noel"
     },
     isSecret: true
 })
