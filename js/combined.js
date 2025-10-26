@@ -1,33 +1,124 @@
 
 // ------------------- js/terminal.js --------------------
-function classFromType(type) {
-    switch (type) {
-        case "directory":
-            return Directory
-        case "text":
-            return TextFile
-        case "executable":
-            return ExecutableFile
-        case "dataurl":
-            return DataURLFile
-        default:
-            throw new Error("Unknown type: " + type);
-    }
-}
-
 let uniqueFileIdCount = 0
 
-class File {
+const FileType = {
+    RAW: "raw",
+    DIRECTORY: "directory",
+    PLAIN_TEXT: "plaintext",
+    DATA_URL: "dataurl"
+}
 
-    constructor(type, content, {
-        isTemp = false
+class FilePath {
+
+    static from(obj) {
+        if (typeof obj == "string") {
+            return this.fromString(obj)
+        } else if (obj instanceof FilePath) {
+            return obj
+        } else if (Array.isArray(obj)) {
+            return new FilePath({items: obj})
+        } else {
+            return new Error(`Can't construct FilePath from "${typeof obj}"`)
+        }
+    }
+
+    static fromString(str) {
+        let parts = str.split(/[\\\/]/g).filter(part => part !== "")
+        return new FilePath({items: parts})
+    }
+
+    constructor({
+        items = [],
+        relativeTo = null,
     }={}) {
-        this.type = type || "file"
+        this.items = items
+        this.relativeTo = relativeTo
+    }
+
+    prependFile(file) {
+        this.items.unshift(file.name)
+    }
+
+    addFile(file) {
+        this.items.push(file.name)
+    }
+
+    prependItem(str) {
+        this.items.unshift(str)
+    }
+
+    addItem(str) {
+        this.items.push(str)
+    }
+
+    pop() {
+        return this.files.pop()
+    }
+
+    concat(otherFilePath) {
+        return new FilePath({items: this.items.concat(otherFilePath.items)})
+    }
+
+    get isFilePath() {
+        return true
+    }
+
+    slice(start, end) {
+        return new FilePath({items: this.items.slice(start, end)})
+    }
+
+    fromRoot() {
+        if (this.relativeTo == null) {
+            return this
+        } else {
+            return this.relativeTo.path.fromRoot().concat(this)
+        }
+    }
+
+    toString() {
+        if (this.relativeTo == null) {
+            if (this.items[0] === "root") {
+                return this.items.join("/") + "/"
+            } else {
+                return "root/" + this.items.join("/") + "/"
+            }
+        } else {
+            return this.fromRoot().toString()
+        }
+    }
+
+    get length() {
+        return this.items.length
+    }
+
+}
+
+class TerminalFile {
+
+    static classFromType(type) {
+        switch (type) {
+            case FileType.RAW:
+                return TerminalFile
+            case FileType.DIRECTORY:
+                return DirectoryFile
+            case FileType.PLAIN_TEXT:
+            case "text": // compatability
+            case "executable": // same here
+                return PlainTextFile
+            case FileType.DATA_URL:
+                return DataURLFile
+            default:
+                throw new Error("Unknown Filetype: " + type)
+        }
+    }
+
+    constructor(content) {
+        this.type = FileType.RAW
         this.content = content
         this.parent = null
-        this.name = null
-        this.isTemp = isTemp
         this.id = uniqueFileIdCount++
+        this.name = `unnamed-${this.id}`
     }
 
     setName(name) {
@@ -36,53 +127,20 @@ class File {
     }
 
     computeSize() {
-        return JSON.stringify(this.toJSON()).length
+        return JSON.stringify(this.toObject()).length
     }
 
     copy() {
-        return File.fromObject(this.toJSON())
+        return TerminalFile.fromObject(this.toObject())
     }
 
     get path() {
-        let tempPath = this.name ?? "root"
-        let tempParent = this.parent
-        while (tempParent) {
-            let parentName = tempParent.name ?? "root"
-            tempPath = parentName + "/" + tempPath
-            tempParent = tempParent.parent
-        }
-        return tempPath
+        return new FilePath({relativeTo: this.parent, items: [this.name]})
     }
 
-    get pathArray() {
-        let path = this.path.split("/")
-        path.shift()
-        return path
-    }
-
-    get relativeChildPaths() {
-        let paths = []
-        
-        function getPaths(file, currPath) {
-            paths.push(currPath)
-            if (file.isDirectory) {
-                for (let [key, value] of Object.entries(file.content)) {
-                    getPaths(value, currPath + "/" + key)
-                }
-            }
-        }
-
-        getPaths(this, "")
-
-        return paths.filter(path => path !== "").map(path => path.slice(1))
-    }
-
-    get isDirectory() {
-        return false
-    }
-
-    toJSON() {
+    toObject() {
         return {
+            name: this.name,
             type: this.type,
             content: this.content
         }
@@ -92,33 +150,47 @@ class File {
         let children = []
         let content = obj.content
         if (obj.type === "directory") {
-            for (let [key, value] of Object.entries(obj.content)) {
-                content[key] = File.fromObject(value)
-                children.push(content[key])
-                content[key].name = key
+            // compatability with previous versions of filesystem saving
+            // that may still exist in some peoples localstorage!
+            if (typeof obj.content == "object" && obj.content !== null && !Array.isArray(obj.content)) {
+                obj.content = Object.entries(obj.content).map(([fname, fobj]) => {
+                    fobj.name = fname
+                    return fobj
+                })
             }
+
+            children = obj.content.map(c => TerminalFile.fromObject(c))
+            content = children
         }
-        let file = new (classFromType(obj.type))(content)
+
+        const file = new (TerminalFile.classFromType(obj.type))(content)
         for (let child of children) {
             child.parent = file
         }
+
+        if (obj.name) {
+            file.name = obj.name
+        }
+
         return file
-    }
-
-    append() {
-        throw new Error("Cannot append to uninitialized file")
-    }
-
-    write() {
-        throw new Error("Cannot write to uninitialized file")
     }
 
 }
 
-class TextFile extends File {
+class PlainTextFile extends TerminalFile {
 
     constructor(content) {
-        super("text", content)
+        content ??= ""
+        super(content)
+        this.type = FileType.PLAIN_TEXT
+    }
+
+    get text() {
+        return this.content
+    }
+
+    set text(newText) {
+        this.content = newText
     }
 
     append(text) {
@@ -129,62 +201,113 @@ class TextFile extends File {
         this.content = text
     }
 
-}
-
-class ExecutableFile extends File {
-
-    constructor(content) {
-        super("executable", content)
+    get isPlainText() {
+        return true
     }
 
 }
 
-class DataURLFile extends File {
+class DataURLFile extends TerminalFile {
 
     constructor(content) {
-        super("dataurl", content)
+        content ??= ""
+        super(content)
+        this.type = FileType.DATA_URL
+    }
+
+    get dataUrl() {
+        return this.content
+    }
+
+    set dataUrl(newUrl) {
+        this.content = newUrl
+    }
+
+    get isDataUrl() {
+        return true
     }
 
 }
 
-class MelodyFile extends File {
+class DirectoryFile extends TerminalFile {
 
     constructor(content) {
-        super("melody", content)
+        content ??= []
+        super(content)
+        this.type = FileType.DIRECTORY
     }
 
-}
-
-class Directory extends File {
-
-    constructor(content) {
-        super("directory", content)
+    get children() {
+        return this.content
     }
 
-    toJSON() {
+    toObject() {
         return {
             type: this.type,
-            content: Object.fromEntries(Object.entries(this.content)
-                .filter(([fileName, file]) => !file.isTemp)
-                .map(([fileName, file]) => [fileName, file.toJSON()]))
+            name: this.name,
+            content: this.children.map(file => file.toObject()),
         }
     }
 
-    addFile(file) {
-        this.content[file.name] = file
-        file.parent = this
+    addChild(child) {
+        this.content.push(child)
+        child.parent = this
     }
 
     deleteChild(child) {
-        delete this.content[child.name]
+        this.content = this.children.filter(f => f.id != child.id)
     }
 
-    fileExists(name) {
-        return name in this.content
+    fileExists(path) {
+        return !!this.getFile(path)
     }
 
-    getFile(name) {
-        return this.content[name]
+    findChildByName(name) {
+        return this.children.find(c => c.name == name)
+    }
+
+    getFile(path) {
+        path = FilePath.from(path)
+        let currDirectory = this
+
+        for (let name of path.items) {
+            let child = undefined
+
+            if (name == ".") {
+                continue
+            } else if (name == "..") {
+                if (!currDirectory.parent) {
+                    return undefined
+                } else {
+                    currDirectory = currDirectory.parent
+                }
+            } else if (name == "~") {
+                while (currDirectory.parent) {
+                    currDirectory = currDirectory.parent
+                }
+            } else {
+                child = currDirectory.findChildByName(name)
+                if (!child) {
+                    return undefined
+                }
+                currDirectory = child
+            }
+        }
+        
+        return currDirectory
+    }
+
+    get allChildren() {
+        let files = []
+        let stack = [this]
+        while (stack.length > 0) {
+            let file = stack.pop()
+            files.push(file)
+            if (file.isDirectory) {
+                stack.push(...file.children)
+            }
+        }
+        return files
     }
 
     get isDirectory() {
@@ -196,49 +319,49 @@ class Directory extends File {
 class FileSystem {
 
     constructor() {
-        this.root = new Directory("root", {})
-        this.currPath = []
-        this.tempSave = undefined
-    }
+        this.root = new DirectoryFile().setName("root")
+        this.currDirectory = this.root
 
-    get currFolder() {
-        return this.getFile(this.pathStr)
-    }
-
-    _pathToString(path) {
-        return "root/" + path.join("/")
+        // in session mode, changes don't get saved to local storage
+        this.inSessionMode = false
     }
 
     get pathStr() {
-        return this._pathToString(this.currPath)
+        return this.currDirectory.path.toString()
     }
 
-    _parsePath(path) {
-        let parts = path.split(/[\\\/]/g).filter(part => part !== "")
-        if (parts[0] === "root") {
-            parts.shift()
-        } else {
-            parts = this.currPath.concat(parts)
-        }
-        return parts
+    get path() {
+        return this.currDirectory.path.fromRoot()
+    }
+
+    allFiles() {
+        return this.root.allChildren
     }
 
     getFile(path) {
-        let parsedPath = this._parsePath(path)
-        let temp = this.root
-        for (let part of parsedPath) {
-            if (temp.isDirectory && part in temp.content) {
-                temp = temp.content[part]
-            } else {
-                return null
-            }
+        path = FilePath.from(path)
+        if (path.items[0] == "root") {
+            return this.root.getFile(path.slice(1))
+        } else {
+            return this.currDirectory.getFile(path)
         }
-        return temp
+    }
+
+    fileExists(path) {
+        return !!this.getFile(path)
+    }
+
+    filesizeStr(numBytes) {
+        if (numBytes < 1e3 ) return `${numBytes} Bytes`
+        if (numBytes < 1e6 ) return `${Math.round(numBytes / 1e3 * 10) / 10} KB`
+        if (numBytes < 1e9 ) return `${Math.floor(numBytes / 1e6 * 10) / 10} MB`
+        if (numBytes < 1e12) return `${Math.floor(numBytes / 1e9 * 10) / 10} GB`
+        return `${Math.floor(numBytes / 1e12 * 10 / 10)} TB`
     }
 
     dumpTooLargeFiles(file, fileSizeLimit) {
         if (file.computeSize() < fileSizeLimit) {
-            return 
+            return
         }
 
         let allFiles = []
@@ -269,15 +392,16 @@ class FileSystem {
             for (let file of allFiles) {
                 if (file.isDirectory)
                     continue
-                if (file.computeSize() > largestSize) {
+                const size = file.computeSize()
+                if (size > largestSize) {
                     largestFile = file
-                    largestSize = file.computeSize()
+                    largestSize = size
                 }
             }
             if (largestFile && largestFile.parent) {
                 largestFile.parent.deleteChild(largestFile)
                 introduceDumping()
-                terminal.printLine(`- ${largestFile.path} (${largestFile.computeSize()} bytes)`)
+                terminal.printLine(`- ${largestFile.path} (${terminal.fileSystem.filesizeStr(largestFile.computeSize())})`)
                 allFiles = allFiles.filter(file => file.id !== largestFile.id)
             } else if (largestFile) {
                 return "not ready yet"
@@ -296,28 +420,49 @@ class FileSystem {
     }
 
     toJSON() {
-        let fileSizeLimit = terminal.data.storageSize
-        this.dumpTooLargeFiles(this.root, fileSizeLimit)
-        return JSON.stringify(this.root.toJSON())
+        if (!this.inSessionMode) {
+            let fileSizeLimit = terminal.data.storageSize
+            this.dumpTooLargeFiles(this.root, fileSizeLimit)
+        }
+        return JSON.stringify(this.root.toObject())
     }
 
     loadJSON(jsonString) {
         let parsed = JSON.parse(jsonString)
-        this.root = File.fromObject(parsed)
+        this.root = TerminalFile.fromObject(parsed).setName("root")
+        this.currDirectory = this.root
     }
 
     reset() {
-        localStorage.removeItem("terminal-filesystem")
-        this.root = new Directory({})
-        this.root.name = "root"
-        this.currPath = []
+        if (!this.inSessionMode) {
+            localStorage.removeItem("terminal-filesystem")
+        }
+
+        this.root = new DirectoryFile().setName("root")
+        this.currDirectory = this.root
+    }
+
+    beginSession() {
+        this.inSessionMode = true
+    }
+
+    endSession() {
+        this.inSessionMode = false
     }
 
     save() {
+        if (this.inSessionMode) {
+            return
+        }
+
         localStorage.setItem("terminal-filesystem", this.toJSON())
     }
 
     async load(jsonVal=undefined) {
+        if (this.inSessionMode) {
+            return
+        }
+
         let json = jsonVal ?? localStorage.getItem("terminal-filesystem")
         if (json) {
             this.loadJSON(json)
@@ -328,26 +473,9 @@ class FileSystem {
         }
     }
 
-    reloadSync() {
-        this.loadJSON(this.toJSON())
-    }
-
     async reload() {
         this.save()
         await this.load()
-    }
-
-    allFiles(startPoint=this.root) {
-        let files = []
-        let stack = [startPoint]
-        while (stack.length > 0) {
-            let file = stack.pop()
-            files.push(file)
-            if (file.isDirectory) {
-                stack.push(...Object.values(file.content))
-            }
-        }
-        return files
     }
 
     saveTemp() {
@@ -372,12 +500,14 @@ class TerminalData {
         "accentColor1": "#ffff00",
         "accentColor2": "#8bc34a",
         "history": "[]",
-        "storageSize": 300000,
-        "startupCommands": "[\"turtlo --silent\", \"helloworld\"]",
+        "storageSize": "1000000",
+        "startupCommands": "[\"helloworld\"]",
         "mobile": "2",
         "easterEggs": "[]",
+        "maxHistoryLength": "100",
         "sidepanel": "true",
-        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3","panik": "time -ms"}'
+        "path": "[]",
+        "aliases": '{"tree": "ls -r","github": "href -f root/github.url","hugeturtlo": "turtlo --size 2","hugehugeturtlo": "turtlo --size 3"}'
     }
 
     localStoragePrepend = "terminal-"
@@ -458,6 +588,14 @@ class TerminalData {
         this.set("history", JSON.stringify(history))
     }
 
+    get path() {
+        return JSON.parse(this.get("path"))
+    }
+    
+    set path(path) {
+        this.set("path", JSON.stringify(path))
+    }
+
     get easterEggs() {
         let arr = JSON.parse(this.get("easterEggs"))
         return new Set(arr)
@@ -518,11 +656,19 @@ class TerminalData {
     }
 
     get storageSize() {
-        return this.get("storageSize")
+        return parseInt(this.get("storageSize"))
     }
 
     set storageSize(size) {
         this.set("storageSize", size)
+    }
+
+    get maxHistoryLength() {
+        return parseInt(this.get("maxHistoryLength"))
+    }
+
+    set maxHistoryLength(length) {
+        this.set("maxHistoryLength", length)
     }
 
     get lastItemOfHistory() {
@@ -542,6 +688,9 @@ class TerminalData {
         let lastItem = history[history.length - 1]
         if (lastItem == command) return
         history.push(command)
+        if (history.length > this.maxHistoryLength) {
+            history.shift()
+        }
         this.history = history
     }
 
@@ -841,6 +990,7 @@ class TerminalParser {
             name: null,
             type: "string",
             typeName: "string",
+            stringType: null,
             optional: false,
             min: null,
             max: null,
@@ -879,6 +1029,9 @@ class TerminalParser {
                 argOptions.type = "number"
                 argOptions.typeName = "integer"
                 argOptions.numtype = "integer"
+            } else if (type == "bn") {
+                argOptions.type = "bigint"
+                argOptions.typeName = "integer"
             } else if (type == "b") {
                 argOptions.type = argOptions.typeName = "boolean"
             } else if (type == "s") {
@@ -891,19 +1044,28 @@ class TerminalParser {
                 argOptions.type = argOptions.typeName = "square-matrix"
             } else if (type == "m") {
                 argOptions.type = argOptions.typeName = "matrix"
+            } else if (type == "e") {
+                argOptions.type = argOptions.typeName = "enum"
+            } else if (type == "t") {
+                argOptions.type = argOptions.typeName = "string"
+                argOptions.stringType = "text"
             } else {
                 throw new DeveloperError(`Invalid argument type: ${type}`)
             }
 
             if (parts.length > 2) {
-                let range = parts[2]
-                if (range.includes("~")) {
-                    let rangeParts = range.split("~")
-                    argOptions.min = parseFloat(rangeParts[0])
-                    argOptions.max = parseFloat(rangeParts[1])
-                } else {
-                    argOptions.min = parseFloat(range)
-                    argOptions.max = parseFloat(range)
+                if (argOptions.type == "number") {
+                    let range = parts[2]
+                    if (range.includes("~")) {
+                        let rangeParts = range.split("~")
+                        argOptions.min = parseFloat(rangeParts[0])
+                        argOptions.max = parseFloat(rangeParts[1])
+                    } else {
+                        argOptions.min = parseFloat(range)
+                        argOptions.max = parseFloat(range)
+                    }
+                } else if (argOptions.type == "enum") {
+                    argOptions.enumOptions = parts[2].split("|")
                 }
             }
         }
@@ -949,7 +1111,7 @@ class TerminalParser {
                     parsingError.tokenIndex = i
                 } else if (!argOption.optional) {
                     argOption.tokenIndex = i
-                    parsingError.message = `Property "${name}" is not optional, must be passed directly`
+                    parsingError.message = `Property "${argOption.name}" is not optional, must be passed directly`
                     parsingError.tokenIndex = i
                     parsingError.tokenSpan = 1
                 } else if (argOption.type == "boolean") {
@@ -962,7 +1124,7 @@ class TerminalParser {
                         argOption.tokenSpan = 1
                         this._parseArgumentValue(argOption, nextToken, parsingError)
                     } else {
-                        parsingError.message = `property "${name}" (${argOption.typeName}) expects a value`
+                        parsingError.message = `property "${argOption.name}" (${argOption.typeName}) expects a value`
                         parsingError.tokenIndex = i + 1
                     }
                 }
@@ -1011,6 +1173,227 @@ class TerminalParser {
         return deleteIndeces
     }
 
+    static _parseNumber(numberString, argOption, error) {
+        // GRAMMAR:
+        // number: "-" number | decimal | number "/" number | "0x" hexint | "0x" hexdecimal |
+        //         "0b" binint | "0b" bindecimal | "sqrt(" number ")" |
+        //         "sin(" number ")" | "cos(" number ")" | "tan(" number ")" |
+        //         decimal "e" int | "pi" | "tau" | "phi" | "e" |
+        //         number "*" number | number "^" number | number "-" number | number "+" number
+        // decimal: int | int "." int
+        // int: "0" int | ... | "9" int | "0" | ... | "9"
+        // hexdecimal: hexint | hexint "." hexint
+        // hexint: "0" hexint | ... | "f" hexint | "0" | ... | "f"
+        // bindecimal: binint | binint "." binint
+        // binint: "0" binint | "1" binint | "0" | "1"
+
+        const constants = {
+            "pi": Math.PI,
+            "tau": 2 * Math.PI,
+            "phi": (1 + Math.sqrt(5)) / 2,
+            "e": Math.E
+        }
+
+        for (const [constant, value] of Object.entries(constants)) {
+            if (numberString == constant) {
+                return value
+            }
+        }
+
+        if (numberString == "inf") {
+            return error(`At property "${argOption.name}": Infinity is not a number`)
+        }
+
+        const decimalRegex = /^[0123456789]+\.[0123456789]+$/
+        const intRegex = /^[0123456789]+$/
+        const hexDecimalRegex = /^0x[0123456789abcdef]+\.[0123456789abcdef]+$/
+        const hexIntRegex = /^0x[0123456789abcdef]+$/
+        const binDecimalRegex = /^0b[01]+\.[01]+$/
+        const binIntRegex = /^0b[01]+$/
+        const scientificRegex = /^\-?[0123456789]+(\.[0123456789]+)?e[0123456789]+$/
+
+        if (numberString.startsWith("-")) {
+            const value = this._parseNumber(numberString.slice(1), argOption, error)
+            if (value == ParserError) {
+                return value
+            } else {
+                return -value
+            }
+        }
+
+        const allowedFunctions = {
+            "sqrt": {
+                compute: n => Math.sqrt(n),
+                constraints: [
+                    {
+                        if: n => (n < 0),
+                        err: () => error(`At property "${argOption.name}": sqrt is only defined on [0, inf)`)
+                    }
+                ]
+            },
+            "sin":     {compute: n => Math.sin(n)},
+            "cos":     {compute: n => Math.cos(n)},
+            "tan":     {compute: n => Math.tan(n)},
+            "arcsin":  {
+                compute: n => Math.asin(n),
+                constraints: [
+                    {
+                        if: n => (n < -1) || (n > 1),
+                        err: () => error(`At property "${argOption.name}": arcsin is only defined on [-1, 1]`)
+                    }
+                ]
+            },
+            "arccos":  {
+                compute: n => Math.acos(n),
+                constraints: [
+                    {
+                        if: n => (n < -1) || (n > 1),
+                        err: () => error(`At property "${argOption.name}": arccos is only defined on [-1, 1]`)
+                    }
+                ]
+            },
+            "arctan":  {compute: n => Math.atan(n)},
+            "sinh":    {compute: n => Math.sinh(n)},
+            "cosh":    {compute: n => Math.cosh(n)},
+            "tanh":    {compute: n => Math.tanh(n)},
+            "arcsinh": {compute: n => Math.asinh(n)},
+            "arccosh": {
+                compute: n => Math.acosh(n),
+                constraints: [
+                    {
+                        if: n => (n < 1),
+                        err: () => error(`At property "${argOption.name}": arccosh is only defined on [1, inf)`)
+                    }
+                ]
+            },
+            "arctanh": {
+                compute: n => Math.atanh(n),
+                constraints: [
+                    {
+                        if: n => (n <= -1) || (n >= 1),
+                        err: () => error(`At property "${argOption.name}": arctanh is only defined on (-1, 1)`)
+                    }
+                ]
+            },
+            "": {compute: n => n}
+        }
+
+        for (const [functionStr, func] of Object.entries(allowedFunctions)) {
+            if (numberString.startsWith(`${functionStr}(`)) {
+                // if we find that we closing bracket doesn't belong to opening bracket, abort
+                const numberPart = numberString.slice(functionStr.length + 1, -1)
+                let openCount = 0
+                let abortThisExecution = false
+                for (const char of numberPart) {
+                    if (char == "(") {
+                        openCount++
+                    } else if (char == ")") {
+                        openCount--
+                    }
+                    if (openCount < 0) {
+                        abortThisExecution = true
+                        break
+                    }
+                }
+                if (abortThisExecution) {
+                    continue
+                }
+
+                const value = this._parseNumber(numberPart, argOption, error)
+                if (value == ParserError) return value
+                for (const constraint of (func.constraints ?? [])) {
+                    if (constraint.if(value)) {
+                        return constraint.err()
+                    }
+                }
+                return func.compute(value)
+            }
+        }
+
+        if (intRegex.test(numberString)) {
+            return parseInt(numberString)
+        } else if (hexIntRegex.test(numberString)) {
+            return parseInt(numberString.slice(2), 16)
+        } else if (binIntRegex.test(numberString)) {
+            return parseInt(numberString.slice(2), 2)
+        }
+
+        if (decimalRegex.test(numberString)) {
+            return parseFloat(numberString)
+        } else if (binDecimalRegex.test(numberString)) {
+            const [before, after] = numberString.split(".")
+            const beforeVal = parseInt(before.slice(2), 2)
+            const afterVal = parseInt(after, 2)
+            return beforeVal + afterVal / (2 ** after.length)
+        } else if (hexDecimalRegex.test(numberString)) {
+            const [before, after] = numberString.split(".")
+            const beforeVal = parseInt(before.slice(2), 16)
+            const afterVal = parseInt(after, 16)
+            return beforeVal + afterVal / (16 ** after.length)
+        }
+
+        if (scientificRegex.test(numberString)) {
+            let [decimal, exponent] = numberString.split("e")
+            decimal = parseFloat(decimal)
+            exponent = parseInt(exponent)
+            return decimal * (10 ** exponent)
+        }
+
+        // in list of anti-precedence
+        const operators = [
+            ["+", (a, b) => a + b],
+            ["-", (a, b) => a - b],
+            ["*", (a, b) => a * b],
+            ["/", (a, b) => a / b],
+            ["^", (a, b) => a ** b],
+        ]
+
+        for (const [operatorName, operatorFunc] of operators) {
+            let currLevel = 0
+            let foundSplitIndex = null
+            for (let i = 0; i < numberString.length; i++) {
+                const char = numberString[i]
+                if (char == "(") currLevel++
+                if (char == ")") currLevel--
+                if (currLevel < 0) {
+                    return error(`At property "${argOption.name}": Unbalanced parentheses`)
+                }
+                if (char == operatorName && currLevel == 0) {
+                    foundSplitIndex = i
+                }
+            }
+
+            if (currLevel != 0) {
+                return error(`At property "${argOption.name}": Unbalanced parentheses`)
+            }
+
+            if (foundSplitIndex === null) {
+                continue
+            }
+
+            // split into two parts only
+            const parts = [
+                numberString.slice(0, foundSplitIndex),
+                numberString.slice(foundSplitIndex + 1)
+            ]
+
+            for (let i = 0; i < 2; i++) {
+                parts[i] = this._parseNumber(parts[i], argOption, error)
+                if (parts[i] == ParserError) {
+                    return parts[i]
+                }
+            }
+
+            if (parts[1] == 0 && operatorName == "/") {
+                return error(`At property "${argOption.name}": Can't divide by zero`)
+            }
+
+            return operatorFunc(parts[0], parts[1])
+        }
+
+        return error(`At property "${argOption.name}": Invalid number`)
+    }
+
     static _parseArgumentValue(argOption, value, parsingError) {
         function addVal(value) {
             if (argOption.expanding && argOption.value) {
@@ -1024,50 +1407,69 @@ class TerminalParser {
             parsingError.message = msg
             parsingError.tokenIndex = argOption.tokenIndex
             parsingError.tokenSpan = argOption.tokenSpan
+            return ParserError
         }
 
         if (argOption.type == "number") {
-            let num = parseFloat(value)
+            let num = this._parseNumber(value, argOption, error)
+            if (num == ParserError) {
+                return num
+            }
+
+            if (!Number.isFinite(num)) {
+                return error(`At property "${argOption.name}": Infinity isn't a number`)
+            } else if (Number.isNaN(num)) {
+                return error(`At property "${argOption.name}": Not a number`)
+            }
+
             if (argOption.numtype == "integer") {
                 if (!Number.isInteger(num)) {
-                    error(`At property "${argOption.name}": Expected an integer`)
+                    return error(`At property "${argOption.name}": Expected an integer`)
                 }
             }
 
-            if (isNaN(num) || isNaN(value)) {
-                error(`At property "${argOption.name}": Expected a number`)
-            }
-
             if (argOption.min != null && num < argOption.min) {
-                error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
+                return error(`At property "${argOption.name}": Number must be at least ${argOption.min}`)
             }
 
             if (argOption.max != null && num > argOption.max) {
-                error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
+                return error(`At property "${argOption.name}": Number must be at most ${argOption.max}`)
             }
 
             addVal(num)
         } else if (argOption.type == "boolean") {
-            if (value != "true" && value != "false" && value !== true && value !== false) {
-                error(`At property "${argOption.name}": Expected a boolean`)
+            const trueForms = ["true", true, "1"]
+            const falseForms = ["false", false, "0"]
+            if (!trueForms.concat(falseForms).includes(value)) {
+                return error(`At property "${argOption.name}": Expected a boolean`)
             }
-            addVal(value == "true" || value === true)
+            addVal(trueForms.includes(value))
+        } else if (argOption.type == "bigint") {
+            try {
+                addVal(BigInt(value))
+            } catch {
+                return error(`At property "${argOption.name}": Expected an integer`)
+            }
         } else if (argOption.type == "file") {
             if (!terminal.fileExists(value)) {
-                error(`File not found: "${value}"`)
+                return error(`File not found: "${value}"`)
             }
             addVal(value)
         } else if (argOption.type == "command") {
             if (!terminal.commandExists(value)) {
-                error(`Command not found: "${value}"`)
+                return error(`Command not found: "${value}"`)
+            }
+            addVal(value)
+        } else if (argOption.type == "enum") {
+            if (!argOption.enumOptions.includes(value)) {
+                return error(`Invalid Option: "${value}"`)
             }
             addVal(value)
         } else if (argOption.type == "matrix" || argOption.type == "square-matrix") {
             // please consider me a regex god for this:
             // (matches any valid matrices)
             if (!/^\[((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*(\/((-?[0-9]+(\.[0-9]+)?)|[a-z])(\,((-?[0-9]+(\.[0-9]+)?)|[a-z]))*)*\]$/.test(value)) {
-                error(`Invalid matrix. Use syntax: [1,2/a,4]`)
-                return
+                return error(`Invalid matrix. Use syntax: [1,2/a,4]`)
             }
 
             let str = value.slice(1, value.length - 1)
@@ -1082,12 +1484,12 @@ class TerminalParser {
             })
 
             if (rows.some(row => row.length != rows[0].length)) {
-                error(`Matrix must have equal sized rows.`)
+                return error(`Matrix must have equal sized rows.`)
             }
 
             if (argOption.type == "square-matrix") {
                 if (rows.length != rows[0].length) {
-                    error(`Matrix must be square.`)
+                    return error(`Matrix must be square.`)
                 }
             }
 
@@ -1123,6 +1525,10 @@ class TerminalParser {
         if (args.toString() == "[object Object]")
             Object.entries(args).map(([arg, description], i) => {
                 argOptions[i].description = description
+                if (argOptions[i].type == "enum") {
+                    const enumOptionStr = argOptions[i].enumOptions.join(" | ")
+                    argOptions[i].description = argOptions[i].description.replaceAll("<enum>", enumOptionStr)
+                }
             })
         
         const ignoreIndeces = this.parseNamedArgs(tempTokens, argOptions, parsingError)
@@ -1170,12 +1576,13 @@ class TerminalParser {
             }
         }
 
-        const requiredCount = argOptions.filter(arg => !arg.optional).length
-        if (tempTokens.length - 1 < requiredCount) {
-            const missingArgOption = argOptions[Math.max(tempTokens.length - 1, 0)]
-            parsingError.message = `argument "${missingArgOption.name}" (${missingArgOption.type}) is missing`
-            parsingError.tokenIndex = 99999
-            return {argOptions, parsingError}
+        // check for missing required arguments
+        for (let arg of argOptions) {
+            if (!arg.optional && !arg.isManuallySetValue) {
+                parsingError.message = `argument "${arg.name}" (${arg.typeName}) is missing`
+                parsingError.tokenIndex = 99999
+                return {argOptions, parsingError}
+            }
         }
 
         return {argOptions, parsingError}
@@ -1306,12 +1713,14 @@ class Command {
             this.terminal.expectingFinishCommand = true
 
         try {
-            let argObject = this.processArgs(tokens, rawArgs)
+            const passingArguments = processArgs
+                ? [this.processArgs(tokens, rawArgs)]
+                : [rawArgs, tokens]
 
             if (this.callback.constructor.name === 'AsyncFunction') {
-                await this.callback(processArgs ? argObject : rawArgs)
+                await this.callback(...passingArguments)
             } else {
-                this.callback(processArgs ? argObject : rawArgs)
+                this.callback(...passingArguments)
             }
 
             if (callFinishFunc)
@@ -1322,8 +1731,10 @@ class Command {
                 this.terminal.printError(error.message, error.name)
                 console.error(error)
             }
-            if (callFinishFunc)
+
+            if (callFinishFunc) {
                 this.terminal.finishCommand()
+            }
 
             // if the sleep command was called a max number
             // of times, it's considered to be a success
@@ -1334,6 +1745,24 @@ class Command {
 }
 
 const UtilityFunctions = {
+
+    downloadFile(file) {
+        if (file.isDirectory) {
+            throw new Error("Cannot download directories")
+        }
+
+        let element = document.createElement('a')
+        if (file.type == FileType.DATA_URL)
+            var dataURL = file.content
+        else
+            var dataURL = 'data:text/plain;charset=utf-8,' + encodeURIComponent(file.content)
+        element.setAttribute('href', dataURL)
+        element.setAttribute('download', file.name)
+        element.style.display = 'none'
+        document.body.appendChild(element)
+        element.click()
+        document.body.removeChild(element)
+    },
 
     mulberry32(a) {
         return function() {
@@ -1392,15 +1821,14 @@ const UtilityFunctions = {
         return string.toString().repeat(count)
     },
 
-    Color: Color,
+    Color,
 
-    FileType: {
-        FOLDER: "directory",
-        READABLE: "text",
-        PROGRAM: "executable",
-        MELODY: "melody",
-        DATA_URL: "dataurl"
-    },
+    FileType,
+    FilePath,
+    TerminalFile,
+    DataURLFile,
+    DirectoryFile,
+    PlainTextFile,
 
     async playFrequency(f, ms, volume=0.5, destination=null, returnSleep=true) {
         if (!terminal.audioContext) {
@@ -1441,11 +1869,6 @@ const UtilityFunctions = {
     },
 
     TerminalParser: TerminalParser,
-    File: File,
-    TextFile: TextFile,
-    Directory: Directory,
-    ExecutableFile: ExecutableFile,
-    DataURLFile: DataURLFile,
     Command: Command,
     IntendedError: IntendedError,
 
@@ -1453,6 +1876,18 @@ const UtilityFunctions = {
         if (terminal.inTestMode) return
         terminal.data.addAlias(alias, command)
         terminal.log(`Added alias "${alias}" for command "${command}"`)
+    },
+
+    shuffle(array) {
+        // shuffles the array in-place and returns it using
+        // the fischer-yates shuffle algorithm
+        let cI = array.length
+        while (cI != 0) {
+            const rI = Math.floor(Math.random() * cI)
+            cI--
+            [array[cI], array[rI]] = [array[rI], array[cI]]
+        }
+        return array
     }
 
 }
@@ -1623,9 +2058,16 @@ class Terminal {
     }
 
     removeCurrInput() {
-        if (this.currInputContainer)
+        if (this.currInputContainer) {
             this.currInputContainer.remove()
+        }
+
+        if (this.currCorrectnessOutput) {
+            this.currCorrectnessOutput.remove()
+        }
+
         this.currInputContainer = null
+        this.currCorrectnessOutput = null
         this.currInputElement = null
         this.currSuggestionElement = null
     }
@@ -1644,7 +2086,6 @@ class Terminal {
 
     getFile(path, fileType=undefined) {
         // throws error if file not found
-        if (path == ".") path = ""
         let file = this.fileSystem.getFile(path)
         if (file == null) {
             throw new Error(`File "${path}" not found`)
@@ -1661,23 +2102,22 @@ class Terminal {
             throw new Error("File already exists")
         let newFile = new (fileType)(data)
         if (!terminal.inTestMode) {
-            terminal.currFolder.content[fileName] = newFile
+            terminal.currDirectory.content[fileName] = newFile
             await terminal.fileSystem.reload()
         }
         return newFile
     }
 
     fileExists(path) {
-        if (path == ".") path = ""
-        return this.fileSystem.getFile(path) != null
+        return !!this.fileSystem.getFile(path)
     }
 
     updatePath() {
-        // legacy
+        this.data.path = this.fileSystem.path.items
     }
 
     isValidFileName(name) {
-        return name.match(/^[a-zA-Z0-9_\-\.]{1,30}$/)
+        return name.match(/^[a-zA-Z0-9_\-\.]{1,100}$/)
     }
 
     async copy(text, {printMessage=false}={}) {
@@ -1754,8 +2194,8 @@ class Terminal {
     getAutoCompleteOptions(text) {
         let lastWord = text.split(/\s/g).pop()
         const allRelativeFiles = this.fileSystem.allFiles()
-            .map(file => file.path)
-            .concat(this.fileSystem.currFolder.relativeChildPaths)
+            .map(file => file.path.toString())
+            .concat(this.fileSystem.currDirectory.allChildren.map(c => c.path.toString().slice(this.fileSystem.pathStr.length)))
 
         const configMatches = ms => ms.filter(f => f.startsWith(lastWord))
             .sort().sort((a, b) => a.length - b.length)
@@ -1791,15 +2231,11 @@ class Terminal {
         }
 
         let fileMatches = configMatches(addApostrophes(allRelativeFiles))
-        let allMatches = configMatches(commandMatches.concat(fileMatches))
 
-        const {argOptions, parsingError} = this.parse(text)
+        const {argOptions} = this.parse(text)
 
         let currArgOption = {}
-        if (text.slice(-1) == "-") {
-            return exportMatches(argOptions.filter(o => !o.isManuallySetValue)
-                .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`))
-        } else if (text.slice(-1) == " ") {
+        if (text.slice(-1) == " ") {
             const nextArgOption = argOptions.filter(o => !o.isManuallySetValue)[0]
             if (nextArgOption !== undefined) {
                 currArgOption = nextArgOption
@@ -1811,8 +2247,8 @@ class Terminal {
         // if an argOption is currently being edited
         if (currArgOption.name) {
             if (currArgOption.type == "boolean") {
-                let numTicks = currArgOption.name.length > 1 ? 2 : 1
-                return exportMatches([`${"-".repeat(numTicks)}${currArgOption.name}`])
+                return exportMatches(configMatches(argOptions.filter(o => !o.isManuallySetValue)
+                    .map(o => o.name.length > 1 ? `--${o.name}` : `-${o.name}`)))
             }
 
             if (currArgOption.type == "file") {
@@ -1821,6 +2257,10 @@ class Terminal {
 
             if (currArgOption.type == "command") {
                 return exportMatches(commandMatches)
+            }
+
+            if (currArgOption.type == "enum") {
+                return exportMatches(configMatches(currArgOption.enumOptions))
             }
         }
 
@@ -1836,8 +2276,7 @@ class Terminal {
         })
         text = text.replaceAll(/!!/g, () => {
             return terminal.data.history[terminal.data.history.length - 1] ?? ""
-        }) 
-        text = text.trim()
+        })
         for (let [alias, command] of Object.entries(terminal.data.aliases)) {
             text = text.replaceAll(RegExp(`^${alias}`, "g"), command)
         }
@@ -1996,7 +2435,7 @@ class Terminal {
             if (message == "") return {text: ""}
 
             const inputOffset = this.fileSystem.pathStr.length
-            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(length - 1) + "\n"
+            let out = " ".repeat(inputOffset + startIndex) + "┬" + "─".repeat(Math.max(length - 1, 0)) + "\n"
             out += " ".repeat(inputOffset + startIndex) + "|\n"
             
             let lines = message.split("\n").filter(l => !!l)
@@ -2073,11 +2512,21 @@ class Terminal {
             } else {
                 out += `--`
             }
-            out += `${argOption.name} (`
+            out += `${argOption.name}`
+
+            out += " ("
             if (argOption.optional) {
                 out += "optional, "
             }
-            out += `${argOption.typeName}) ${argOption.description}`
+            out += `${argOption.typeName}) `
+            
+            if (argOption.type == "enum") {
+                const optionStr = argOption.enumOptions.join(" | ")
+                return `${out}: ${optionStr.length > 30 ? (optionStr.slice(0, 40) + "...") : optionStr}`
+            }
+
+            out += argOption.description
+
             return out
         }
 
@@ -2165,7 +2614,8 @@ class Terminal {
         inputCleaning=!this.commandIsExecuting,
         inputSuggestions=!this.commandIsExecuting,
         mobileLayout=undefined,
-        printInputAfter=true
+        printInputAfter=true,
+        makeClickCopy=true
     }={}) {
         if (this.inTestMode) {
             this.tempActivityCallCount++
@@ -2219,10 +2669,11 @@ class Terminal {
         }
         inputContainer.style.width = `${inputMinWidth()}px`
 
-        let correctnessOutput = null
+        this.currCorrectnessOutput = null
+        let thisIsActivePrompt = true
 
         if (affectCorrectness) {
-            correctnessOutput = terminal.print("", Color.ERROR, {forceElement: true})
+            this.currCorrectnessOutput = this.print("", Color.ERROR, {forceElement: true})
         }
 
         this.scroll("smooth", false)
@@ -2231,42 +2682,81 @@ class Terminal {
         this.currInputContainer = inputContainer
         this.focusInput({options: {preventScroll: true}})
 
+        function getInputValueSanetized() {
+            // IOS produces special characters instead of ascii ("-", "'", etc)
+            // ~ Since we don't want em, we replace em ~
+            return inputElement.value
+                .replaceAll(/[\u2018\u2019\u201B\u2032\u2035]/g, "'")
+                .replaceAll(/[\u201C\u201D\u201F\u2033\u2036]/g, '"')
+                .replaceAll(/[\u2013\u2014]/g, "-")
+        }
+
         return new Promise(resolve => {
             let inputValue = ""
             let keyListeners = {}
 
             keyListeners["Enter"] = event => {
-                let text = inputElement.value
-                if (printInputAfter)
-                    this.printLine(password ? "•".repeat(text.length) : text)
+                let text = getInputValueSanetized()
+
+                const printText = password ? "•".repeat(text.length) : text
+                if (printInputAfter) {
+                    if (makeClickCopy) {
+                        const outElement = this.printLine(printText, undefined, {forceElement: true})
+                        outElement.addEventListener("click", event => {
+                            if (this.currInputElement) {
+                                this.currInputElement.value += printText
+                                event.preventDefault()
+                            }
+                        })
+                        outElement.style.cursor = "pointer"
+                    } else {
+                        this.printLine(printText)
+                    }
+                }
+
                 if (inputCleaning) {
-                    text = this.sanetizeInput(inputElement.value)
+                    text = this.sanetizeInput(getInputValueSanetized())
                 }
-                if (text !== lastItemOfHistory() && text.length > 0)
+
+                if (text !== lastItemOfHistory() && text.length > 0) {
                     addToHistory(text)
-                this.removeCurrInput()
-                if (correctnessOutput) {
-                    correctnessOutput.remove()
                 }
+
+                this.removeCurrInput()
+
+                if (this.currCorrectnessOutput) {
+                    this.currCorrectnessOutput.remove()
+                }
+
                 resolve(text)
+                thisIsActivePrompt = true
             }
 
             let tabIndex = 0
             let suggestions = []
-            keyListeners["Tab"] = event => {
-                event.preventDefault()
+
+            const completeSuggestion = () => {
                 if (!inputSuggestions) {
                     inputElement.value += "    "
                     inputElement.oninput()
                     return
                 }
-                if (suggestions.length == 0)
-                    suggestions = this.getAutoCompleteOptions(inputValue)
                 if (suggestions.length > 0) {
-                    inputElement.value = suggestions[tabIndex]
+                    inputElement.value = suggestions[tabIndex % suggestions.length]
+                    suggestionElement.textContent = ""
+                    
                     tabIndex = (tabIndex + 1) % suggestions.length
                     inputValue = ""
                 }
+            }
+
+            keyListeners["Tab"] = event => {
+                event.preventDefault()
+                completeSuggestion()
+            }
+
+            suggestionElement.onclick = () => {
+                completeSuggestion()
                 inputElement.oninput()
             }
 
@@ -2295,6 +2785,12 @@ class Terminal {
             }
 
             inputElement.oninput = async event => {
+                if (!thisIsActivePrompt) {
+                    return
+                }
+
+                suggestions = this.getAutoCompleteOptions(getInputValueSanetized())
+
                 if (!inputSuggestions) {
                     suggestionElement.textContent = ""
                     return
@@ -2319,50 +2815,64 @@ class Terminal {
                 }
 
                 if (affectCorrectness) {
-                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
-                    if (correctnessOutput) {
-                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                    if (this.currCorrectnessOutput) {
+                        this.updateCorrectnessText(getInputValueSanetized(), this.currCorrectnessOutput, inputElement)
                     }
                 }
+
+                let textLength = Math.max(inputElement.value.length, suggestionElement.textContent.length)
+                // (textLength + 1) to leave room for the next character
+                let inputWidth = (textLength + 1) * this.charWidth
+                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
             }
 
             inputElement.onselectionchange = () => {
+                if (!thisIsActivePrompt) {
+                    return
+                }
+
                 if (affectCorrectness) {
-                    let cleanedInput = this.sanetizeInput(inputElement.value)
+                    let cleanedInput = this.sanetizeInput(getInputValueSanetized())
                     this.updateInputCorrectness(cleanedInput)
-                    if (correctnessOutput) {
-                        this.updateCorrectnessText(inputElement.value, correctnessOutput, inputElement)
+                    if (this.currCorrectnessOutput) {
+                        this.updateCorrectnessText(getInputValueSanetized(), this.currCorrectnessOutput, inputElement)
                     }
                 }
             }
 
             inputElement.onkeydown = async (event, addToVal=true) => {
-                if (addToVal) {
-                    if (event.key.length == 1) // a, b, c, " "
-                        inputValue = inputElement.value + event.key
-                    else if (event.key == "Backspace")
-                        inputValue = inputElement.value.slice(0, -1)
-                    else // Tab, Enter, etc.
-                        inputValue = inputElement.value
+                if (!thisIsActivePrompt) {
+                    return
                 }
 
-                if (keyListeners[event.key])
-                    keyListeners[event.key](event)
-                else {
+                if (addToVal) {
+                    if (event.key.length == 1) // a, b, c, " "
+                        inputValue = getInputValueSanetized() + event.key
+                    else if (event.key == "Backspace")
+                        inputValue = getInputValueSanetized().slice(0, -1)
+                    else // Tab, Enter, etc.
+                        inputValue = getInputValueSanetized()
+                }
+
+                if (keyListeners[event.key]) {
+                    if (thisIsActivePrompt) {
+                        keyListeners[event.key](event)
+                    }
+                } else {
                     tabIndex = 0
-                    suggestions = this.getAutoCompleteOptions(inputValue)
                 }
 
                 if (event.key == "c" && event.ctrlKey) {
+                    if (this.currCorrectnessOutput) {
+                        this.currCorrectnessOutput.remove()
+                    }
+
                     this.removeCurrInput()
                     this._interruptSTRGC()
+                    thisIsActivePrompt = false
                 }
-
-                let textLength = inputElement.value.length
-                // (textLength + 1) to leave room for the next character
-                let inputWidth = (textLength + 1) * this.charWidth
-                inputContainer.style.width = `max(${inputMinWidth()}px, ${inputWidth}px)`
 
                 // call async to let selection be updated before event is fired
                 setTimeout(inputElement.onselectionchange, 0)
@@ -2382,7 +2892,7 @@ class Terminal {
                 this.mobileKeyboard.show()
                 this.mobileKeyboard.oninput = event => {
                     if (event.key == "Backspace")
-                        inputElement.value = inputElement.value.slice(0, -1)
+                        inputElement.value = getInputValueSanetized().slice(0, -1)
 
                     if (!event.isFunctionKey) {
                         inputElement.value += event.keyValue
@@ -2434,7 +2944,12 @@ class Terminal {
         }
     }
 
-    print(text, color=undefined, {forceElement=false, element="span", fontStyle=undefined, background=undefined, addToCache=true}={}) {
+    print(text, color=undefined, {
+        forceElement=false, element="span", fontStyle=undefined,
+        background=undefined, addToCache=true, outputNode=undefined
+    }={}) {
+        outputNode ??= this.parentNode
+
         if (this.outputChannel == OutputChannel.CACHE_AND_USER && addToCache) {
             this.writeToOutputCache(text)
         }
@@ -2444,7 +2959,7 @@ class Terminal {
         if (color === undefined && !forceElement && fontStyle === undefined && background === undefined) {
             let textNode = document.createTextNode(text)
             if (!this.inTestMode)
-                this.parentNode.appendChild(textNode)
+                outputNode.appendChild(textNode)
             output = textNode
         } else {
             let span = document.createElement(element)
@@ -2456,7 +2971,7 @@ class Terminal {
             }
 
             if (!this.inTestMode) {
-                this.parentNode.appendChild(span)
+                outputNode.appendChild(span)
             }
             output = span
         }
@@ -2467,11 +2982,16 @@ class Terminal {
         return this.printLine(text, color, {...opts, fontStyle: "italic"})
     }
 
-    printImg(src, altText="") {
+    printImg(src, {
+        altText = "",
+        outputNode = undefined
+    }={}) {
+        outputNode ??= this.parentNode
+
         if (this.inTestMode)
             return
 
-        let img = this.parentNode.appendChild(document.createElement("img"))
+        let img = outputNode.appendChild(document.createElement("img"))
         img.src = src
         img.alt = altText
         img.classList.add("terminal-img")
@@ -2494,7 +3014,7 @@ class Terminal {
         }
     }
 
-    printTable(inRows, headerRow=null) {
+    printTable(inRows, headerRow=null, opts) {
         let rows = inRows.map(r => r.map(c => (c == undefined) ? " " : c))
         if (headerRow != null) rows.unshift(headerRow)
         const column = i => rows.map(row => row[i])
@@ -2510,7 +3030,7 @@ class Terminal {
                     line += `+-${item}-`
                 }
                 line += "+"
-                this.printLine(line)
+                this.printLine(line, opts)
             }
             if (rowIndex == rows.length) break
             let line = ""
@@ -2522,7 +3042,7 @@ class Terminal {
                 line += `| ${item} `
             }
             line += "|  "
-            this.printLine(line)
+            this.printLine(line, opts)
         }
     }
 
@@ -2543,9 +3063,9 @@ class Terminal {
         return this.print(text + "\n", color, opts)
     }
 
-    printError(text, name="Error") {
-        this.print(name, new Color(255, 0, 0))
-        this.printLine(": " + text)
+    printError(text, name="Error", opts) {
+        this.print(name, new Color(255, 0, 0), opts)
+        this.printLine(": " + text, undefined, opts)
         this.log(text, {type: "error"})
     }
 
@@ -2558,8 +3078,16 @@ class Terminal {
             this.printLine()
     }
 
-    printCommand(commandText, command, color, endLine=true) {
-        let element = this.print(commandText, color, {forceElement: true})
+    printClickable(text, callback, color, opts) {
+        let element = this.print(text, color, {forceElement: true, ...opts})
+        element.onclick = callback
+        element.classList.add("clickable")
+        if (color) element.style.color = color.string.hex
+        return element
+    }
+
+    printCommand(commandText, command, color, endLine=true, opts) {
+        let element = this.print(commandText, color, {forceElement: true, ...opts})
         element.onclick = this.makeInputFunc(command ?? commandText)
         element.classList.add("clickable")
         if (color) element.style.color = color.string.hex
@@ -2697,15 +3225,15 @@ class Terminal {
             })
     }
 
-    get currFolder() {
-        return this.fileSystem.currFolder
+    get currDirectory() {
+        return this.fileSystem.currDirectory
     }
 
     get lastPrintedChar() {
         return this.parentNode.textContent[this.parentNode.textContent.length - 1]
     }
 
-    get rootFolder() {
+    get rootDirectory() {
         return this.fileSystem.root
     }
 
@@ -2821,6 +3349,7 @@ class Terminal {
         this.tempCommandInputHistory = []
 
         this.fileSystem.save()
+        this.updatePath()
 
         this.standardInputPrompt()
     }
@@ -2864,23 +3393,26 @@ class Terminal {
             .replace("MSG", msg)
 
 
-        let lines = terminal.logFile.content.split("\n")
+        let lines = terminal.logFile.text.split("\n")
                     .filter(line => line.length > 0)
         while (lines.length > terminal.logFileMaxLines - 1) {
             lines.shift()
         }
+
         lines.push(logText)
-        terminal.logFile.content = lines.join("\n")
+        terminal.logFile.text = lines.join("\n")
+    }
+
+    get logFilePath() {
+        return "root/" + this.logFileName
     }
 
     get logFile() {
-        if (this.fileExists(this.logFileName)) {
-            return this.getFile("root/" + this.logFileName)
+        if (this.fileExists(this.logFilePath)) {
+            return this.getFile(this.logFilePath)
         } else {
-            let logFile = new TextFile("")
-                            .setName(this.logFileName)
-            this.rootFolder.addFile(logFile)
-            this.fileSystem.reloadSync()
+            let logFile = new PlainTextFile().setName(this.logFileName)
+            this.rootDirectory.addChild(logFile)
             return logFile
         }
     }
@@ -2897,14 +3429,14 @@ class Terminal {
     makeInputFunc(text) {
         return async () => {
             if (this.expectingFinishCommand) {
-                this.interrupt()
-                await new Promise(resolve => setTimeout(resolve, 500))
+                return
             }
 
             if (this.currInputElement) {
                 this.removeCurrInput()
             }
 
+            this.expectingFinishCommand = true
             await this.animatePrint(text, 5)
             this.data.addToHistory(text)
             this.input(text)
@@ -2914,6 +3446,7 @@ class Terminal {
     async init({
         runInput=true,
         runStartupCommands=true,
+        loadPath=true,
         loadSidePanel=true,
         ignoreMobile=false
     }={}) {
@@ -2931,6 +3464,16 @@ class Terminal {
             if (runStartupCommands) {
                 for (let startupCommand of this.data.startupCommands) {
                     await this.input(startupCommand, true)
+                }
+            }
+
+            if (loadPath) {
+                // load path from localstorage
+                let filePath = FilePath.from(this.data.path)
+                if (this.fileExists(filePath)) {
+                    this.fileSystem.currDirectory = this.getFile(filePath)
+                } else {
+                    this.updatePath()
                 }
             }
 
@@ -2994,7 +3537,7 @@ class Terminal {
         }
     }
 
-    currFontSizeIndex = 8
+    currFontSizeIndex = 6
 
     changeTextSize(increment) {
         const options = [3, 5, 7.5, 10, 12.5, 14, 15, 16, 17, 18, 19, 20, 22, 25, 30, 35, 40, 45, 50, 60, 80, 100]
@@ -3199,61 +3742,6 @@ const about_txt_content = `<noel-friedrich>
 
 </noel-friedrich>`
 
-const projects_readme_content = `Welcome to my projects Page!
-
-In this folder, there are some projects of mine. Most of
-them are websites. You can open a project using the 'run'
-command or by simply executing the .url file inside the 
-projects directory: './<project_name>.url'
-
-I also have a Github. You can open it by executing the
-'github.url' file inside this directory.
-`
-
-const perilious_path_txt = `Perilious Path is a simple html game.
-You are shown a grid of bombs for 3 seconds,
-then you must find a path between two points,
-without hitting a bomb.
-
-The game trains your memory skills and is also
-available to play on mobile devices!`
-
-const teleasy_txt = `Creating Telegram Bots Made Simple with Teleasy!
-It's a python library that makes it easy to create
-Telegram bots. It enables asynchronous handling of
-updates and provides a simple interface to create
-commands and queries.`
-
-const anticookiebox_txt = `This browser extension will delete an 'accept cookie'
-section of a page, by simply removing it from your screen
-This plugin behaves similar to an ad blocker, but for 'Accept Cookies' Boxes. The plugin will
-automatically scan the pages you load and remove the boxes, without accepting any Cookie use!
-
-How does it work?
-Behind the scenes, Lucy is your internet-immune system. She's a detective and
-just really good at finding 'Accept Cookies' popups. She loves eating them :)
-
-Just keep surfing the web as usual, but without wasting precious time clicking away
-useless cookie boxes and giving random web-services access to your personal data.
-
-Get Lucy to be part of your next Web-Journey by installing AntiCookieBox!`
-
-const coville_txt = `Coville is a City-Simulator that allows you to simulate
-a virtual city (coville) and a virtual virus (covid).
-
-It's also my submission to the german 'Jugend Forscht' competetion.
-
-(the website is in german)`
-
-const compli_txt = `Compli, An Android to remind people to give compliments.
-
-The App contains a timer telling you how long it's been since you've given
-someone a compliment. If you give a compliment to someone, you can reset this
-timer. Once this timer reaches a configurable threshold, you get a reminding
-notification to compliment someone.
-
-Download the App on the Google Play Store!`
-
 const contact_txt = `E-Mail: noel.friedrich@outlook.de`
 
 let passwords_json = `{
@@ -3277,65 +3765,19 @@ while (passwords_json.match(/FAKE_PASSWORD/)) {
     }())
 }
 
-const MELODIES_FOLDER = new Directory({}, {"<": "cd ..", "melody": "melody"})
-
-const melodies_readme_txt = `Welcome to the Melodies Folder!
-In this folder are some .melody files, which contain basic melodys.
-- to list all melody files, use 'ls'
-- to play a file, use 'play <filename>'
-- to make your own melody, use 'melody'
-- to download a melody as a .mp3, use 'exportmelody <filename>'`
-
-MELODIES_FOLDER.content["README.txt"] = new TextFile(melodies_readme_txt)
-
-terminal.fileSystem.root = new Directory({
-    "about.txt": new TextFile(about_txt_content),
-    "projects": new Directory({
-        "README.txt": new TextFile(projects_readme_content),
-        "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
-        "perilious-path": new Directory({
-            "about.txt": new TextFile(perilious_path_txt),
-            "perilious-path.url": new ExecutableFile("https://noel-friedrich.de/perilious-path")
-        }, {"<": "cd ..", "open": "run perilious-path.url"}),
-        "anticookiebox": new Directory({
-            "about.txt": new TextFile(anticookiebox_txt),
-            "anticookiebox-github.url": new ExecutableFile("https://github.com/noel-friedrich/AntiCookieBox"),
-            "anticookiebox.url": new ExecutableFile("https://noel-friedrich.de/anticookiebox")
-        }, {"<": "cd ..", "install": "run anticookiebox.url", "github": "run anticookiebox-github.url"}),
-        "coville": new Directory({
-            "about.txt": new TextFile(coville_txt),
-            "coville-github.url": new ExecutableFile("https://github.com/noel-friedrich/coville"),
-            "coville.url": new ExecutableFile("https://noel-friedrich.de/coville")
-        }, {"<": "cd ..", "open": "run coville.url", "github": "run coville-github.url"}),
-        "teleasy": new Directory({
-            "about.txt": new TextFile(teleasy_txt),
-            "teleasy-github.url": new ExecutableFile("https://github.com/noel-friedrich/teleasy")
-        }, {"<": "cd ..", "github": "run teleasy-github.url"}),
-        "compli": new Directory({
-            "about.txt": new TextFile(compli_txt),
-            "compli.url": new ExecutableFile("https://github.com/noel-friedrich/compli")
-        }, {"<": "cd ..", "open": "run compli.url"}),
-    }, {
-        "<": "cd ..",
-        "ppath": ["cd perilious-path", "cat about.txt"],
-        "coville": ["cd coville", "cat about.txt"],
-        "acb": ["cd anticookiebox", "cat about.txt"],
-        "teleasy": ["cd teleasy", "cat about.txt"],
-        "compli": ["cd compli", "cat about.txt"]
-    }),
-    "noel": new Directory({
-        "secret": new Directory({
-            "passwords.json": new TextFile(passwords_json)
-        }, {"<": "cd ..", "passwords": "cat passwords.json"}),
-        "email.txt": new TextFile(contact_txt),
-        "melodies": MELODIES_FOLDER
-    }, {"<": "cd ..", "secret": "cd secret/", "contact": "cat contact.txt", "melodies": ["cd melodies/", "cat README.txt"]}),
-    "github.url": new ExecutableFile("https://github.com/noel-friedrich/"),
-    "blog.url": new ExecutableFile("https://noel-friedrich.de/blobber")
-}, {"projects": ["cd projects/", "cat README.txt"], "about me": "cat about.txt", "help": "help", "my blog": "run blog.url"})
+terminal.fileSystem.root = new DirectoryFile([
+    new PlainTextFile(about_txt_content).setName("about.txt"),
+    new DirectoryFile([
+        new DirectoryFile([
+            new PlainTextFile(passwords_json).setName("passwords.json")
+        ]).setName("secret"),
+        new PlainTextFile(contact_txt).setName("email.txt"),
+    ]).setName("noel"),
+    new PlainTextFile("https://github.com/noel-friedrich/").setName("github.url"),
+])
 
 // ------------------- js/load-commands.js --------------------
-terminal.commandData = {"2048": {"description": "play a game of 2048", "isGame": true}, "4inarow": {"description": "play a game of Connect Four against the computer", "args": {"?depth:i:1~100": "The depth of the search tree"}, "standardVals": {"depth": 4}, "isGame": true}, "alias": {"description": "create a new alias for a given function", "args": {"?alias:s": "name of the new alias", "?*command:s": "name of the command to be aliased", "?s=show:b": "show all aliases", "?r=remove:s": "remove a given alias"}}, "ant-opt": {"description": "interactive solution to the travelling salesman problem using ant colony optimization", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "asteroids": {"description": "simulate a bunch of balls jumping around", "args": {"?f=fullscreen:b": "start in fullscreen mode", "?c=chaos:b": "start with chaos mode enabled"}, "isGame": true}, "avoida": {"description": "play a game of avoida", "isGame": true}, "background": {"description": "change the background color of the terminal", "args": ["color"]}, "base64": {"description": "encode/decode a message using base64", "args": {"*message": "the message to encode/decode", "?d=decode:b": "decode the message instead of encoding it", "?c=copy:b": "copy the result to the clipboard"}}, "bc": {"description": "start a bc (basic calculator) session"}, "bezier": {"description": "play with bezier curves"}, "bin": {"description": "convert a number to another base", "args": {"n": "number to convert", "?t=to-base:i:2~36": "base to convert to", "?f=from-base:i:2~36": "base to convert from"}, "standardVals": {"t": 2, "f": 10}}, "binomcdf": {"description": "calculate the binomial cumulative distribution function", "args": {"n:n:1~1000": "the number of trials", "p:n:0~1": "the probability of success", "lower:n:0~1000": "the lower bound", "upper:n:0~1000": "the upper bound"}}, "binompdf": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "p:n:0~1": "the probability of success", "k:n:0~100": "the number of successes"}}, "blocks": {"description": "3d raycasting test", "args": {"?fov:i:1~720": "Field of view in degrees", "?res=resolution:i:1~1000": "Resolution (width) in Pixels", "?x=roomX:i:5~100": "Room size in x direction", "?y=roomY:i:5~100": "Room size in y direction", "?z=roomZ:i:5~100": "Room size in z direction", "?v=viewDistance:i:1~9999": "View distance in blocks"}, "defaultValues": {"fov": 90, "resolution": 90, "roomX": 30, "roomY": 10, "roomZ": 10, "viewDistance": 13}}, "brainfuck": {"description": "parse given brainfuck code", "args": ["*code"]}, "cal": {"description": "print a calendar", "args": {"?month": "the month to print", "?year": "the year to print"}}, "cardoid": {"description": "start a cardoid generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cat": {"description": "print file content", "args": {"file:f": "file to display the content of"}}, "cd": {"helpVisible": true, "args": {"directory": "the directory relative to your current path"}, "description": "change current directory"}, "ceasar": {"description": "shift the letters of a text", "args": {"text": "the text to shift", "?s=shift:i:-26~26": "the shift value"}, "standardVals": {"shift": 1}}, "cheese": {"description": "take a foto with your webcam"}, "chess": {"description": "play a game of chess against the computer", "isGame": true}, "clear": {"description": "clear the terminal"}, "clock": {"description": "display a clock", "args": {"?m=millis:b": "display milliseconds"}}, "cmatrix": {"description": "show the matrix", "args": {"?nf=not-fullscreen:b": "make the window fullscreen"}}, "cmdnotfound": {"description": "display that a command was not found", "rawArgMode": true, "isSecret": true}, "code": {"description": "show the source code of a command", "args": {"command:c": "the command to show the source code of"}}, "collatz": {"description": "Calculate the Collatz Sequence (3x+1) for a given Number", "args": {"n:i": "the starting number of the sequence", "?m=max:i": "max number of steps to print"}, "standardVals": {"m": 999999999999}}, "color-test": {"description": "test the color capabilities of the terminal", "args": {"?size:i:1~999": "the size of the test image"}, "defaultValues": {"size": 60}}, "compliment": {"description": "get info about yourself"}, "contact": {"description": "Open contact form"}, "copy": {"description": "copy the file content to the clipboard", "rawArgMode": true}, "coville": {"description": "interactive virus simulation (in german)", "isSecret": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cowsay": {"description": "let the cow say something", "args": ["*message"]}, "cowthink": {"description": "let the cow say something", "args": ["*thought"]}, "cp": {"description": "copy a file", "args": ["file", "directory"]}, "crossp": {"description": "calculate the cross product of 2 3d vectors", "args": {"x1:n": "the x component of the first vector", "y1:n": "the y component of the first vector", "z1:n": "the z component of the first vector", "x2:n": "the x component of the second vector", "y2:n": "the y component of the second vector", "z2:n": "the z component of the second vector"}}, "curl": {"description": "download a file from the internet", "args": {"url:s": "the url to download the file from"}, "disableEqualsArgNotation": true}, "cw": {"description": "get the calendar week of a date", "args": {"?date": "the date to get the calendar week of"}, "standardVals": {"date": null}}, "debug": {"description": "activate the debug mode to enable untested new features", "isSecret": true}, "donut": {"description": "display a spinning donut"}, "download": {"description": "download a file", "args": {"file": "the file to download"}}, "draw": {"description": "start simple drawing app"}, "du": {"description": "display storage of current directory", "args": {"?folder": "folder to display storage of"}}, "easter-eggs": {"description": "open easter egg hunt", "args": {"?reset:b": "reset easter egg hunt"}}, "echo": {"description": "print a line of text", "rawArgMode": true}, "edit": {"description": "edit a file of the current directory", "args": {"?file": "the file to open"}}, "enigma": {"description": "Simulate an Enigma machine", "args": {"?c=config:b": "Enables config mode", "?t=translate:b": "Enables translation mode", "?r=reset:b": "Resets the machine", "?s=show:b": "Shows the current settings"}}, "error404": {"description": "Display a 404 error", "rawArgMode": true}, "eval": {"description": "evaluate javascript code", "rawArgMode": true}, "exit": {"description": "exit the terminal"}, "f": {"description": "calculate friendship score with a friend", "args": ["*friend"]}, "factor": {"description": "print the prime factors of a number", "args": {"?n:n": "number to factorize"}, "standardVals": {"n": null}}, "fakechat": {"description": "fake a whatsapp chat conversation", "args": {"?f=fast:b": "skip typing animations [fast mode]", "?o=offset:n:-100~100": "offset the chat by a procentage of the screen height", "?s=scale:n:0.1~5": "scale the chat by a factor", "?x=width:n:100~10000": "set the width of the screen in pixels", "?y=height:n:100~10000": "set the height of the screen in pixels"}, "standardVals": {"o": 0, "s": 1, "x": 720, "y": 1560}}, "fibo": {"description": "Prints the Fibonacci sequence", "args": {"?n:i:1~100": "The number of elements to print", "?p=phi:b": "calculate the golden ratio using the last two elements"}, "defaultValues": {"n": 10}}, "fizzbuzz": {"description": "print the fizzbuzz sequence", "args": {"?max:n:1~100000": "the maximum number to print"}, "standardVals": {"max": 15}}, "flaci-to-turing": {"description": "Converts a flaci.com JSON File of a turing machine to a turing machine file", "args": {"file": "file to convert", "?s=save:b": "save the converted file"}, "isSecret": true}, "flappy": {"description": "play a game of flappy turtlo", "args": {"?f=fullscreen:b": "fullscreen", "?s=silent:b": "silent mode"}, "isGame": true}, "font": {"description": "change the font of the terminal", "args": ["*font"]}, "foreground": {"description": "change the foreground color of the terminal", "args": {"color": "the color to change the foreground to"}}, "fraction": {"description": "find a fraction from a decimal number", "args": {"n=number:n": "number (decimal)", "?d=max-denominator:i:1~999999999": "maximum denominator"}, "defaultValues": {"d": 1000}}, "games": {"description": "shows the game menu"}, "get": {"description": "get a value from the server", "args": {"key": "the key to get the value of"}, "disableEqualsArgNotation": true}, "greed": {"description": "play a game of greed", "isGame": true, "args": {"?b": "play the bigger version"}}, "grep": {"description": "search for a pattern in a file", "args": {"pattern": "the pattern to search for", "file": "the file to search in", "?r:b": "search recursively", "?i:b": "ignore case", "?v:b": "invert match", "?x:b": "match whole lines"}}, "hangman": {"description": "play a game of hangman", "isGame": true}, "head": {"description": "display the first lines of a file", "args": ["file", "?l:i:1~1000"], "standardVals": {"l": 10}}, "helloworld": {"description": "display the hello-world text", "rawArgMode": true}, "help": {"description": "shows this help menu"}, "hi": {"description": "say hello to the terminal"}, "highscore-admin": {"description": "Login as Admin", "isSecret": true, "args": {"?d": "Delete password from local storage"}}, "highscore-remove": {"description": "Remove a highscore", "isSecret": true, "args": {"game": "the game to remove the highscore from", "?n": "only show highscores with this name", "?l:n:1~10000": "limit the number of highscores to show", "?uid": "the uid of the highscore to remove"}, "standardVals": {"n": null, "l": Infinity}}, "highscores": {"description": "Show global highscores for a game", "args": {"game:s": "the game to show the highscores for", "?n:s": "only show highscores with this name", "?l:i:1~10000": "limit the number of highscores to show", "?show-all:b": "show all highscores, not just the top ones"}, "standardVals": {"n": null, "l": 10}}, "history": {"description": "print the command history", "args": {"?l=limit:n:1~100000": "the maximum number of commands to print", "?show-full:b": "show the full command instead of the shortened version"}, "standardVals": {"l": 1000}}, "hr-draw": {"description": "turn drawings into bitmaps", "args": {"?x=width:i:1~100": "width (pixels)", "?y=height:i:1~100": "height (pixels)"}, "defaultValues": {"width": 5, "height": 5}, "isSecret": true}, "hr": {"description": "create a hr code", "args": {"message:s": "the message to encode", "?f=fontmode:s": "the font mode to use", "?fill:b": "fill empty spaces with random data"}, "defaultValues": {"fontmode": "5x5"}}, "href": {"description": "open a link in another tab", "args": {"?u=url:s": "url to open", "?f=file:s": "file to open"}}, "image-crop": {"description": "start image cropper program"}, "img2ascii": {"description": "Convert an image to ASCII art", "args": {"?w=width:i:1~500": "the width of the output image in characters"}, "defaultValues": {"width": 60}}, "isprime": {"description": "Check if a number is prime", "args": {"n:i": "The number to check"}}, "joke": {"description": "tell a joke"}, "kaprekar": {"description": "display the kaprekar steps of a number", "args": {"n:n:1~999999999": "the number to display the kaprekar steps of"}}, "keyboard": {"description": "Toggle mobile mode", "args": {"?m=mode:s": "status | on | off | auto"}, "defaultValues": {"m": "status"}}, "kill": {"description": "kill a process", "args": {"process": "the process to kill"}}, "labyrinth": {"description": "play a game of labyrinth", "isGame": true, "args": {"?fps:n:1~60": "the frames per second of the game"}, "standardVals": {"fps": 30}}, "letters": {"description": "prints the given text in ascii art", "args": {"*text": "the text to print"}, "example": "letters hello world"}, "live-quiz": {"description": "a simple quiz game that uses your camera as input for your answer", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "live-rocket": {"description": "a simple avoid game that you steer using camera input", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "logistic-map": {"description": "draw the logistic map", "args": {"?min:n:-2~4": "minimum R value", "?max:n:-2~4": "maximum R value", "?w:n:10~200": "width of display", "?h:n:5~100": "height of display"}, "standardVals": {"min": 0, "max": 4, "w": 80, "h": 20}}, "longjump": {"description": "Play a game of longjump", "isGame": true, "args": {"?f=fullscreen:b": "Play in fullscreen"}}, "lorem": {"description": "generate lorem ipsum text", "args": {"?l=length:i": "number of words to generate", "?c=copy:b": "copy to clipboard"}, "defaultValues": {"l": 100}}, "ls": {"helpVisible": true, "description": "list all files of current directory", "args": {"?folder:f": "folder to list", "?r:b": "list recursively"}, "standardVals": {"folder": ""}}, "lscmds": {"description": "list all available commands", "helpVisible": true, "args": {"?m:b": "format output as markdown table"}}, "lscpu": {"description": "get some helpful info about your cpu"}, "lunar-lander": {"description": "play a classic game of moon-lander", "args": {"?particles:n:1~1000": "number of particles to generate", "?f=fullscreen:b": "enable fullscreen application"}, "standardVals": {"particles": 10}, "isGame": true}, "man": {"description": "show the manual page for a command", "args": {"command:c": "the command to show the manual page for"}, "helpVisible": true}, "mandelbrot": {"description": "draws the mandelbrot set", "args": {"?x:i:10~1000": "width of the plot", "?y:i:10~1000": "height of the plot"}}, "matdet": {"description": "find the determinant of a matrix", "args": {"?A:sm": "square matrix"}}, "matinv": {"description": "find the inverse of a matrix", "args": {"?A:sm": "matrix to invert"}}, "matmin": {"description": "find the matrix of minors of a given matrix", "args": {"?A:sm": "matrix to find minors of"}}, "matmul": {"description": "multiply two matrices with each other", "args": {"?A:m": "matrix A", "?B:m": "matrix B"}}, "matred": {"description": "reduce a given matrix to reduced row echelon form", "args": {"?A:m": "matrix to reduce"}}, "mill2player": {"description": "play a game of mill with a friend locally", "isGame": true}, "minesweeper": {"description": "play a game of minesweeper", "args": {"?x=width:i:5~100": "width of the board", "?y=height:i:5~100": "height of the board", "?b=bombs:i:10~90": "percentage of bombs"}, "defaultValues": {"width": 10, "height": 10, "bombs": 20}, "isGame": true}, "minigolf": {"description": "play a game of minigolf", "args": {"?l=level:i": "open a specific level", "?e=edit:b": "open map editor", "?f=file:s": "open a specific file", "?fullscreen:b": "activate fullscreen mode"}, "defaultValues": {"level": 1}, "isGame": true}, "mkdir": {"description": "create a new directory", "args": ["directory_name"]}, "morse": {"description": "translate latin to morse or morse to latin", "args": {"*text": "text to translate"}}, "mv": {"description": "move a file", "args": ["file", "directory"]}, "name-gen": {"description": "start a name generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "name": {"description": "set a default name for the highscore system to use", "args": {"method": "set | get | reset", "?newname": "the new name"}}, "ncr": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "k:n:0~100": "the number of successes"}}, "neural-car": {"description": "start a neural car simulation", "args": {"?cars:i:1~9999": "number of cars to simulate", "?edit:b": "activate the wall editor"}, "defaultValues": {"cars": 100}}, "neural-rocket": {"description": "trains neural networks to fly rockets", "args": {"?population:i:10~99999": "number of rockets in the population"}, "defaultValues": {"population": 100}, "isSecret": true}, "nsolve": {"description": "solve an equation using the newton-raphson method", "args": {"*e=equation:s": "the equation to solve", "?s=startn:n": "Starting number", "?i=iterations:i:1~999999": "number of iterations to perform", "?l=list:b": "list all intermediate values"}, "defaultValues": {"startn": 0.71, "iterations": 1000}}, "number-guess": {"description": "guess a random number", "isGame": true}, "particle": {"description": "start a particle simulation", "args": {"?n:i:1000~10000000": "number of particles"}, "standardVals": {"n": 100000}, "isSecret": true}, "pascal": {"description": "print a pascal triangle", "args": {"?depth:n:1~100": "the depth of the triangle", "?f:b": "only show the final row"}, "standardVals": {"depth": 10}}, "password": {"description": "Generate a random password", "args": {"?l=length:i:1~9999": "The length of the password", "?c=chars:s": "The characters to use in the password", "?norepeat:b": "If present, the password will not repeat characters", "?nocopy:b": "Do not copy the password to the clipboard", "?d=diverse:b": "Use at least one special character, number, and uppercase letter"}, "standardVals": {"l": 20, "c": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&!?.,;:[]{}()_-+=*"}}, "pendulum": {"description": "start a pendulum wave simulation", "args": {"?n:i:1~10000": "number of pendulums", "?o:n:0~1": "offset of pendulums", "?f=fullscreen:b": "start in fullscreen mode"}, "standardVals": {"n": 20, "o": 0.025}}, "perilious-path": {"description": "play perilous path", "isGame": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "physics": {"description": "start a physics simulation", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "pi": {"description": "calculate pi to the n-th digit", "args": {"?n:i:1~10000": "the number of digits"}, "standardVals": {"n": 100}}, "piano": {"description": "play a piano with your keyboard"}, "plane": {"description": "play the plane game", "args": {"?f=fullscreen:b": "open in fullscreen mode"}, "isGame": true}, "plot": {"description": "plot a mathematical function within bounds", "args": {"equation": "the equation to plot", "?xmin:n:-1000~1000": "the minimum x value", "?xmax:n:-1000~1000": "the maximum x value", "?ymin:n:-1000~1000": "the minimum y value", "?ymax:n:-1000~1000": "the maximum y value", "?playtime:i:0~10000": "the time to play the sound for in milliseconds"}, "standardVals": {"xmin": -3, "xmax": 3.1, "ymin": -3, "ymax": 3.1, "playtime": 2500}}, "plotter": {"description": "plot mathematical functions", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "polyrythm": {"description": "creates a polyrythm", "args": {"*numbers": "numbers (e.g. \"3 4 5\")", "?t=time:n:10~99999": "time in miliseconds for full rotation", "?b=beepMs:n": "time in miliseconds that they beep for"}, "defaultValues": {"time": 4000, "beepMs": 150}}, "pong": {"description": "play a game of pong against the computer", "isGame": true}, "primes": {"description": "generate mersenne primes"}, "pull": {"description": "pull a file from the server", "args": {"file": "file to pull"}}, "push": {"description": "push a file to the server", "args": {"file": "file to push"}}, "pv": {"description": "print a message with a typing animation", "args": ["*message"]}, "pwd": {"description": "print the current working directory"}, "python": {"description": "run a script or open a python shell", "args": {"?f=file:s": "the script to run", "?c=code:s": "the code to run"}, "disableEqualsArgNotation": true}, "qr": {"description": "generate a qr code", "args": {"*text": "the text to encode"}}, "rate": {"description": "rate a programming language", "args": ["language"]}, "raycasting": {"description": "play with raycasting", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "reboot": {"description": "reboot the website"}, "reload": {"description": "Reloads the terminal"}, "rename": {"description": "rename a file or folder", "args": {"file": "the file or folder to rename", "name": "the new name of the file or folder"}}, "reset": {"description": "reset the terminal", "args": {"?n=now:b": "reset now"}}, "reverse": {"description": "reverse a message", "args": {"*message": "the message to reverse", "?c": "copy the reversed message to the clipboard"}}, "rm": {"description": "remove a file", "args": ["*file"]}, "rmdir": {"description": "remove a directory", "args": ["directory"]}, "rndm": {"description": "generate a random number based on the current time", "args": {"?min:n:0~100000": "minimum value (inclusive)", "?max:n:0~100000": "maximum value (inclusive)", "?t=time:b": "use a time based random number generator", "?f=float:b": "generate a float instead of an integer"}, "standardVals": {"min": 1, "max": 100}}, "sc": {"description": "manage the startup commands", "args": {"?mode": "'add', 'remove', 'reset' or 'list'", "?command": "the command to add or remove (or index)"}, "defaultValues": {"mode": "list"}}, "scarpet": {"description": "draws the Sierpinski carpet using the chaos game", "args": {"?s=speed:i:1~99999": "the speed of dots placed. The higher the faster.", "?size:i:10~1000": "size of output canvas in characters"}, "defaultValues": {"speed": 30, "size": 50}}, "search": {"description": "search something via google.com", "args": {"*query": "the search query", "?b=baseUrl": "the base search-engine url"}, "standardVals": {"b": "https://www.google.com/search?q="}}, "set": {"description": "set a value on the server", "args": {"key": "the key to set the value of", "value": "the value to set"}, "disableEqualsArgNotation": true}, "sha256": {"description": "calculate the SHA-256 hash of a message", "args": {"?s": "a string to hash", "?f": "a file to hash"}, "standardVals": {"s": null, "f": null}}, "shoot": {"description": "Play a game of Shoot against another player locally", "isGame": true, "args": {"?l=lives:i:1~100": "The number of lives each player has", "?s=shoot-delay:i:0~1000": "The number of frames between each shot"}, "defaultValues": {"l": 3, "s": 20}}, "shutdown": {"description": "shutdown the terminal"}, "sl": {"description": "Steam Locomotive", "args": {"?f=F:b": "Make it fly"}}, "sleep": {"description": "sleep for a number of seconds", "args": ["seconds:n:0~1000000"]}, "slime": {"description": "Start a slime simulation"}, "snake": {"description": "play a game of snake", "args": {"?s:n:1~10": "speed level of snake moving"}, "standardVals": {"s": 2}, "isGame": true}, "sodoku": {"description": "Solve or generate a sodoku puzzle", "args": {"?mode:s": "the mode to run in (play, solve)", "?fen:s": "a FEN string to load", "?give-fen:b": "output the FEN string for the inputted puzzle"}, "isGame": true}, "solve": {"description": "solve a mathematical equation for x", "args": {"*equation": "the equation to solve", "?i:n:1~5": "the number of iteration-steps to perform", "?m:n:1~100000": "the maximum number of total iterations to perform", "?l:n": "the lower bound of the search interval", "?u:n": "the upper bound of the search interval"}, "standardVals": {"i": 4, "m": 100000, "l": -100, "u": 100}, "disableEqualsArgNotation": true}, "sorting": {"description": "display a sorting algorithm", "args": {"?algorithm": "the algorithm to display", "?n:i:10~1000": "the number of elements to sort", "?speed:n:0~100": "the speed of the sorting algorithm", "?s:b": "silent mode (deactivate sound)"}, "standardVals": {"algorithm": null, "n": 20, "speed": 1}}, "spion": {"description": "Spiel Spiel Manager", "args": {"?a=add:b": "add a new place", "?l=list:s": "list a given places roles"}, "isSecret": true}, "stacker": {"description": "play a stacker game", "isGame": true}, "stat": {"description": "show a statistic of a given data set", "args": {"?*nums:s": "the numbers to show the statistic of", "?f=function:s": "the function to plot", "?min:n": "the minimum value of the function", "?max:n": "the maximum value of the function", "?width:n:1~9999": "the width of the canvas", "?height:n:1~9999": "the height of the canvas", "?x=x-name:s": "the name of the x axis", "?y=y-name:s": "the name of the y axis", "?p=padding:n:0~9999": "the padding of the canvas", "?color=foreground:s": "the color of plot", "?axis-color:s": "the color of the axis", "?a=animateMs": "animate the plot", "?background": "the background color of the canvas", "?l=length:i:2~99999": "the length of a data set", "?linewidth:n:1~999": "the width of the line in pixels", "?nopoints:b": "disable the points being displayed"}, "defaultValues": {"nums": null, "width": 640, "height": 400, "x": null, "y": null, "min": -10, "max": 10, "padding": 20, "axis-color": null, "color": null, "animateMs": 500, "background": null, "length": 100, "linewidth": 2}}, "style": {"description": "change the style of the terminal", "args": ["?preset"], "standardVals": {"preset": null}}, "sudo": {"description": "try to use sudo", "args": ["**"]}, "terminal": {"description": "a terminal inside a terminal", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "terml": {"description": "run a .terml file", "args": {"file": "the file to run"}}, "tetris": {"description": "play a classic game of tetris", "isGame": true}, "tictactoe": {"description": "play a game of tic tac toe against the computer.", "args": {"?d=difficulty": "play against an unbeatable computer."}, "standardVals": {"d": "impossible"}, "isGame": true}, "time": {"description": "Shows the current time.", "args": {"?m=show-milli:b": "Show milliseconds.", "?f=size:n:0.1~99": "Font size in em.", "?s=start:b": "Start a stopwatch."}, "defaultValues": {"size": 3}}, "timer": {"description": "set a timer", "rawArgMode": true}, "todo": {"description": "manage a todo list", "rawArgMode": true}, "touch": {"description": "create a file in the current directory", "args": {"filename": "the name of the file"}}, "turing": {"description": "run a turing machine file", "args": {"file": "file to run", "?t=startTape": "starting tape content", "?s=sleep:i:0~10000": "sleep time between steps (in ms)", "?d=startingState": "starting state", "?m=maxSteps:i:0~9999999999": "maximum number of steps to run", "?turbo:b": "run as fast as possible"}, "standardVals": {"startTape": "", "s": 100, "d": "0", "m": 100000}}, "turtlo": {"description": "spawn turtlo", "args": {"?size:i:1~3": "size of turtlo", "?silent:b": "don't print anything"}, "defaultValues": {"size": 1}}, "type-test": {"description": "test your typing speed", "isGame": true}, "uname": {"description": "print the operating system name"}, "upload": {"description": "upload a file from your computer"}, "vigenere": {"description": "encrypt/decrypt a message using the vigenere cipher", "args": {"message": "the message to encrypt/decrypt", "key": "the key to use", "?d=decrypt:b": "decrypt the message instead of encrypting it", "?c=copy:b": "copy the result to the clipboard"}}, "visits": {"description": "Shows the number of page visits"}, "w": {"description": "print the current time elapsed"}, "wave": {"description": "play with a wave"}, "wc": {"description": "display word and line count of file", "args": {"?f=file": "file to open", "?s": "string to count instead of file"}}, "weather": {"description": "Get the current weather", "author": "Colin Chadwick"}, "whatday": {"description": "get the weekday of a date", "args": ["DD.MM.YYYY"]}, "whatis": {"description": "display a short description of a command", "args": ["command"]}, "whoami": {"description": "get client info"}, "yes": {"description": "print a message repeatedly", "args": {"?message": "the message to print", "?s:b": "slow mode"}, "standardVals": {"message": "y"}}, "zip": {"description": "zip a file"}}
+terminal.commandData = {"2048": {"description": "play a game of 2048", "isGame": true}, "4inarow": {"description": "play a game of Connect Four against the computer", "args": {"?d=depth:i:1~100": "The depth of the search tree", "?s=show-debug:b": "Show debug info about board eval"}, "standardVals": {"depth": 4}, "isGame": true}, "alias": {"description": "create a new alias for a given function", "args": {"?alias:s": "name of the new alias", "?*command:s": "name of the command to be aliased", "?s=show:b": "show all aliases", "?r=remove:s": "remove a given alias"}}, "ant-opt": {"description": "interactive solution to the travelling salesman problem using ant colony optimization", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "apc-sim": {"description": "play an animation relating to an apc problem", "args": {"problem:e:can-x-see-q": "problem to animate", "?f=fullscreen:b": "open in fullscreen"}}, "asteroids": {"description": "simulate a bunch of balls jumping around", "args": {"?f=fullscreen:b": "start in fullscreen mode", "?c=chaos:b": "start with chaos mode enabled"}, "isGame": true}, "avoida": {"description": "play a game of avoida", "isGame": true}, "background": {"description": "change the background color of the terminal", "args": ["color"]}, "base64": {"description": "encode/decode a message using base64", "args": {"*message": "the message to encode/decode", "?d=decode:b": "decode the message instead of encoding it", "?c=copy:b": "copy the result to the clipboard"}}, "bc": {"description": "start a bc (basic calculator) session"}, "bezier": {"description": "play with bezier curves"}, "bin": {"description": "convert a number to another base", "args": {"n": "number to convert", "?t=to-base:i:2~36": "base to convert to", "?f=from-base:i:2~36": "base to convert from"}, "standardVals": {"t": 2, "f": 10}}, "binomcdf": {"description": "calculate the binomial cumulative distribution function", "args": {"n:n:1~1000": "the number of trials", "p:n:0~1": "the probability of success", "lower:n:0~1000": "the lower bound", "upper:n:0~1000": "the upper bound"}}, "binompdf": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "p:n:0~1": "the probability of success", "k:n:0~100": "the number of successes"}}, "blocks": {"description": "3d raycasting test", "args": {"?fov:i:1~720": "Field of view in degrees", "?res=resolution:i:1~1000": "Resolution (width) in Pixels", "?x=roomX:i:5~100": "Room size in x direction", "?y=roomY:i:5~100": "Room size in y direction", "?z=roomZ:i:5~100": "Room size in z direction", "?v=viewDistance:i:1~9999": "View distance in blocks"}, "defaultValues": {"fov": 90, "resolution": 90, "roomX": 30, "roomY": 10, "roomZ": 10, "viewDistance": 13}}, "brainfuck": {"description": "parse given brainfuck code", "args": ["*code"]}, "cal": {"description": "print a calendar", "args": {"?month": "the month to print", "?year": "the year to print"}}, "cardoid": {"description": "start a cardoid generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cat": {"description": "print file content", "args": {"file:f": "file to display the content of"}}, "cd": {"helpVisible": true, "args": {"directory:f": "the directory relative to your current path"}, "description": "change current directory"}, "ceasar": {"description": "shift the letters of a text", "args": {"text": "the text to shift", "?s=shift:i:-26~26": "the shift value"}, "standardVals": {"shift": 1}}, "changes": {"description": "see latest changes to the terminal", "args": {"?b=branch:s": "git branch to view changes of", "?l=limit:i:1~9999999": "number of changes to show"}, "defaultValues": {"branch": "main", "limit": 10}, "isSecret": true}, "cheese": {"description": "take a foto with your webcam"}, "chess": {"description": "play a game of chess against the computer", "isGame": true}, "clear": {"description": "clear the terminal"}, "clock": {"description": "display a clock", "args": {"?m=millis:b": "display milliseconds"}}, "cmatrix": {"description": "show the matrix", "args": {"?nf=not-fullscreen:b": "make the window fullscreen"}}, "cmdnotfound": {"description": "display that a command was not found", "rawArgMode": true, "isSecret": true}, "code": {"description": "show the source code of a command", "args": {"?c=command:c": "the command to show the source code of", "?s=string:s": "print a highlighted string"}}, "collatz": {"description": "Calculate the Collatz Sequence (3x+1) for a given Number", "args": {"n:bn": "the starting number of the sequence", "?v=visualize:b": "visualize the numbers as a graph", "?l=log-scale:b": "use a logarithmic scale to graph the numbers"}}, "color-test": {"description": "test the color capabilities of the terminal", "args": {"?size:i:1~999": "the size of the test image"}, "defaultValues": {"size": 60}}, "compliment": {"description": "get info about yourself"}, "config": {"description": "manage the terminal configuration", "args": {"?e=edit:e:foreground|background|font|color1|color2|storage|history": "edit a given property"}}, "construct": {"description": "animate the construction of a given number (using ruler and compass only)", "args": {"number:s": "the number to construct (form: 'sqrt(20)+3')", "?f=fullscreen:b": "enable fullscreen mode", "?fps:i:1~99999": "fps of animation"}, "defaultValues": {"fps": 30}, "isSecret": true}, "contact": {"description": "Open contact form"}, "copy": {"description": "copy the file content to the clipboard", "rawArgMode": true}, "coville": {"description": "interactive virus simulation (in german)", "isSecret": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "cowsay": {"description": "let the cow say something", "args": ["*message"]}, "cowthink": {"description": "let the cow say something", "args": ["*thought"]}, "cp": {"description": "copy a file", "args": {"file:f": "file to copy", "?d=directory:f": "directory to copy to", "?n=name:s": "new filename"}, "defaultValues": {"directory": "."}}, "crossp": {"description": "calculate the cross product of 2 3d vectors", "args": {"x1:n": "the x component of the first vector", "y1:n": "the y component of the first vector", "z1:n": "the z component of the first vector", "x2:n": "the x component of the second vector", "y2:n": "the y component of the second vector", "z2:n": "the z component of the second vector"}}, "curl": {"description": "download a file from the internet", "args": {"url:s": "the url to download the file from"}, "disableEqualsArgNotation": true}, "cw": {"description": "get the calendar week of a date", "args": {"?date": "the date to get the calendar week of"}, "standardVals": {"date": null}}, "debug": {"description": "activate the debug mode to enable untested new features", "isSecret": true}, "donut": {"description": "display a spinning donut"}, "download": {"description": "download a file", "args": {"file:f": "the file to download"}}, "draw": {"description": "start simple drawing app"}, "du": {"description": "display storage of current directory", "args": {"?folder:f": "folder to display storage of"}}, "easter-eggs": {"description": "open easter egg hunt", "args": {"?reset:b": "reset easter egg hunt"}}, "echo": {"description": "print a line of text", "rawArgMode": true}, "echonum": {"description": "echo a given number", "args": {"number:n": "number to echo"}, "isSecret": true}, "edit": {"description": "edit a file", "args": {"file:f": "file to edit"}}, "enigma": {"description": "Simulate an Enigma machine", "args": {"?c=config:b": "Enables config mode", "?t=translate:b": "Enables translation mode", "?r=reset:b": "Resets the machine", "?s=show:b": "Shows the current settings"}}, "error404": {"description": "Display a 404 error", "rawArgMode": true}, "eval": {"description": "evaluate javascript code", "rawArgMode": true}, "exit": {"description": "exit the terminal"}, "f-optimize": {"args": {"?*names": "names to optimize", "?s=seconds:i": "how long to optimize for (seconds)"}, "defaultValues": {"seconds": 99999999}, "description": "finds a good nonce value for the friendship score generator"}, "f": {"description": "calculate friendship score with a friend", "args": {"*name": "name of friend"}}, "factor": {"description": "print the prime factors of a number", "args": {"?n:bn": "number to factorize"}, "standardVals": {"n": null}}, "fakechat": {"description": "fake a whatsapp chat conversation", "args": {"?f=fast:b": "skip typing animations [fast mode]", "?o=offset:n:-100~100": "offset the chat by a procentage of the screen height", "?s=scale:n:0.1~5": "scale the chat by a factor", "?x=width:n:100~10000": "set the width of the screen in pixels", "?y=height:n:100~10000": "set the height of the screen in pixels"}, "standardVals": {"o": 0, "s": 1, "x": 720, "y": 1560}}, "fibo": {"description": "Prints the Fibonacci sequence", "args": {"?n:i:1~100": "The number of elements to print", "?p=phi:b": "calculate the golden ratio using the last two elements"}, "defaultValues": {"n": 10}}, "fizzbuzz": {"description": "print the fizzbuzz sequence", "args": {"?max:n:1~100000": "the maximum number to print"}, "standardVals": {"max": 15}}, "flaci-to-turing": {"description": "Converts a flaci.com JSON File of a turing machine to a turing machine file", "args": {"file": "file to convert", "?s=save:b": "save the converted file"}, "isSecret": true}, "flappy": {"description": "play a game of flappy turtlo", "args": {"?f=fullscreen:b": "fullscreen", "?s=silent:b": "silent mode"}, "isGame": true}, "font": {"description": "change the font of the terminal", "args": ["*font"]}, "foreground": {"description": "change the foreground color of the terminal", "args": {"color": "the color to change the foreground to"}}, "fraction": {"description": "find a fraction from a decimal number", "args": {"n=number:n": "number (decimal)", "?d=max-denominator:i:1~999999999": "maximum denominator"}, "defaultValues": {"d": 1000}}, "freq": {"description": "play a frequency for an amount of time", "args": {"f=frequency:n:0~30000": "the frequency to play", "?t=time:n:0~9999": "time in seconds to play frequency"}, "defaultValues": {"time": 0.5}}, "games": {"description": "shows the game menu"}, "get": {"description": "get a value from the server", "args": {"key": "the key to get the value of"}, "disableEqualsArgNotation": true}, "greed": {"description": "play a game of greed", "isGame": true, "args": {"?b": "play the bigger version"}}, "grep": {"description": "search for a pattern in a file", "args": {"pattern": "the pattern to search for", "file": "the file to search in", "?r=recurse:b": "search recursively", "?i=ignore-case:b": "ignore case", "?v=invert-match:b": "invert match", "?x=match-whole-lines:b": "match whole lines"}}, "gui": {"description": "open the GUI page for a given command", "args": {"command:c": "a terminal command"}}, "hangman": {"description": "play a game of hangman", "isGame": true}, "head": {"description": "display the first lines of a file", "args": ["file", "?l:i:1~1000"], "standardVals": {"l": 10}}, "helloworld": {"description": "display the hello-world text", "rawArgMode": true}, "help": {"description": "shows this help menu"}, "hi": {"description": "say hello to the terminal"}, "highscore-admin": {"description": "Highscore Admin Management", "isSecret": true, "args": {"?l=list:b": "List all unconfirmed highscores", "?t=tinder:b": "Play Tinder Swiping with highscores", "?d=delete:b": "Delete password from local storage"}}, "highscore-remove": {"description": "Remove a highscore", "isSecret": true, "args": {"game": "the game to remove the highscore from", "?n": "only show highscores with this name", "?l:n:1~10000": "limit the number of highscores to show", "?uid": "the uid of the highscore to remove"}, "standardVals": {"n": null, "l": Infinity}}, "highscores": {"description": "Show global highscores for a game", "args": {"game:s": "the game to show the highscores for", "?n:s": "only show highscores with this name", "?l:i:1~10000": "limit the number of highscores to show", "?show-all:b": "show all highscores, not just the top ones"}, "standardVals": {"n": null, "l": 10}}, "history": {"description": "print the command history", "args": {"?l=limit:n:1~100000": "the maximum number of commands to print", "?show-full:b": "show the full command instead of the shortened version"}, "standardVals": {"l": 1000}}, "hr-draw": {"description": "turn drawings into bitmaps", "args": {"?x=width:i:1~100": "width (pixels)", "?y=height:i:1~100": "height (pixels)"}, "defaultValues": {"width": 5, "height": 5}, "isSecret": true}, "hr": {"description": "create a hr code", "args": {"message:s": "the message to encode", "?f=fontmode:s": "the font mode to use", "?fill:b": "fill empty spaces with random data"}, "defaultValues": {"fontmode": "5x5"}}, "href": {"description": "open a link in another tab", "args": {"?u=url:s": "url to open", "?f=file:s": "file to open"}}, "hyp-lines": {"description": "spawn a simulation of the hyperbolic disk and half-plane model", "args": {"?w=width:i:22~100": "width of each screen in characters", "?h=height:i:10~100": "height of each screen in characters"}, "defaultValues": {"width": 50, "height": 40}}, "image-crop": {"description": "start image cropper program"}, "img2ascii": {"description": "Convert an image to ASCII art", "args": {"?w=width:i:1~500": "the width of the output image in characters"}, "defaultValues": {"width": 60}}, "img2pdf": {"description": "convert image files to pdf", "args": {"?f=filename:s": "filename for the pdf", "?p=padding:i:0~50": "padding of pdf (in px)", "?r=rotate:b": "rotate the images to maximise space"}, "defaultValues": {"filename": null, "padding": 5}}, "imgwarp": {"description": "warp an image using a geometric step-distance function", "args": {"f=function:s": "step distance function"}, "isSecret": true}, "isprime": {"description": "Check if a number is prime", "args": {"n:i": "The number to check", "?f=find-next:b": "if n is not prime, find the next one"}}, "joke": {"description": "tell a joke"}, "kaprekar": {"description": "display the kaprekar steps of a number", "args": {"n:n:1~999999999": "the number to display the kaprekar steps of"}}, "keyboard": {"description": "Toggle mobile mode", "args": {"?m=mode:s": "status | on | off | auto"}, "defaultValues": {"m": "status"}}, "kill": {"description": "kill a process", "args": {"process": "the process to kill"}}, "labyrinth": {"description": "play a game of labyrinth", "isGame": true, "args": {"?fps:n:1~60": "the frames per second of the game"}, "standardVals": {"fps": 30}}, "letters": {"description": "prints the given text in ascii art", "args": {"*text": "the text to print"}, "example": "letters hello world"}, "live-quiz": {"description": "a simple quiz game that uses your camera as input for your answer", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "live-rocket": {"description": "a simple avoid game that you steer using camera input", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "logistic-map": {"description": "draw the logistic map", "args": {"?min:n:-2~4": "minimum R value", "?max:n:-2~4": "maximum R value", "?w:n:10~200": "width of display", "?h:n:5~100": "height of display"}, "standardVals": {"min": 0, "max": 4, "w": 80, "h": 20}}, "longjump": {"description": "Play a game of longjump", "isGame": true, "args": {"?f=fullscreen:b": "Play in fullscreen"}}, "lorem": {"description": "generate lorem ipsum text", "args": {"?l=length:i": "number of words to generate", "?c=copy:b": "copy to clipboard"}, "defaultValues": {"l": 100}}, "ls": {"helpVisible": true, "description": "list all files of current directory", "args": {"?folder:f": "folder to list", "?r=recursive:b": "list recursively"}, "standardVals": {"folder": ""}}, "lscmds": {"description": "list all available commands", "helpVisible": true, "args": {"?m:b": "format output as markdown table"}}, "lscpu": {"description": "get some helpful info about your cpu"}, "lunar-lander": {"description": "play a classic game of moon-lander", "args": {"?particles:n:1~1000": "number of particles to generate", "?f=fullscreen:b": "enable fullscreen application"}, "standardVals": {"particles": 10}, "isGame": true}, "man": {"description": "show the manual page for a command", "args": {"command:c": "the command to show the manual page for"}, "helpVisible": true}, "mandelbrot": {"description": "draws the mandelbrot set", "args": {"?x:i:10~1000": "width of the plot", "?y:i:10~1000": "height of the plot"}}, "matdet": {"description": "find the determinant of a matrix", "args": {"?A:sm": "square matrix"}}, "mateig": {"description": "find the eigenvalues and eigenspaces of a given matrix", "args": {"?A:sm": "square matrix"}, "isSecret": true}, "matinv": {"description": "find the inverse of a matrix", "args": {"?A:sm": "matrix to invert"}}, "matmin": {"description": "find the matrix of minors of a given matrix", "args": {"?A:sm": "matrix to find minors of"}}, "matmul": {"description": "multiply two matrices with each other", "args": {"?A:m": "matrix A", "?B:m": "matrix B"}}, "matred": {"description": "reduce a given matrix to reduced row echelon form", "args": {"?A:m": "matrix to reduce"}}, "matvisualize": {"description": "visualize a given 2x2 matrix transformation", "args": {"?m=matrix:sm": "2x2 matrix to left-multiply by", "?x:n": "x coordinate of center", "?y:n": "y coordinate of center", "?z=zoom:n:0.01~99999": "zoom level"}, "defaultValues": {"x": 0, "y": 0, "zoom": 5}}, "mill2player": {"description": "play a game of mill with a friend locally", "isGame": true}, "minesweeper": {"description": "play a game of minesweeper", "args": {"?x=width:i:5~100": "width of the board", "?y=height:i:5~100": "height of the board", "?b=bombs:i:10~90": "percentage of bombs"}, "defaultValues": {"width": 10, "height": 10, "bombs": 20}, "isGame": true}, "minigolf": {"description": "play a game of minigolf", "args": {"?l=level:i": "open a specific level", "?e=edit:b": "open map editor", "?f=file:s": "open a specific file", "?fullscreen:b": "activate fullscreen mode"}, "defaultValues": {"level": 1}, "isGame": true}, "mkdir": {"description": "create a new directory", "args": {"name:s": "name for your shiny new directory"}}, "morse": {"description": "translate latin to morse or morse to latin", "args": {"*text": "text to translate"}}, "mv": {"description": "move a file", "args": {"file:f": "file to move", "d=directory:f": "directory to move to", "?n=name:s": "new filename"}}, "name-gen": {"description": "start a name generator", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "name": {"description": "set a default name for the highscore system to use", "args": {"method": "set | get | reset", "?newname": "the new name"}}, "ncr": {"description": "calculate binomial distribution value", "args": {"n:n:0~100": "the number of trials", "k:n:0~100": "the number of successes"}}, "neural-car": {"description": "start a neural car simulation", "args": {"?cars:i:1~9999": "number of cars to simulate", "?edit:b": "activate the wall editor"}, "defaultValues": {"cars": 100}}, "neural-rocket": {"description": "trains neural networks to fly rockets", "args": {"?population:i:10~99999": "number of rockets in the population"}, "defaultValues": {"population": 100}, "isSecret": true}, "np": {"description": "start a noelpy interpreter for calculations", "isSecret": false}, "nsolve": {"description": "solve an equation using the newton-raphson method", "args": {"*e=equation:s": "the equation to solve", "?s=startn:n": "Starting number", "?i=iterations:i:1~999999": "number of iterations to perform", "?l=list:b": "list all intermediate values"}, "defaultValues": {"startn": 0.71, "iterations": 1000}}, "number-guess": {"description": "guess a random number", "isGame": true}, "old-edit": {"description": "edit a file of the current directory (old version of editor)", "args": {"?file:f": "the file to open"}, "isSecret": true}, "panik": {"description": "[german command] m\u00e4\u00dfige hilfe bei einer panikattacke", "isSecret": true}, "particle": {"description": "start a particle simulation", "args": {"?n:i:1000~10000000": "number of particles"}, "standardVals": {"n": 100000}, "isSecret": true}, "pascal": {"description": "print a pascal triangle", "args": {"?depth:n:1~100": "the depth of the triangle", "?f:b": "only show the final row"}, "standardVals": {"depth": 10}}, "password": {"description": "Generate a random password", "args": {"?l=length:i:1~9999": "The length of the password", "?c=chars:s": "The characters to use in the password", "?norepeat:b": "If present, the password will not repeat characters", "?nocopy:b": "Do not copy the password to the clipboard", "?d=diverse:b": "Use at least one special character, number, and uppercase letter"}, "standardVals": {"l": 20, "c": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&!?.,;:[]{}()_-+=*"}}, "pendulum": {"description": "start a pendulum wave simulation", "args": {"?n:i:1~10000": "number of pendulums", "?o:n:0~1": "offset of pendulums", "?f=fullscreen:b": "start in fullscreen mode"}, "standardVals": {"n": 20, "o": 0.025}}, "perilious-path": {"description": "play perilous path", "isGame": true, "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "physics": {"description": "start a physics simulation", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "pi-blocks": {"description": "simulate the bouncy blocks from 3b1b", "args": {"f=factor:i": "the factor of the two blocks", "?s=speed:n:0~10": "the speed factor"}, "defaultValues": {"speed": 1}}, "pi": {"description": "calculate pi to the n-th digit", "args": {"?n:i": "the number of digits", "?w=unwrap:b": "don't split the digits into lines.", "?c=copy:b": "copy the digits to the clipboard", "?y=yes:b": "ignore any computation warnings"}, "standardVals": {"n": 100}}, "piano": {"description": "play a piano with your keyboard"}, "plane": {"description": "play the plane game", "args": {"?f=fullscreen:b": "open in fullscreen mode"}, "isGame": true}, "plot": {"description": "plot a mathematical function within bounds", "args": {"equation": "the equation to plot", "?xmin:n:-1000~1000": "the minimum x value", "?xmax:n:-1000~1000": "the maximum x value", "?ymin:n:-1000~1000": "the minimum y value", "?ymax:n:-1000~1000": "the maximum y value", "?playtime:i:0~10000": "the time to play the sound for in milliseconds"}, "standardVals": {"xmin": -3, "xmax": 3.1, "ymin": -3, "ymax": 3.1, "playtime": 2500}}, "plotter": {"description": "plot mathematical functions", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "polyrythm": {"description": "creates a polyrythm", "args": {"*numbers": "numbers (e.g. \"3 4 5\")", "?t=time:n:10~99999": "time in miliseconds for full rotation"}, "defaultValues": {"time": 4000}}, "pong": {"description": "play a game of pong against the computer", "isGame": true}, "primes": {"description": "generate mersenne primes"}, "pull": {"description": "pull a file from the server", "args": {"file": "file to pull"}}, "push": {"description": "push a file to the server", "args": {"file:f": "file to push"}}, "pv": {"description": "print a message with a typing animation", "args": ["*message"]}, "pwd": {"description": "print the current working directory"}, "python": {"description": "run a script or open a python shell", "args": {"?f=file:f": "the script to run", "?c=code:s": "the code to run"}, "disableEqualsArgNotation": true}, "qr": {"description": "generate a qr code", "args": {"*text": "the text to encode"}}, "rate": {"description": "rate a programming language", "args": ["language"]}, "raycasting": {"description": "play with raycasting", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "reboot": {"description": "reboot the website"}, "reload": {"description": "Reloads the terminal"}, "rename": {"description": "rename a file or folder", "args": {"file:f": "the file or folder to rename", "name:s": "the new name of the file or folder"}}, "reset": {"description": "reset the terminal", "args": {"?n=now:b": "reset now"}}, "reverse": {"description": "reverse a message", "args": {"*message": "the message to reverse", "?c": "copy the reversed message to the clipboard"}}, "rm": {"description": "remove a file", "args": {"file:f": "file to remove"}}, "rndm": {"description": "generate a random number based on the current time", "args": {"?min:n:0~100000": "minimum value (inclusive)", "?max:n:0~100000": "maximum value (inclusive)", "?t=time:b": "use a time based random number generator", "?f=float:b": "generate a float instead of an integer"}, "standardVals": {"min": 1, "max": 100}}, "say": {"author": "Colin Chadwick", "description": "Say something", "args": {"*text:s": "The text to say", "?pitch:n:0~2": "The pitch of the voice", "?language:s": "The language of the voice"}, "defaultValues": {"pitch": 1, "language": "en-US"}}, "sc": {"description": "manage the startup commands", "args": {"?mode": "'add', 'remove', 'reset' or 'list'", "?command": "the command to add or remove (or index)"}, "defaultValues": {"mode": "list"}}, "scarpet": {"description": "draws the Sierpinski carpet using the chaos game", "args": {"?s=speed:i:1~99999": "the speed of dots placed. The higher the faster.", "?size:i:10~1000": "size of output canvas in characters"}, "defaultValues": {"speed": 30, "size": 50}}, "search": {"description": "search something via google.com", "args": {"*query": "the search query", "?b=baseUrl": "the base search-engine url"}, "standardVals": {"b": "https://www.google.com/search?q="}}, "session": {"description": "manage a filesystem session", "args": {"action:e:begin|reset|save|load|end": "<enum>"}}, "set": {"description": "set a value on the server", "args": {"key": "the key to set the value of", "value": "the value to set"}, "disableEqualsArgNotation": true}, "sha256": {"description": "calculate the SHA-256 hash of a message", "args": {"*text:s": "ascii text to calculate hash of"}}, "shi": {"description": "calculate your SHI (stability height index)", "args": {"s=shoe-size:n:1~99999": "shoe size (european)", "l=height:n:1~999999": "body height in centimeters"}}, "shoot": {"description": "Play a game of Shoot against another player locally", "isGame": true, "args": {"?l=lives:i:1~100": "The number of lives each player has", "?s=shoot-delay:i:0~1000": "The number of frames between each shot"}, "defaultValues": {"l": 3, "s": 20}}, "shutdown": {"description": "shutdown the terminal"}, "simulate": {"description": "Run a simulation. Doesn't work well on phones", "args": {"s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem|circle-gravity": "simulation to run", "?f=fullscreen:b": "run application in fullscreen", "?g=gravity:n:0~99999999": "initial gravity constant in gravity based simulations", "?s=skip-ticks:i": "ticks to simulate before rendering", "?h=start-being-halted:b": "simulation will start being stopped"}}, "sl": {"description": "Steam Locomotive", "args": {"?f=F:b": "Make it fly"}}, "sleep": {"description": "sleep for a number of seconds", "args": ["seconds:n:0~1000000"]}, "slime": {"description": "Start a slime simulation"}, "snake": {"description": "play a game of snake", "args": {"?s:n:1~10": "speed level of snake moving"}, "standardVals": {"s": 2}, "isGame": true}, "sodoku": {"description": "Solve or generate a sodoku puzzle", "args": {"?mode:e:play|solve": "the mode to run in (play, solve)", "?fen:s": "a FEN string to load", "?give-fen:b": "output the FEN string for the inputted puzzle"}, "isGame": true}, "solve": {"description": "solve a mathematical equation for x", "args": {"*equation": "the equation to solve", "?i:n:1~5": "the number of iteration-steps to perform", "?m:n:1~100000": "the maximum number of total iterations to perform", "?l:n": "the lower bound of the search interval", "?u:n": "the upper bound of the search interval"}, "standardVals": {"i": 4, "m": 100000, "l": -100, "u": 100}, "disableEqualsArgNotation": true}, "sorting": {"description": "display a sorting algorithm", "args": {"?algorithm": "the algorithm to display", "?n:i:10~1000": "the number of elements to sort", "?speed:n:0~100": "the speed of the sorting algorithm", "?s:b": "silent mode (deactivate sound)"}, "standardVals": {"algorithm": null, "n": 20, "speed": 1}}, "sounds": {"description": "make sounds", "args": {"*text:s": "text to speak", "?i=interval:i:1~999999": "interval in ms between letters", "?r=random:b": "make random", "?l=length:i:1~99999": "length of random notes", "?a=alphabet:s": "alphabet of random letters"}, "defaultValues": {"text": "", "interval": 500, "length": 10, "alphabet": " abcdefghijklmnopqrstuvwxyz.,\n"}}, "spion": {"description": "Spiel Spiel Manager", "args": {"?a=add:b": "add a new place", "?l=list:s": "list a given places roles"}, "isSecret": true}, "stacker": {"description": "play a stacker game", "isGame": true}, "stat": {"description": "show a statistic of a given data set", "args": {"?*nums:s": "the numbers to show the statistic of", "?f=function:s": "the function to plot", "?min:n": "the minimum value of the function", "?max:n": "the maximum value of the function", "?width:n:1~9999": "the width of the canvas", "?height:n:1~9999": "the height of the canvas", "?x=x-name:s": "the name of the x axis", "?y=y-name:s": "the name of the y axis", "?p=padding:n:0~9999": "the padding of the canvas", "?color=foreground:s": "the color of plot", "?axis-color:s": "the color of the axis", "?a=animateMs": "animate the plot", "?background": "the background color of the canvas", "?l=length:i:2~99999": "the length of a data set", "?linewidth:n:1~999": "the width of the line in pixels", "?nopoints:b": "disable the points being displayed"}, "defaultValues": {"nums": null, "width": 640, "height": 400, "x": null, "y": null, "min": -10, "max": 10, "padding": 20, "axis-color": null, "color": null, "animateMs": 500, "background": null, "length": 100, "linewidth": 2}}, "style": {"description": "change the style of the terminal", "args": ["?preset"], "standardVals": {"preset": null}}, "sudo": {"description": "try to use sudo", "args": ["**"]}, "terminal": {"description": "a terminal inside a terminal", "args": {"?f=fullscreen:b": "Open in fullscreen mode"}}, "terml": {"description": "run a .terml file", "args": {"file": "the file to run"}}, "tetris": {"description": "play a classic game of tetris", "isGame": true}, "tictactoe": {"description": "play a game of tic tac toe against the computer.", "args": {"?d=difficulty": "play against an unbeatable computer."}, "standardVals": {"d": "impossible"}, "isGame": true}, "time": {"description": "Shows the current time.", "args": {"?no-hours:b": "Hide hours.", "?no-minutes:b": "Hide minutes.", "?no-seconds:b": "Hide seconds.", "?m=show-milli:b": "Show milliseconds.", "?f=size:n:0.1~99": "Font size in em.", "?s=start:b": "Start a stopwatch."}, "defaultValues": {"size": 3}}, "timer": {"description": "set a timer", "rawArgMode": true}, "todo": {"description": "show and manage a todo list", "args": {"n=name:s": "name of the the todo list", "?u=uncompleted-only:b": "only show the uncompleted todos", "?a=add-item:b": "add an item to the todo list", "?r=rm-item:b": "remove an item from the todo list", "?e=edit-item:b": "edit an item of the todo list", "?rm-completed:b": "remove all completed todos from the todo list"}}, "touch": {"description": "create a file in the current directory", "args": {"filename:s": "the name of the file"}}, "turing": {"description": "run a turing machine file", "args": {"file:f": "file to run", "?t=startTape:s": "starting tape content", "?s=sleep:i:0~10000": "sleep time between steps (in ms)", "?d=startingState:s": "starting state", "?m=maxSteps:i:0~9999999999": "maximum number of steps to run", "?p=turboTapeSize:i:0~9999999999": "size of turing machine tape", "?turbo:b": "run as fast as possible"}, "standardVals": {"startTape": "", "sleep": 100, "startingState": "0", "maxSteps": 100000, "turboTapeSize": 10000}}, "turtlo": {"description": "spawn turtlo", "args": {"?size:i:1~3": "size of turtlo", "?silent:b": "don't print anything"}, "defaultValues": {"size": 1}}, "type-test": {"description": "test your typing speed", "isGame": true}, "uname": {"description": "print the operating system name"}, "unit": {"description": "convert numbers between units", "args": {"v=value:n": "numeric value of unit", "s=start-unit:s": "starting unit", "r=result-unit:s": "resulting unit", "?l=list-units:b": "list all known units"}}, "upload": {"description": "upload a file from your computer", "args": {"?f=filename:s": "name of your shiny new uploaded file"}}, "vigenere": {"description": "encrypt/decrypt a message using the vigenere cipher", "args": {"message": "the message to encrypt/decrypt", "key": "the key to use", "?d=decrypt:b": "decrypt the message instead of encrypting it", "?c=copy:b": "copy the result to the clipboard"}}, "visits": {"description": "Shows the number of page visits"}, "voronoi": {"description": "create voronoi diagrams interactively", "args": {"?n=num-points:i:0~100": "number of random initial points", "?r=random-move:b": "make points wander randomly", "?f=fullscreen:b": "enable fullscreen mode"}, "defaultValues": {"n": 8}}, "w": {"description": "print the current time elapsed"}, "water": {"description": "compute solutions to the longest water problem", "isSecret": true}, "watti": {"description": "manage the walk to trinity database", "isSecret": true, "args": {"action:e:list|add": "<enum>"}}, "wave": {"description": "play with a wave"}, "wc": {"description": "display word and line count of file", "args": {"?f=file:f": "file to open", "?s": "string to count instead of file"}}, "weather": {"description": "Get the current weather", "author": "Colin Chadwick"}, "whatday": {"description": "get the weekday of a date", "args": ["DD.MM.YYYY"]}, "whatis": {"description": "display a short description of a command", "args": ["command"]}, "whoami": {"description": "get client info"}, "wurzle-admin": {"description": "manage wurzles (recmaths.ch/wurzle)", "args": {"action:e:show|set|delete": "<enum>", "?d=date:s": "date to set or delete", "?t=term:s": "term to set", "?a=author:s": "author of wurzle", "?password:s": "admin password required to see stats"}, "defaultValues": {"author": "noel"}, "isSecret": true}, "wurzle-stats": {"description": "show usage stats about wurzle (recmaths.ch/wurzle)", "args": {"?d=date:s": "date to see the stats of", "?password": "admin password required to see stats"}, "isSecret": true}, "yes": {"description": "print a message repeatedly", "args": {"?message": "the message to print", "?s:b": "slow mode"}, "standardVals": {"message": "y"}}, "zip": {"description": "zip a file"}}
 
 // ------------------- js/commands/2048.js --------------------
 terminal.addCommand("2048", async function(args) {
@@ -3506,8 +3948,6 @@ terminal.addCommand("2048", async function(args) {
             addRandomCell()
         }
         draw()
-        if (checkWin())
-            gameRunning = false
     }
 
     let listener = addEventListener("keydown", keydown)
@@ -3552,23 +3992,38 @@ terminal.addCommand("4inarow", async function(args) {
 
     const N = " ", X = "X", O = "O"
     let field = Array.from(Array(6)).map(() => Array(7).fill(N))
+    let printedElements = []
 
     let DEPTH = args.depth
 
+    function printDeletable(text, color, backgroundColor) {
+        const ele = terminal.print(text, color, {forceElement: true, background: backgroundColor})
+        printedElements.push(ele)
+        return ele
+    }
+
+    function clearPrinted() {
+        for (const element of printedElements) {
+            element.remove()
+        }
+        printedElements = []
+    }
+
     function printField(f=field) {
         const betweenRow = "+---+---+---+---+---+---+---+"
-        terminal.printLine("+-1-+-2-+-3-+-4-+-5-+-6-+-7-+")
+
+        printDeletable("+-1-+-2-+-3-+-4-+-5-+-6-+-7-+\n")
         for (let row of f) {
-            terminal.print("| ")
+            printDeletable("| ")
             for (let item of row) {
                 switch(item) {
-                    case X: terminal.print(X, Color.YELLOW); break;
-                    case O: terminal.print(O, Color.BLUE); break;
-                    case N: terminal.print(" ")
+                    case X: printDeletable(X, Color.rgb(255, 255, 0)); break;
+                    case O: printDeletable(O, Color.rgb(100, 100, 255)); break;
+                    case N: printDeletable(" ")
                 }
-                terminal.print(" | ")
+                printDeletable(" | ")
             }
-            terminal.printLine("\n" + betweenRow)
+            printDeletable("\n" + betweenRow + "\n")
         }
     }
 
@@ -3876,28 +4331,39 @@ terminal.addCommand("4inarow", async function(args) {
     let totalEvaluations = 0
 
     while (!isDraw() && !getWinner()) {
+        clearPrinted()
+
         printField()
         let userMove = await getUserMove()
         putIntoField(userMove, X)
         if (isDraw() || getWinner())
             break
+
         totalEvaluations = 0
         let evaluation = new Board(field).getBestMove(DEPTH)
         let computerMove = evaluation.move
         let moveScore = ~~evaluation.score
-        terminal.printLine(`(depth=${DEPTH}, eval=${moveScore})`)
-        if (totalEvaluations < 1000)
+
+        if (args.s) {
+            terminal.printLine(`(depth=${DEPTH}, eval=${moveScore})`)
+        }
+
+        if (totalEvaluations < 1000) {
             DEPTH += 4
-        else if (totalEvaluations < 10000)
+        } else if (totalEvaluations < 10000) {
             DEPTH++
+        }
+
         if (computerMove == null) {
             terminal.printLine("The computer resigns. You win!")
             terminal.printEasterEgg("4inarow-Master-Egg")
             return
         }
+
         putIntoField(computerMove, O)
     }
 
+    clearPrinted()
     let winner = getWinner()
     printField()
     if (winner) {
@@ -3910,7 +4376,8 @@ terminal.addCommand("4inarow", async function(args) {
 }, {
     description: "play a game of Connect Four against the computer",
     args: {
-        "?depth:i:1~100": "The depth of the search tree",
+        "?d=depth:i:1~100": "The depth of the search tree",
+        "?s=show-debug:b": "Show debug info about board eval"
     },
     standardVals: {
         depth: 4
@@ -3991,6 +4458,400 @@ terminal.addCommand("ant-opt", async function(args) {
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
 
+// ------------------- js/commands/apc-sim.js --------------------
+terminal.addCommand("apc-sim", async function(args) {
+    await terminal.modules.import("game", window)
+    await terminal.modules.load("window", terminal)
+
+    const nicerProblemName = args.problem.replaceAll("-", " ")
+    const terminalWindow = terminal.modules.window.make({
+        name: `APC Animation (${nicerProblemName})`, fullscreen: args.f})
+
+    const canvas = terminalWindow.CANVAS
+    const context = terminalWindow.CONTEXT
+
+    const canvasSize = () => new Vector2d(canvas.width, canvas.height)
+    const backgroundColor = "white"
+
+    let uniqueIdCount = 0
+    function makeUniqueId() {
+        return uniqueIdCount++
+    }
+
+    function randomPosition() {
+        return Vector2d.fromFunc(Math.random).sub(UnitVector2d.scale(0.5)).scale(2)
+    }
+
+    function easeInOut(t) {
+        if ((t /= 1 / 2) < 1) return 1 / 2 * t * t
+        return -1 / 2 * ((--t) * (t - 2) - 1)
+    }
+
+    function clipPosToScreenPos(clipPos) {
+        return clipPos.add(UnitVector2d).mul(canvasSize().scale(0.5))
+    }
+
+    function screenPosToClipPos(screenPos) {
+        return screenPos.div(canvasSize()).scale(2).sub(UnitVector2d)
+    }
+
+    class ApcScene {
+
+        constructor() {
+            this.objects = []
+            this.animationObjects = new Map()
+            this.animationObjectId = 0
+        }
+
+        add(object) {
+            this.objects.push(object)
+            return this
+        }
+
+        remove(object) {
+            this.objects = this.objects.filter(o => o.id !== object.id)
+            return this
+        }
+
+        animateAdd(object, ms=500) {
+            if (object.type == "line") {
+                this.animateAddLine(object, ms)
+            } else if (object.type == "point") {
+                this.animateAddPoint(object, ms)
+            }
+            return this
+        }
+
+        _makeAnimation(obj, changeFunc, ms) {
+            const originalObj = obj.copy()
+            const startTime = Date.now()
+            const objectId = this.animationObjectId++
+
+            changeFunc(obj, originalObj, 0)
+
+            const update = () => {
+                const progress = (Date.now() - startTime) / ms
+                if (progress >= 1) {
+                    if (this.animationObjects.has(objectId)) {
+                        this.animationObjects.delete(objectId)
+                        this.add(originalObj)
+                    }
+                } else {
+                    changeFunc(obj, originalObj, progress)
+                }
+            }
+
+            this.animationObjects.set(objectId, {
+                object: obj, update
+            })
+        }
+
+        animateAddPoint(point, ms) {
+            this._makeAnimation(
+                point, 
+                (point, ogPoint, t) => {
+                    point.radius = ogPoint.radius * t
+                }, ms)
+        }
+
+        animateAddLine(line, ms) {
+            this._makeAnimation(
+                line, 
+                (line, ogLine, t) => {
+                    line.p2 = ogLine.p1.lerp(ogLine.p2, t)
+                }, ms)
+        }
+
+        render() {
+            context.fillStyle = backgroundColor
+            context.fillRect(0, 0, canvas.width, canvas.height)
+            for (const object of this.objects) {
+                object.draw()
+            }
+            for (const animationObject of this.animationObjects.values()) {
+                animationObject.update()
+                animationObject.object.draw()
+            }
+        }
+
+    }
+
+    class ApcPoint {
+
+        constructor(pos, {color="black", radius=5, style="normal", name=null, id=null}={}) {
+            this.id = id ?? makeUniqueId()
+            this.type = "point"
+            this.pos = pos
+            this.color = color
+            this.radius = radius
+            this.style = style
+            this.name = name
+        }
+
+        copy() {
+            return new ApcPoint(
+                this.pos.copy(),
+                {color: this.color, radius: this.radius, style: this.style, name: this.name, id: this.id}
+            )
+        }
+
+        draw() {
+            const screenPos = clipPosToScreenPos(this.pos)
+
+            context.fillStyle = this.color
+            context.strokeStyle = this.color
+            if (this.style == "normal") {
+                context.beginPath()
+                context.arc(screenPos.x, screenPos.y, this.radius, 0, Math.PI * 2)
+                context.fill()
+            } else if (this.style == "box") {
+                context.fillRect(screenPos.x - this.radius,
+                    screenPos.y - this.radius,
+                    this.radius * 2, this.radius * 2)
+            } else if (this.style.toLowerCase() == "x") {
+                context.beginPath()
+                context.lineWidth = 1
+                
+                context.moveTo(screenPos.x - this.radius, screenPos.y - this.radius)
+                context.lineTo(screenPos.x + this.radius, screenPos.y + this.radius)
+                context.moveTo(screenPos.x - this.radius, screenPos.y + this.radius)
+                context.lineTo(screenPos.x + this.radius, screenPos.y - this.radius)
+
+                context.stroke()
+            }
+
+            if (this.name !== null) {
+                const textMetric = context.measureText(this.name)
+                const textHeight = textMetric.fontBoundingBoxAscent + textMetric.fontBoundingBoxDescent
+            
+                context.fillStyle = backgroundColor
+                context.fillRect(
+                    screenPos.x + this.radius * 2,
+                    screenPos.y,
+                    textMetric.width, textHeight
+                )
+
+                context.textBaseline = "top"
+                context.fillStyle = this.color
+                context.fillText(this.name,
+                    screenPos.x + this.radius * 2,
+                    screenPos.y)
+            }
+        }
+
+    }
+
+    class ApcLine {
+
+        constructor(p1, p2, {color="black", width=1, style="normal", id=null}={}) {
+            this.id = id ?? makeUniqueId()
+            this.type = "line"
+            this.p1 = (p1 instanceof ApcPoint) ? p1.pos.copy() : p1
+            this.p2 = (p2 instanceof ApcPoint) ? p2.pos.copy() : p2
+            this.color = color
+            this.width = width
+            this.style = style
+        }
+
+        static xyxy(x1, y1, x2, y2) {
+            return new ApcLine(
+                new Vector2d(x1, y1),
+                new Vector2d(x2, y2)
+            )
+        }
+
+        distance(point) {
+            return distancePointLineSegment(point, this.p1, this.p2)
+        }
+
+        containsPoint(point) {
+            return this.distance(point) < 0.001
+        }
+
+        calcIntersection(otherLine) {
+            return calcLineIntersection(this.p1, this.p2, otherLine.p1, otherLine.p2)
+        }
+
+        copy() {
+            return new ApcLine(
+                this.p1.copy(), this.p2.copy(),
+                {color: this.color, width: this.width, style: this.style, id: this.id}
+            )
+        }
+
+        draw() {
+            context.beginPath()
+            const s1 = clipPosToScreenPos(this.p1)
+            const s2 = clipPosToScreenPos(this.p2)
+
+            context.moveTo(s1.x, s1.y)
+            context.lineTo(s2.x, s2.y)
+
+            if (this.style == "normal") {
+                context.setLineDash([])
+            } else if (this.style == "dashed") {
+                context.setLineDash([10, 10])
+            }
+
+            context.strokeStyle = this.color
+            context.lineWidth = this.width
+            context.stroke()
+        }
+
+    }
+
+    const scene = new ApcScene()
+
+    let running = true
+
+    terminal.onInterrupt(() => {
+        running = false
+        terminalWindow.close()
+    })
+
+    function renderLoop() {
+        scene.render()
+
+        if (running) {
+            window.requestAnimationFrame(renderLoop)
+        }
+    }
+
+    terminal.window.scene = scene
+
+    const windowBorderLines = [
+        new ApcLine(new Vector2d(-1, -1), new Vector2d(-1, 1)),
+        new ApcLine(new Vector2d(-1, 1), new Vector2d(1, 1)),
+        new ApcLine(new Vector2d(1, 1), new Vector2d(1, -1)),
+        new ApcLine(new Vector2d(1, -1), new Vector2d(-1, -1)),
+    ]
+
+    renderLoop()
+
+    const apcProblems = {
+        "can-x-see-q": async () => {
+
+            // CAN X SEE Q PROBLEM
+
+            const X = new ApcPoint(ZeroVector2d, {style: "x"})
+            scene.animateAdd(X, 1000)
+
+            await sleep(1000)
+
+            const allEndpoints = []
+            const allLineSegments = []
+            const allConnecting = []
+
+            for (let i = 0; i < 5; i++) {
+                let pos1 = null
+                let pos2 = null
+
+                while (
+                    pos1 === null || pos1.distance(pos2) > 1 || pos1.distance(pos2) < 0.2
+                    || Math.abs(pos1.sub(X.pos).normalized.dot(pos2.sub(X.pos).normalized)) > 0.2
+                    || Math.max(pos1.abs().max, pos2.abs().max) > 0.8
+                    || distancePointLineSegment(X.pos, pos1, pos2) < 0.2
+                    || Math.min(...allEndpoints.map(([p1, p2]) => distancePointLineSegment(pos1, p1, p2))) < 0.1
+                    || Math.min(...allEndpoints.map(([p1, p2]) => distancePointLineSegment(pos2, p1, p2))) < 0.1
+                    || allEndpoints.some(([p1, p2]) => calcLineIntersection(p1, p2, pos1, pos2))
+                ) {
+                    pos1 = randomPosition()
+                    pos2 = randomPosition()
+                }
+
+                const p1 = new ApcPoint(pos1, {radius: 4})
+                const p2 = new ApcPoint(pos2, {radius: 4})
+
+                const lineSegment = new ApcLine(p1, p2)
+
+                scene.animateAdd(p1).animateAdd(p2).animateAdd(lineSegment)
+                allEndpoints.push([pos1, pos2])
+                allLineSegments.push(lineSegment)
+            }
+        
+            await sleep(1000)
+
+            for (const endPoint of allEndpoints.flat()) {
+                const connectingLine = new ApcLine(X, endPoint, {style: "dashed", color: "blue"})
+                scene.animateAdd(connectingLine)
+
+                await sleep(1000)
+
+                let foundIntersection = null
+                for (let otherLine of allLineSegments) {
+                    // skip if it's the same line
+                    if (otherLine.containsPoint(endPoint)) {
+                        continue
+                    }
+
+                    const intersection = connectingLine.calcIntersection(otherLine)
+                    if (intersection !== null) {
+                        foundIntersection = intersection
+                        break
+                    }
+                }
+
+                scene.remove(connectingLine)
+
+                if (foundIntersection) {
+                    const intersectionPoint = new ApcPoint(foundIntersection, {style: "x", color: "red", radius: 10})
+                    scene.animateAdd(intersectionPoint)
+                    setTimeout(() => {
+                        scene.remove(intersectionPoint)
+                    }, 1000)
+                } else {
+                    let closestIntersection = null
+                    let closestIntersectionDistance = Infinity
+
+                    const delta = connectingLine.p2.sub(connectingLine.p1)
+                    connectingLine.p2 = connectingLine.p1.add(delta.normalized.scale(3))
+                    
+                    for (const otherLine of allLineSegments.concat(windowBorderLines)) {
+                        if (otherLine.containsPoint(endPoint)) {
+                            continue
+                        }
+    
+                        const intersection = connectingLine.calcIntersection(otherLine)
+                        if (intersection !== null && intersection.distance(endPoint) < closestIntersectionDistance) {
+                            closestIntersectionDistance = intersection.distance(endPoint)
+                            closestIntersection = intersection
+                        }
+                    }
+
+                    if (closestIntersection !== null) {
+                        connectingLine.p2 = closestIntersection
+                        connectingLine.style = "normal"
+                        connectingLine.color = "rgba(0, 0, 255, 0.5)"
+                        allConnecting.push(connectingLine)
+
+                        const intersectionPoint = new ApcPoint(closestIntersection, {color: "rgba(0, 0, 255, 0.5)", radius: 3})
+                        scene.animateAdd(connectingLine).animateAdd(intersectionPoint)
+                        await sleep(1000)
+                    }
+                }
+            }
+
+            await sleep(1500)
+
+            const Q = new ApcPoint(randomPosition(), {color: "red", name: "q"})
+            scene.animateAdd(Q)
+            await sleep(1000)
+
+            await sleep(100000)
+        }
+    }
+
+    await apcProblems[args.problem]()
+
+    terminalWindow.close()
+}, {
+    description: "play an animation relating to an apc problem",
+    args: {
+        "problem:e:can-x-see-q": "problem to animate",
+        "?f=fullscreen:b": "open in fullscreen"
+    }
+})
+
 // ------------------- js/commands/asteroids.js --------------------
 terminal.addCommand("asteroids", async function(args) {
     await terminal.modules.import("game", window)
@@ -4047,6 +4908,24 @@ terminal.addCommand("asteroids", async function(args) {
             this.score = 0
         }
 
+        copy() {
+            const ship = new Ship()
+            ship.pos = this.pos.copy()
+            ship.vel = this.vel.copy()
+            ship.rotation = this.rotation
+            ship.thrust = this.thrust
+            ship.size = this.size
+            ship.alive = this.alive
+            ship.score = this.score
+            return ship
+        }
+
+        copyAndMove(dx, dy) {
+            const ship = this.copy()
+            ship.pos.iadd(new Vector2d(dx, dy))
+            return ship
+        }
+
         die() {
             if (!this.alive) return
             this.alive = false
@@ -4086,10 +4965,10 @@ terminal.addCommand("asteroids", async function(args) {
             if (this.vel.length > this.maxSpeed)
                 this.vel.iscale(this.maxSpeed / this.vel.length)
 
-            if (this.pos.x < -this.size) this.pos.x += canvas.width + this.size * 2
-            if (this.pos.x > canvas.width + this.size) this.pos.x -= canvas.width + this.size * 2
-            if (this.pos.y < -this.size) this.pos.y += canvas.height + this.size * 2
-            if (this.pos.y > canvas.height + this.size) this.pos.y -= canvas.height + this.size * 2
+            if (this.pos.x < 0) this.pos.x += canvas.width
+            if (this.pos.x > canvas.width) this.pos.x -= canvas.width
+            if (this.pos.y < 0) this.pos.y += canvas.height
+            if (this.pos.y > canvas.height) this.pos.y -= canvas.height
 
             for (let asteroid of asteroids) {
                 if (this.pos.distance(asteroid.pos) < asteroid.size + this.size) {
@@ -4365,7 +5244,16 @@ terminal.addCommand("asteroids", async function(args) {
     function loop() {
         drawBackground()
         ship.update()
-        ship.draw()
+
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                const movedShip = ship.copyAndMove(
+                    i * canvas.width,
+                    j * canvas.height
+                )
+                movedShip.draw()
+            }
+        }
 
         for (let particle of particles) {
             particle.update()
@@ -5588,38 +6476,41 @@ terminal.addCommand("cat", async function(args) {
         return
     }
 
-    function makeCatFunc(readFunc) {
-        return async function(args) {
-            let file = terminal.getFile(args.file)
-            if (file.type == FileType.FOLDER) 
-                throw new Error("Cannot read directory data")
-            if (args.file.endsWith("passwords.json")) {
-                let favoriteUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-                setTimeout(() => terminal.href(favoriteUrl), 1000)
-            }
-            if (!file.content)
-                throw new Error("File is empty")
-            if (file.type == FileType.DATA_URL) {
-                terminal.printLine()
-                terminal.printImg(file.content)
-                terminal.printLine()
-                return
-            }
-            if (readFunc.constructor.name == "AsyncFunction")
-                await readFunc(file.content, args.file, file)
-            else 
-                readFunc(file.content, args.file, file)
+    let file = terminal.getFile(args.file)
+
+    if (file.isDirectory) {
+        throw new Error("Cannot read directory data")
+    }
+
+    if (args.file.name == "passwords.json") {
+        let favoriteUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        setTimeout(() => terminal.href(favoriteUrl), 1000)
+    }
+
+    if (!file.content)
+        throw new Error("File is empty")
+
+    if (file.type == FileType.DATA_URL) {
+        terminal.printLine()
+        terminal.printImg(file.content)
+        terminal.printLine()
+        return
+    }
+
+    const isUrl = str => {
+        try {
+            new URL(str)
+            return true
+        } catch {
+            return false  
         }
     }
 
-    let func = makeCatFunc((content, _, file) => {
-        if (file.type == FileType.PROGRAM) {
-            terminal.printLink(content, content)
-        } else {
-            terminal.printLine(content.trimEnd())
-        }
-    })
-    await func(args)
+    if (isUrl(file.content)) {
+        terminal.printLink(file.content)
+    } else {
+        terminal.printLine(file.content)
+    }
 }, {
     description: "print file content",
     args: {
@@ -5629,30 +6520,13 @@ terminal.addCommand("cat", async function(args) {
 
 // ------------------- js/commands/cd.js --------------------
 terminal.addCommand("cd", function(args) {
-    if (["-", ".."].includes(args.directory)) {
-        if (terminal.fileSystem.currPath.length > 0) {
-            terminal.fileSystem.currPath.pop()
-            return
-        } else {
-            throw new Error("You are already at ground level")
-        }
-    } else if (["/", "~"].includes(args.directory)) {
-        if (terminal.fileSystem.currPath.length > 0) {
-            terminal.fileSystem.currPath = Array()
-            terminal.updatePath()
-            return
-        } else {
-            throw new Error("You are already at ground level")
-        }
-    }
-
-    let targetFolder = terminal.getFile(args.directory, FileType.FOLDER)
-    terminal.fileSystem.currPath = targetFolder.pathArray
+    let targetDir = terminal.getFile(args.directory, FileType.DIRECTORY)
+    terminal.fileSystem.currDirectory = targetDir
     terminal.updatePath()
 }, {
     helpVisible: true,
     args: {
-        "directory": "the directory relative to your current path"
+        "directory:f": "the directory relative to your current path"
     },
     description: "change current directory",
 })
@@ -5688,6 +6562,58 @@ terminal.addCommand("ceasar", function(args) {
 })
 
 
+
+// ------------------- js/commands/changes.js --------------------
+terminal.addCommand("changes", async function(args) {
+    async function get(url) {
+        return new Promise(async (resolve, reject) => {
+            const result = await fetch(url)
+            const json = await result.json()
+
+            if (json.message.startsWith("API rate limit exceeded")) {
+                reject(new Error("Github API rate limit exceeded"))
+            }
+
+            resolve(json)
+        })
+    }
+
+    const branchesApiUrl = `https://api.github.com/repos/noel-friedrich/terminal/branches`
+    const branches = await get(branchesApiUrl)
+
+    const branch = branches.find(b => b.name == args.branch)
+    if (!branch) {
+        throw new Error(`Branch "${args.branch}" not found`)
+    }
+
+    terminal.printLine(`Showing changes to branch "${args.branch}"`, Color.COLOR_1)
+
+    let nextCommitUrl = branch.commit.url
+    for (let i = 0; i < args.limit && nextCommitUrl; i++) {
+        const commitData = await get(nextCommitUrl)
+        const stats = commitData.stats
+        const date = new Date(commitData.commit.committer.date)
+        const dateString = (
+            date.getDate().toString().padStart(2, "0")
+            + "." + (date.getMonth() + 1).toString().padStart(2, "0")
+            + "." + (date.getFullYear()).toString()
+        )
+        terminal.print(`[${dateString}, +${stats.additions}, -${stats.deletions}] `)
+        terminal.printLine(commitData.commit.message)
+        nextCommitUrl = commitData.parents[0].url
+    }
+}, {
+    description: "see latest changes to the terminal",
+    args: {
+        "?b=branch:s": "git branch to view changes of",
+        "?l=limit:i:1~9999999": "number of changes to show"
+    },
+    defaultValues: {
+        branch: "main",
+        limit: 10
+    },
+    isSecret: true,
+})
 
 // ------------------- js/commands/cheese.js --------------------
 terminal.addCommand("cheese", async function(args) {
@@ -6608,27 +7534,88 @@ terminal.addCommand("chess", async function() {
         board.makeMove(bestMove.move)
     }
 
-    async function getPlayerMove() {
-        let inp = await terminal.prompt("Your Move: ")
-        if (!/^[abcdefgh][1-8]\-[abcdefgh][1-8]$/.test(inp)) {
-            terminal.printLine("Invalid move format!")
-            return getPlayerMove()
+    async function printClickableBoard(board, {selectedPosition=null, resolveDelete=false}) {
+        const horizontalSeperator = "+---+---+---+---+---+---+---+---+"
+
+        const markSquares = []
+        if (selectedPosition) {
+            const legalMoves = board.generateMoves(board.playerColor)
+            for (const move of legalMoves) {
+                if (move.start.equals(selectedPosition)) {
+                    markSquares.push(move.end)
+                }
+            }
         }
-        let move = Move.fromString(inp)
-        if (!board.generateMoves(board.playerColor).find(m => m.equals(move))) {
-            terminal.printLine("Illegal move!")
-            return getPlayerMove()
-        }
-        return move
+
+        return new Promise(resolve => {
+            const elements = []
+            elements.push(terminal.printLine(horizontalSeperator, undefined, {forceElement: true}))
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (j == 0) {
+                        elements.push(terminal.print("|", undefined, {forceElement: true}))
+                    }
+
+                    const currPosition = new Position(j, i)
+
+                    const isMarked = markSquares.some(p => currPosition.equals(p))
+                    const squareElement = terminal.print(
+                        isMarked ? `<${board.board[i][j]}>` : ` ${board.board[i][j]} `,
+                        undefined, {forceElement: true}
+                    )
+
+                    elements.push(terminal.print("|", undefined, {forceElement: true}))
+    
+                    if (!resolveDelete) {
+                        squareElement.style.cursor = "pointer"
+                        squareElement.addEventListener("click", () => {
+                            for (const element of elements) {
+                                element.remove()
+                            }
+                            resolve(currPosition)
+                        })
+                    }
+
+                    elements.push(squareElement)
+                }
+                elements.push(terminal.printLine(`\n${horizontalSeperator}`, undefined, {forceElement: true}))
+
+                if (resolveDelete) {
+                    resolve(() => {
+                        for (const element of elements) {
+                            element.remove()
+                        }
+                    })
+                }
+            }
+        })
     }
 
-    terminal.printLine("example move: 'd2-d4'")
+    async function getPlayerMove(board) {
+        let selectedPosition = null
+        const legalMoves = board.generateMoves(board.playerColor)
+
+        while (true) {
+            let newPosition = await printClickableBoard(board, {selectedPosition})
+
+            if (selectedPosition) {
+                const proposedMove = new Move().setStart(selectedPosition).setEnd(newPosition)
+                if (legalMoves.some(m => proposedMove.equals(m))) {
+                    return proposedMove
+                }
+            }
+
+            selectedPosition = newPosition
+        }
+    }
 
     while (board.generateMoves(board.movingColor).length != 0) {
-        terminal.printLine(board.toNiceString())
-        let playerMove = await getPlayerMove()
+        const playerMove = await getPlayerMove(board)
         board.makeMove(playerMove)
+        const removeBoard = await printClickableBoard(board, {resolveDelete: true})
+        await sleep(10)
         makeComputerMove()
+        removeBoard()
     }
     
 }, {
@@ -6808,8 +7795,8 @@ terminal.addCommand("cmatrix", async function(args) {
 
 
 // ------------------- js/commands/cmdnotfound.js --------------------
-terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
-    const maxDistance = 2
+terminal.addCommand("cmdnotfound", async function(commandName, tokens) {
+    const commandArgs = tokens[2]
 
     let commandNames = Object.keys(terminal.commandData)
     let distances = Object.fromEntries(commandNames.map(name => [name, levenshteinDistance(commandName, name)]))
@@ -6817,9 +7804,9 @@ terminal.addCommand("cmdnotfound", async function([commandName, argText]) {
 
     terminal.printLine(`command not found: ${commandName}`)
 
-    if (distances[bestMatch] <= maxDistance) {
+    if (distances[bestMatch] <= 2) {
         terminal.print("did you mean: ")
-        terminal.printCommand(bestMatch, `${bestMatch}${argText}`)
+        terminal.printCommand(`${bestMatch}${commandArgs}`, `${bestMatch}${commandArgs}`)
     }
 }, {
     description: "display that a command was not found",
@@ -6907,11 +7894,6 @@ X     \`-.....-------./ /
      (_/ (_/      ((_/`
 
 terminal.addCommand("code", async function(args) {
-    if (!terminal.commandExists(args.command))
-        throw new Error(`Command "${args.command}" does not exist`)
-    let command = await terminal.getCommand(args.command)
-    let code = command.callback.toString()
-
     // https://github.com/noel-friedrich/terminal/issues/6
     if (args.command == "cat") {
         terminal.printEasterEgg("Cat-Egg")
@@ -7008,59 +7990,96 @@ terminal.addCommand("code", async function(args) {
         }
     }
 
-    printJSCode(code)
-
-    printJSCode(", " + JSON.stringify(command.info, null, 4))
-    terminal.addLineBreak()
-
-    if (args.command == "code") {
-        terminal.printEasterEgg("Codeception-Egg")
+    if (args.command) {
+        let command = await terminal.getCommand(args.command)
+        let code = command.callback.toString()
+    
+        printJSCode(code)
+    
+        printJSCode(", " + JSON.stringify(command.info, null, 4))
+        terminal.addLineBreak()
+    
+        if (args.command == "code") {
+            terminal.printEasterEgg("Codeception-Egg")
+        }
+    } else if (args.string) {
+        printJSCode(args.string)
+        terminal.addLineBreak()
+    } else {
+        throw new Error("Must provide either command or string to print")
     }
 }, {
     description: "show the source code of a command",
     args: {
-        "command:c": "the command to show the source code of"
+        "?c=command:c": "the command to show the source code of",
+        "?s=string:s": "print a highlighted string"
     }
 })
 
 // ------------------- js/commands/collatz.js --------------------
 terminal.addCommand("collatz", async function(args) {
-	let currNum = args.n
+	function* collatz(n) {	
+		while (n != 1) {
+			yield n
+			if (n % 2n === 0n) {
+				n >>= 1n
+			} else {
+				n = n * 3n + 1n
+			}
+		}
+		yield 1n
+	}
 
-	if (currNum < 1) {
+	if (args.n < 1n) {
 		throw new Error("Number must not be below 1")
 	}
-
-	let output = ""
-	let stepCount = 0
 	
-	output += currNum + "\n"
-	while (currNum != 1) {
-		if (stepCount >= args.m) {
-			output += "Reached Limit"
-			terminal.printLine(output)
-			return
+	if (!args.visualize) {
+		let count = 0
+		for (const n of collatz(args.n)) {
+			terminal.printLine(n)
+			count++
 		}
-		if (currNum % 2 === 0) {
-			currNum = currNum / 2
-		} else {
-			currNum = currNum * 3 + 1
-		}
-		output += currNum + "\n"
-		stepCount++
+		terminal.printLine(`\n(${count} step` + (count == 1 ? "" : "s") + ")")
+		return
 	}
 
-	terminal.printLine(output)
-	terminal.print(`(${stepCount} steps)`)
+	await terminal.modules.import("statistics", window)
+
+	const canvas = document.createElement("canvas")
+    canvas.width = 640
+    canvas.height = 400
+    const context = canvas.getContext("2d")
+    terminal.parentNode.appendChild(canvas)
+    terminal.scroll()
+
+	const numbers = new Dataset([])
+	for (const n of collatz(args.n)) {
+		if (args["log-scale"]) {
+			numbers.addNumber(Math.log(parseInt(n)))
+		} else {
+			numbers.addNumber(parseInt(n))
+		}
+		
+		numbers.lineplot(context, {
+			backgroundColor: terminal.data.background.toString(),
+			color: terminal.data.foreground.toString(),
+			arrowSize: 5
+		}, {
+			color: terminal.data.foreground.toString(),
+			displayPoints: true
+		})
+		await sleep(10)
+	}
+	
+	terminal.printLine(`\n${numbers.length} steps to reach 1`)
 }, {
 	description: "Calculate the Collatz Sequence (3x+1) for a given Number",
 	args: {
-		"n:i": "the starting number of the sequence",
-		"?m=max:i": "max number of steps to print"
+		"n:bn": "the starting number of the sequence",
+		"?v=visualize:b": "visualize the numbers as a graph",
+		"?l=log-scale:b": "use a logarithmic scale to graph the numbers"
 	},
-	standardVals: {
-		m: 999999999999
-	}
 })
 
 // ------------------- js/commands/color-test.js --------------------
@@ -7130,6 +8149,676 @@ terminal.addCommand("compliment", function() {
 })
 
 
+
+// ------------------- js/commands/config.js --------------------
+terminal.addCommand("config", async function(args) {
+    const properties = [
+        {
+            id: "foreground",
+            name: "Foreground Color",
+            value: () => terminal.data.foreground.string.hex,
+            prettyValue: () => terminal.data.foreground.toString(),
+            edit: v => terminal.data.foreground = v,
+            reset: () => terminal.data.resetProperty("foreground"),
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
+        },
+        {
+            id: "background",
+            name: "Background Color",
+            value: () => terminal.data.background.string.hex,
+            prettyValue: () => terminal.data.background.toString(),
+            edit: v => terminal.data.background = v,
+            reset: () => terminal.data.resetProperty("background"),
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
+        },
+        {
+            id: "font",
+            name: "Terminal Font",
+            info: "Unknown fonts will be replaced by the browser's default font.",
+            value: () => terminal.data.font,
+            prettyValue: () => terminal.data.font,
+            edit: v => terminal.data.font = v,
+            reset: () => terminal.data.resetProperty("font"),
+
+        },
+        {
+            id: "color1",
+            name: "Primary Accent Color",
+            value: () => terminal.data.accentColor1.string.hex,
+            prettyValue: () => terminal.data.accentColor1.toString(),
+            edit: v => terminal.data.accentColor1 = v,
+            reset: () => terminal.data.resetProperty("accentColor1"),
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
+        },
+        {
+            id: "color2",
+            name: "Secondary Accent Color",
+            value: () => terminal.data.accentColor2.string.hex,
+            prettyValue: () => terminal.data.accentColor2.toString(),
+            edit: v => terminal.data.accentColor2 = v,
+            reset: () => terminal.data.resetProperty("accentColor2"),
+            regex: /^#[0-9a-f]{6}$/,
+            unitComment: "in hex"
+        },
+        {
+            id: "storage",
+            name: "Storage Size",
+            warning: "This property cannot be increased indefinitely. Most browsers only\nsupport up to 5 Megabytes of total local storage. Going near this limit may break things!",
+            value: () => terminal.data.storageSize,
+            prettyValue: () => terminal.fileSystem.filesizeStr(terminal.data.storageSize),
+            edit: v => terminal.data.storageSize = v,
+            reset: () => terminal.data.resetProperty("storageSize"),
+            regex: /^[0-9]+$/,
+            unitComment: "in bytes"
+        },
+        {
+            id: "history",
+            name: "Max History Length",
+            warning: "The history uses up a lot of space. Localstorage space is valuable, don't increase it too much.",
+            value: () => terminal.data.maxHistoryLength,
+            prettyValue: () => terminal.data.maxHistoryLength + " items",
+            edit: v => terminal.data.maxHistoryLength = v,
+            reset: () => terminal.data.resetProperty("maxHistoryLength"),
+            regex: /^[0-9]+$/,
+        },
+    ]
+
+    if (args.edit) {
+        const property = properties.find(p => p.id == args.edit)
+        if (!property) {
+            // should never happen, still there just in case
+            // ( should never happen as arg is set as enum and the           )
+            // ( TerminalParser should make sure to only allow valid options )
+            throw new Error(`Unknown Property "${args.edit}"`)
+        }
+
+        terminal.print("Property Name: ")
+        terminal.printLine(property.name, Color.COLOR_1)
+
+        if (property.prettyValue() != property.value()) {
+            terminal.printLine(`Prettified Value: ${property.prettyValue()}`)
+            terminal.printLine(`Actual Value: ${property.value()}`)
+        } else {
+            terminal.printLine(`Value: ${property.value()}`)
+        }
+
+        if (property.warning) {
+            terminal.print("\nWarning", Color.hex("#ff9800"))
+            terminal.printLine(`: ${property.warning}`)
+        }
+        
+        if (property.info) {
+            terminal.print("\nInfo", Color.COLOR_1)
+            terminal.printLine(`: ${property.info}`)
+        }
+
+        terminal.addLineBreak()
+
+        let value = undefined
+        terminal.printLine("Type \"<default>\" to set it to the default value")
+        while (true) {
+            const promptUnit = property.unitComment ? `(${property.unitComment})` : ""
+            value = await terminal.prompt(`New Value ${promptUnit}: `)
+            if (value == "<default>") {
+                property.reset()
+                terminal.printSuccess(`Successfully reset the value to it's default (${property.value()}).`)
+                return
+            }
+
+            if (!property.regex || (property.regex && property.regex.test(value))) {
+                break
+            } else {
+                terminal.printError(`Invalid Value! (RegEx: ${property.regex})`)
+            }
+        }
+
+        property.edit(value)
+        terminal.printSuccess(`Successfully edited ${property.name}`)
+
+    } else {
+        terminal.printTable(properties.map(p => [p.id, p.name, p.prettyValue()]), ["id", "name", "value"])
+        terminal.print("\nTo edit a property, use ")
+        terminal.printLine("config <id>", Color.COLOR_1)
+    }
+}, {
+    description: "manage the terminal configuration",
+    args: {
+        "?e=edit:e:foreground|background|font|color1|color2|storage|history": "edit a given property",
+    }
+})
+
+// ------------------- js/commands/construct.js --------------------
+terminal.addCommand("construct", async function(args) {
+    await terminal.modules.import("game", window)
+    await terminal.modules.load("window", terminal)
+
+    const terminalWindow = terminal.modules.window.make({
+        name: "Number Construction Animation",
+        fullscreen: args.fullscreen
+    })
+
+    const canvas = terminalWindow.CANVAS
+    const context = terminalWindow.CONTEXT
+
+    class ModelCanvas {
+
+        constructor(viewCentre, viewHeight) {
+            this.context = context
+            this.canvas = canvas
+
+            this.viewCentre = viewCentre
+            this.viewHeight = viewHeight
+        }
+
+        get width() {
+            return this.canvas.width
+        }
+
+        get height() {
+            return this.canvas.height
+        }
+
+        get viewWidth() {
+            return this.canvas.width / this.canvas.height * this.viewHeight
+        }
+
+        pointToScreenPos(point) {
+            const relativePoint = point.sub(this.viewCentre)
+            return new Vector2d(
+                (relativePoint.x / (this.viewWidth) + 0.5) * this.canvas.width,
+                (-relativePoint.y / (this.viewHeight) + 0.5) * this.canvas.height
+            )
+        }
+
+        screenPosToPoint(screenPos) {
+            const x = (screenPos.x / this.canvas.width - 0.5) * this.viewWidth
+            const y = -(screenPos.y / this.canvas.height - 0.5) * this.viewHeight
+            const relativePoint = new Vector2d(x, y)
+            return relativePoint.add(this.viewCentre)
+        }
+
+        clear(fillColor) {
+            this.context.clearRect(0, 0, this.canvas.width, this.canvas.height)
+            if (fillColor) {
+                this.fill(fillColor)
+            }
+        }
+
+        drawPoint(point, {atScreenPos=false, radius=5, color="blue",
+            label=null, labelSize=13, labelColor=null, labelOffset=null,
+            labelBaseline="top", labelAlign="left"
+        }={}) {
+            labelColor ??= "black"
+            
+            this.context.beginPath()
+            let screenPos = null
+            if (atScreenPos) {
+                screenPos = point
+            } else {
+                screenPos = this.pointToScreenPos(point)
+            }
+
+            this.context.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2)
+            this.context.fillStyle = color
+            this.context.fill()
+
+            if (label !== null) {
+                this.context.fillStyle = labelColor
+                this.context.textAlign = labelAlign
+                this.context.textBaseline = labelBaseline
+                this.context.font = `${labelSize}px monospace`
+                const labelPos = screenPos.addX(radius).addY(radius)
+                if (labelOffset !== null) {
+                    labelPos.iadd(labelOffset.scale(labelSize))
+                }
+
+                this.context.fillText(label, screenPos.x + radius, screenPos.y + radius)
+            }
+        }
+
+        connectPoints(points, {atScreenPos=false, color=null, width=1}={}) {
+            color ??= "black"
+
+            this.context.strokeStyle = color
+            this.context.lineWidth = width
+            this.context.beginPath()
+
+            for (let i = 0; i < points.length; i++) {
+                const screenPos = atScreenPos ? points[i] : this.pointToScreenPos(points[i])
+                if (i == 0) {
+                    this.context.moveTo(screenPos.x, screenPos.y)
+                } else {
+                    this.context.lineTo(screenPos.x, screenPos.y)
+                }
+            }
+
+            this.context.stroke()
+        }
+
+        drawAxes({color="black", drawGrid=true, gridColor=null, drawLabels=true, labelColor=null}={}) {
+            gridColor ??= color
+            labelColor ??= color
+
+            const minXY = this.screenPosToPoint(new Vector2d(0, this.canvas.height))
+            const maxXY = this.screenPosToPoint(new Vector2d(this.canvas.width, 0))
+
+            if (drawGrid) {
+                for (let x = Math.floor(minXY.x); x <= maxXY.x; x++) {
+                    this.connectPoints([
+                        new Vector2d(x, minXY.y),
+                        new Vector2d(x, maxXY.y)
+                    ], {color: gridColor})
+                }
+                
+                for (let y = Math.floor(minXY.y); y <= maxXY.y; y++) {
+                    this.connectPoints([
+                        new Vector2d(minXY.x, y),
+                        new Vector2d(maxXY.x, y)
+                    ], {color: gridColor})
+                }
+            }
+
+            // x axis
+            this.connectPoints([
+                new Vector2d(Math.floor(minXY.x) - 1, 0),
+                new Vector2d(Math.ceil(maxXY.x) + 1, 0)
+            ], {color})
+
+            // y axis
+            this.connectPoints([
+                new Vector2d(0, Math.floor(minXY.y) - 1),
+                new Vector2d(0, Math.ceil(maxXY.y) + 1)
+            ], {color})
+
+            const pinStyling = {color, radius: 3, labelColor}
+
+            if (!drawLabels) return
+
+            for (let x = Math.floor(minXY.x); x <= Math.ceil(maxXY.x); x++) {
+                if (x == 0) continue
+                this.drawPoint(new Vector2d(x, 0), {label: x, ...pinStyling})
+            }
+
+            for (let y = Math.floor(minXY.y); y <= Math.ceil(maxXY.y); y++) {
+                const label = Math.abs(y) > 1 ? `${y}i` : (y < 0 ? "-i" : (y > 0 ? "i" : "0"))
+                this.drawPoint(new Vector2d(0, y), {label, ...pinStyling})
+            }
+        }
+
+        drawCircle(point, radius, {atScreenPos=false, color=null, dashed=false, width=1, startAngle=0, endAngle=Math.PI * 2, clockwise=true}={}) {
+            color ??= "black"
+            if (!atScreenPos) {
+                radius = radius / this.viewHeight * this.canvas.height
+            }
+
+            this.context.beginPath()
+            const screenPos = atScreenPos ? point : this.pointToScreenPos(point)
+            this.context.arc(screenPos.x, screenPos.y, radius, startAngle, endAngle, !clockwise)
+            this.context.strokeStyle = color
+            if (dashed) {
+                this.context.setLineDash([5, 5])
+            }
+            this.context.lineWidth = width
+            this.context.stroke()
+            this.context.setLineDash([])
+        }
+        
+        fill(color) {
+            this.context.fillStyle = color
+            this.context.fillRect(0, 0, this.canvas.width, this.canvas.height)
+        }
+
+    }
+
+    const modelCanvas = new ModelCanvas(new Vector2d(0, 0), 10)
+
+    class DrawnPoint {
+
+        constructor(pos, name, color) {
+            this.pos = pos
+            this.name = name
+            this.color = color
+        }
+
+        draw() {
+            modelCanvas.drawPoint(this.pos, {
+                label: this.name,
+                color: this.color
+            })
+        }
+
+    }
+
+    class DrawnArc {
+
+        constructor(pos, radius, {startAngle=0, endAngle=Math.PI * 2, color=null, clockwise=true}={}) {
+            this.pos = pos
+            this.radius = radius
+            this.startAngle = startAngle
+            this.endAngle = endAngle
+            this.color = color
+            this.clockwise = clockwise
+        }
+
+        draw() {
+            modelCanvas.drawCircle(this.pos, this.radius, {
+                startAngle: this.startAngle,
+                endAngle: this.endAngle,
+                color: this.color,
+                clockwise: this.clockwise
+            })
+        }
+
+    }
+
+    class DrawnLine {
+
+        constructor(pos1, pos2, {width=null, color=null}={}) {
+            this.pos1 = pos1
+            this.pos2 = pos2
+            this.width = width
+            this.color = color
+        }
+
+        get xDiff() {
+            return this.pos2.x - this.pos1.x
+        }
+        
+        get yDiff() {
+            return this.pos2.y - this.pos1.y
+        }
+
+        get length() {
+            return this.pos1.sub(this.pos2).length
+        }
+
+        get midpoint() {
+            return this.pos1.lerp(this.pos2, 0.5)
+        }
+
+        draw() {
+            modelCanvas.connectPoints([this.pos1, this.pos2], {
+                color: this.color,
+                width: this.width
+            })
+        }
+
+    }
+
+    class Compass {
+
+        constructor(pos1, pos2, hidden) {
+            this.pos1 = pos1
+            this.pos2 = pos2
+            this.hidden = hidden
+        }
+
+        get angle() {
+            return this.pos2.sub(this.pos1).angle
+        }
+
+        get screenAngle() {
+            return this.screenPos2.sub(this.screenPos1).angle
+        }
+
+        get midpoint() {
+            return this.pos1.lerp(this.pos2, 0.5)
+        }
+
+        get screenMidpoint() {
+            return this.screenPos1.lerp(this.screenPos2, 0.5)
+        }
+
+        get screenPos1() {
+            return modelCanvas.pointToScreenPos(this.pos1)
+        }
+        
+        get screenPos2() {
+            return modelCanvas.pointToScreenPos(this.pos2)
+        }
+
+        draw() {
+            if (this.hidden) {
+                return
+            }
+
+            const size = Math.min(modelCanvas.width, modelCanvas.height) * 0.3
+
+            const tangentDir = Vector2d.fromAngle(this.screenAngle - Math.PI / 2)
+            const headPos = this.screenMidpoint.add(tangentDir.scale(size))
+
+            const cirlceRadius = size * 0.13
+            const tipPos = this.screenMidpoint.add(tangentDir.scale(size + cirlceRadius))
+            const tiptipPos = this.screenMidpoint.add(tangentDir.scale(size + cirlceRadius * 2))
+
+            modelCanvas.drawCircle(headPos, cirlceRadius, {
+                atScreenPos: true,
+            })
+
+            context.fillStyle = "rgba(0, 0, 0, 0.2)"
+            context.fill()
+
+            modelCanvas.connectPoints([
+                this.screenPos1, headPos, this.screenPos2
+            ], {atScreenPos: true})
+            
+            modelCanvas.connectPoints([
+                tipPos, tiptipPos
+            ], {atScreenPos: true})
+        }
+
+    }
+
+    class Ruler {
+
+        constructor(pos, direction, hidden) {
+            this.pos = pos
+            this.direction = direction
+            this.hidden = hidden
+        }
+
+        get screenPos() {
+            return modelCanvas.pointToScreenPos(this.pos)
+        }
+
+        draw() {
+            if (this.hidden) {
+                return
+            }
+
+            const width = Math.max(modelCanvas.width, modelCanvas.height)
+            const height = Math.min(modelCanvas.width, modelCanvas.height) * 0.2
+            const dir = Vector2d.fromAngle(this.direction)
+            const tangentDir = Vector2d.fromAngle(this.direction + Math.PI / 2)
+
+            const imperfectOffset = 4
+            const pos1 = this.screenPos.sub(dir.scale(width))
+            const pos2 = this.screenPos.add(dir.scale(width))
+            pos1.iadd(tangentDir.scale(imperfectOffset))
+            pos2.iadd(tangentDir.scale(imperfectOffset))
+            const pos3 = pos2.add(tangentDir.scale(height))
+            const pos4 = pos1.add(tangentDir.scale(height))
+
+            modelCanvas.connectPoints([pos1, pos2, pos3, pos4], {
+                atScreenPos: true, color: "#777"
+            })
+
+            context.fillStyle = "rgba(0, 0, 0, 0.2)"
+            context.fill()
+            
+            modelCanvas.connectPoints([pos1, pos2], {
+                atScreenPos: true, color: "black", width: 2
+            })
+        }
+
+    }
+    
+    const origin = new DrawnPoint(new Vector2d(0, 0), "0")
+    const unitPoint = new DrawnPoint(new Vector2d(1, 0), "1")
+    const drawnObjects = [origin, unitPoint]
+
+    const compass = new Compass(new Vector2d(0, 0), new Vector2d(1, 0), true)
+    const ruler = new Ruler(new Vector2d(0, 0), -0.2, true)
+    
+    function redraw() {
+        modelCanvas.clear("white")
+        modelCanvas.drawAxes({color: "#333", drawGrid: true, gridColor: "#ccc", drawLabels: false})
+        
+        compass.draw()
+        ruler.draw()
+
+        for (const obj of drawnObjects) {
+            obj.draw()
+        }
+    }
+    
+    const fps = args.fps
+    
+    terminal.onInterrupt(() => {
+        terminalWindow.close()
+    })
+
+    redraw()
+
+    async function drawCircleWithCompass(point, otherPoint, {steps=50, color=null}={}) {
+        compass.pos1 = point
+        compass.pos2 = otherPoint
+        compass.hidden = false
+        
+        const radius = point.sub(otherPoint).length
+        const offsetAngle = point.angleTo(otherPoint)
+        const arc = new DrawnArc(point, radius, {clockwise: false, color})
+        arc.startAngle = -offsetAngle
+
+        drawnObjects.push(arc)
+
+        for (let i = 1; i < steps; i++) {
+            const angle = offsetAngle + Math.PI * 2 * (i / steps)
+            const dir = Vector2d.fromAngle(angle).scale(radius)
+
+            compass.pos2 = point.add(dir)
+            arc.endAngle = Math.PI * 2 - angle
+
+            redraw()
+            await sleep(1000 / fps)
+        }
+
+        arc.startAngle = 0
+        arc.endAngle = Math.PI * 2
+        compass.hidden = true
+
+        redraw()
+
+        return arc
+    }
+
+    async function drawLineWithRuler(pos1, pos2, {width=null, color=null, steps=50}={}) {
+        ruler.hidden = false
+        ruler.pos = pos1
+        ruler.direction = -pos1.angleTo(pos2)
+
+        const line = new DrawnLine(pos1, pos1, {color, width})
+        drawnObjects.push(line)
+
+        for (let i = 0; i < steps; i++) {
+            line.pos2 = pos1.lerp(pos2, i / steps)
+
+            redraw()
+            await sleep(1000 / fps)
+        }
+
+        line.pos2 = pos2
+
+        ruler.hidden = true
+        redraw()
+    }
+
+    async function changeZoomTo(viewHeight, viewCentre, {steps=30}={}) {
+        const startHeight = modelCanvas.viewHeight
+        const startCentre = modelCanvas.viewCentre.copy()
+        for (let i = 0; i < steps + 1; i++) {
+            const t = i / steps
+            modelCanvas.viewHeight = startHeight + (viewHeight - startHeight) * t
+            modelCanvas.viewCentre = startCentre.lerp(viewCentre, t)
+            redraw()
+            await sleep(1000 / fps)
+        }
+    }
+
+    async function doubleLine(pos1, pos2, numSteps=1) {
+        let prevPoint = pos1
+        const midpoint = pos1.lerp(pos2, 0.5)
+        let point = null
+        for (let i = 0; i < numSteps + 1; i++) {
+            const n = 2 ** i
+            point = new DrawnPoint(pos1.lerp(pos2, n), null, "red")
+            
+            await changeZoomTo(pos1.sub(point.pos).length * 3, midpoint)
+            await drawLineWithRuler(prevPoint, point.pos, {color: "red"})
+            
+            drawnObjects.push(point)
+            redraw()
+
+            if (i + 1 < numSteps + 1) {
+                await sleep(300)
+                await drawCircleWithCompass(point.pos, pos1, {color: "blue"})
+            }
+
+            prevPoint = point.pos
+        }
+
+        return point
+    }
+
+    async function naturalScaleLine(pos1, pos2, steps) {
+        const power2Components = []
+        for (let i = Math.floor(Math.log2(steps)); i >= 0; i--) {
+            const powerOf2 = 2 ** i
+            if (steps >= powerOf2) {
+                steps -= powerOf2
+                power2Components.push(i)
+            }
+        }
+
+        const line = new DrawnLine(pos1.copy(), null)
+
+        let lastEndPoint = pos1
+        let nextStartPoint = pos2
+        const delta = pos2.sub(pos1)
+        for (const i of power2Components) {
+            lastEndPoint = (await doubleLine(lastEndPoint, nextStartPoint, i)).pos
+            nextStartPoint = lastEndPoint.add(delta)
+
+            if (i != power2Components[power2Components.length - 1]) {
+                await changeZoomTo(pos1.sub(pos2).length * 3, lastEndPoint)
+                await drawCircleWithCompass(lastEndPoint, nextStartPoint, {color: "blue"})
+            }
+        }
+
+        line.pos2 = lastEndPoint
+
+        await changeZoomTo(Math.max(Math.abs(line.xDiff), Math.abs(line.yDiff)) * 1.5, line.midpoint)
+
+        return line
+    }
+
+    const line = await naturalScaleLine(origin.pos, unitPoint.pos, 10)
+
+}, {
+    description: "animate the construction of a given number (using ruler and compass only)",
+    args: {
+        "number:s": "the number to construct (form: 'sqrt(20)+3')",
+        "?f=fullscreen:b": "enable fullscreen mode",
+        "?fps:i:1~99999": "fps of animation"
+    },
+    defaultValues: {
+        fps: 30
+    },
+    isSecret: true
+})
 
 // ------------------- js/commands/contact.js --------------------
 const formContainer = document.createElement("div")
@@ -7513,20 +9202,74 @@ terminal.addCommand("cowthink", function(args) {
 // ------------------- js/commands/cp.js --------------------
 terminal.addCommand("cp", async function(args) {
     let file = terminal.getFile(args.file)
-    if (["..", "-"].includes(args.directory)) {
-        if (terminal.currFolder == terminal.rootFolder)
-            throw new Error("You are already at ground level")
-        var directory = terminal.currFolder.parent
-    } else if (["/", "~"].includes(args.directory)) {
-        var directory = terminal.rootFolder
-    } else {
-        var directory = terminal.getFile(args.directory, FileType.FOLDER)
+    let directory = terminal.getFile(args.directory, FileType.DIRECTORY)
+
+    let copy = file.copy()
+    
+    if (args.name) {
+        if (!terminal.isValidFileName(args.name)) {
+            throw new Error("Invalid Filename")
+        } else if (directory.getFile(args.name)) {
+            throw new Error("File with that name already exists in directory")
+        } else {
+            copy.setName(args.name)
+        }
+    } else if (directory == file.parent || directory.fileExists(file.name)) {
+        let nameFromNumber = undefined
+
+        let nameStart = ""
+        let nameEnding = ""
+        let foundPoint = false
+        for (let char of [...copy.name].reverse()) {
+            if (!foundPoint && char == ".") {
+                foundPoint = true
+            } else if (foundPoint) {
+                nameStart = char + nameStart
+            } else {
+                nameEnding = char + nameEnding
+            }
+        }
+
+        if (!foundPoint) {
+            // swap them
+            let temp = nameStart
+            nameStart = nameEnding
+            nameEnding = temp
+        }
+
+        let match = nameStart.match(/^(.+?)([0-9]+)$/)
+        let dotQ = foundPoint ? "." : ""
+        if (match) {
+            nameFromNumber = n => `${match[1]}${(BigInt(match[2]) + BigInt(n))}${dotQ}${nameEnding}`
+        } else {
+            nameFromNumber = n => `${nameStart}${n}${dotQ}${nameEnding}`
+        }
+
+        const maxNumberingTries = 1000
+        for (let i = 1; i <= maxNumberingTries; i++) {
+            let fileName = nameFromNumber(i)
+            if (terminal.isValidFileName(fileName) && !directory.fileExists(fileName)) {
+                copy.setName(fileName)
+                break
+            }
+            
+            if (i == maxNumberingTries) {
+                throw new Error("Couldn't generate new unique filename. Provide one using the --name option")
+            }
+        }
     }
-    directory.content[file.name] = file.copy()
-    await terminal.fileSystem.reload()
+
+    directory.addChild(copy)
 }, {
     description: "copy a file",
-    args: ["file", "directory"]
+    args: {
+        "file:f": "file to copy",
+        "?d=directory:f": "directory to copy to",
+        "?n=name:s": "new filename",
+    },
+    defaultValues: {
+        directory: "."
+    }
 })
 
 
@@ -7726,27 +9469,13 @@ terminal.addCommand("donut", async function() {
 
 // ------------------- js/commands/download.js --------------------
 terminal.addCommand("download", function(args) {
-    function downloadFile(fileName, file) {
-        let element = document.createElement('a')
-        if (file.type == FileType.DATA_URL)
-            var dataURL = file.content
-        else
-            var dataURL = 'data:text/plain;charset=utf-8,' + encodeURIComponent(file.content)
-        element.setAttribute('href', dataURL)
-        element.setAttribute('download', fileName)
-        element.style.display = 'none'
-        document.body.appendChild(element)
-        element.click()
-        document.body.removeChild(element)
-    }
-
     let file = terminal.getFile(args.file)
     if (file.type == FileType.FOLDER)
         throw new Error("cannot download directory")
-    downloadFile(file.name, file)
+    downloadFile(file)
 }, {
     description: "download a file",
-    args: {"file": "the file to download"}
+    args: {"file:f": "the file to download"}
 })
 
 // ------------------- js/commands/draw.js --------------------
@@ -7768,26 +9497,26 @@ terminal.addCommand("du", function(args) {
     let fileNames = []
     let fileSizes = []
     let totalSize = 0
-    function getSizeStr(size) {
-        if (size < 10 ** 3) return `${size}B`
-        if (size < 10 ** 6) return `${Math.ceil(size / 1024)}kB`
-        return `${Math.ceil(size / (1024 ** 2))}mB`
-    }
+
     let targetFolder = terminal.getFile("")
     if (args.folder) {
         targetFolder = terminal.getFile(args.folder)
     }
-    for (let [fileName, file] of Object.entries(targetFolder.content)) {
-        let fileContent = JSON.stringify(file.toJSON())
-        totalSize += fileContent.length
-        let fileSize = getSizeStr(fileContent.length)
+
+    for (let file of targetFolder.children) {
+        let fileBytes = file.computeSize()
+        totalSize += fileBytes
+        let fileSize = terminal.fileSystem.filesizeStr(fileBytes)
+
+        let fileName = file.name
         if (file.type == FileType.FOLDER)
             fileName += "/"
         fileNames.push(fileName)
         fileSizes.push(fileSize)
     }
+    
     fileNames.unshift("TOTAL")
-    fileSizes.unshift(getSizeStr(totalSize))
+    fileSizes.unshift(terminal.fileSystem.filesizeStr(totalSize))
     let longestSizeLength = fileSizes.reduce((a, e) => Math.max(a, e.length), 0) + 2
     let paddedFileSizes = fileSizes.map(s => stringPadBack(s, longestSizeLength))
     for (let i = 0; i < fileNames.length; i++) {
@@ -7803,11 +9532,9 @@ terminal.addCommand("du", function(args) {
 }, {
     description: "display storage of current directory",
     args: {
-        "?folder": "folder to display storage of"
+        "?folder:f": "folder to display storage of"
     },
 })
-
-
 
 // ------------------- js/commands/easter-eggs.js --------------------
 terminal.addCommand("easter-eggs", async function(args) {
@@ -7866,191 +9593,137 @@ terminal.addCommand("echo", function(rawArgs) {
     rawArgMode: true,
 })
 
-// ------------------- js/commands/edit.js --------------------
-const cssCode = {
-    ".editor-parent": {
-        "width": "100%",
-        "resize": "both",
-        "display": "grid",
-        "grid-template-rows": "auto 1fr",
-        "grid-template-columns": "1fr",
-    },
-
-    ".editor-header-title": {
-        "width": "fit-content",
-        "color": "var(--background)",
-        "background": "var(--foreground)",
-    },
-
-    ".editor-body": {
-        "display": "grid",
-        "grid-template-rows": "1fr",
-        "grid-template-columns": "auto 1fr",
-    },
-
-    ".editor-sidebar": {
-        "color": "var(--background)",
-        "background": "var(--foreground)",
-        "padding-right": "0.1em",
-        "padding-left": "0.1em",
-    },
-
-    ".editor-content": {
-        "outline": "none",
-        "padding-right": "0.5em",
-        "padding-left": "0.5em",
-    },
-
-    ".editor-content > div:focus-visible": {
-        "outline": "none",
-        "background": "#1d1d1d",
-    },
-}
-
-function createEditorHTML() {
-    let parent = createElement("div", {className: "editor-parent"})
-    let header = createElement("div", {className: "editor-header"}, parent)
-    let headerTitle = createElement("div", {className: "editor-header-title"}, header)
-    let body = createElement("div", {className: "editor-body"}, parent)
-    let sidebar = createElement("div", {className: "editor-sidebar"}, body)
-    let contentScroll = createElement("div", {className: "editor-content-scroll"}, body)
-    let content = createElement("div", {
-        className: "editor-content",
-        contentEditable: true,
-    }, contentScroll)
-
-    return {
-        parent, header, headerTitle, body, sidebar, content, contentScroll
-    }
-}
-
-function implementCSS(code) {
-    let style = document.createElement("style")
-    for (const [selector, properties] of Object.entries(code)) {
-        let css = selector + " {"
-        for (const [property, value] of Object.entries(properties))
-            css += property + ": " + value + ";"
-        css += "}"
-        style.innerHTML += css
-    }
-    terminal.document.head.appendChild(style)
-}
-
-let tempFileContent = null
-let tempFileName = null
-let elements = null
-let lineCount = null
-let prevLineCount = null
-let currentlyEditing = false
-
-function updateLineNums() {
-    lineCount = elements.content.childNodes.length
-
-    if (lineCount == 0) {
-        elements.sidebar.textContent = "1"
-        prevLineCount = lineCount
-    } else if (prevLineCount !== lineCount) {
-        elements.sidebar.textContent = ""
-        for (let i = 0; i < lineCount; i++) {
-            let line = createElement("div", {className: "editor-line-num"}, elements.sidebar)
-            line.textContent = i + 1
-        }
-        prevLineCount = lineCount
-    }
-}
-
-function createElement(tag, props, parent=null) {
-    const element = document.createElement(tag)
-    for (const [key, value] of Object.entries(props))
-        element[key] = value
-    if (parent)
-        parent.appendChild(element)
-    return element
-}
-
-function getText() {
-    let text = ""
-    for (let line of elements.content.querySelectorAll("div")) {
-        text += line.textContent + "\n"
-    }
-    return text.slice(0, -1)
-}
-
-function loadContent() {
-    let lastElement = null
-    for (let line of tempFileContent.split("\n")) {
-        let lineElement = createElement("div", {}, elements.content)
-        lineElement.textContent = line
-        if (lineElement.textContent.trim() == "")
-            lineElement.appendChild(document.createElement("br"))
-        lastElement = lineElement
-    }
-    if (lastElement)
-        setTimeout(() => lastElement.focus(), 100)
-    lineCount = tempFileContent.split("\n").length
-    updateLineNums()
-}
-
-terminal.addCommand("edit", async function(args) {
-    if (terminal.inTestMode) return
-
-    tempFileContent = ""
-    tempFileName = "Untitled File"
-    currentlyEditing = true
-    prevLineCount = null
-    elements = createEditorHTML()
-    
-    if (args.file) {
-        let file = terminal.getFile(args.file)
-        if (file.type == FileType.FOLDER)
-            throw new Error("cannot edit a folder")
-        tempFileContent = file.content
-        tempFileName = file.path
-    }
-
-    implementCSS(cssCode)
-    terminal.parentNode.appendChild(elements.parent)
-
-    elements.headerTitle.textContent = tempFileName
-    elements.content.addEventListener("input", updateLineNums)
-    loadContent()
-
-    terminal.document.addEventListener("keydown", event => {
-        // save
-        if (event.ctrlKey && event.key == "s") {
-            currentlyEditing = false
-            event.preventDefault()
-        }
-    })
-
-    while (currentlyEditing) {
-        await sleep(100)
-    }
-
-    while (tempFileName == "" || tempFileName == "Untitled File") {
-        tempFileName = await terminal.prompt("file name: ")
-        while (!terminal.isValidFileName(tempFileName)) {
-            terminal.printError("invalid file name")
-            tempFileName = await terminal.prompt("file name: ")
-        }
-    }
-
-    if (terminal.fileExists(tempFileName)) {
-        let file = terminal.getFile(tempFileName)
-        if (file.type == FileType.FOLDER)
-            throw new Error("cannot edit a folder")
-        file.content = getText()
-    } else {
-        terminal.createFile(tempFileName, TextFile, getText())
-    }
+// ------------------- js/commands/echonum.js --------------------
+terminal.addCommand("echonum", function(args) {
+    terminal.printLine(args.number)
 }, {
-    description: "edit a file of the current directory",
+    description: "echo a given number",
     args: {
-        "?file": "the file to open",
-    }
+        "number:n": "number to echo"
+    },
+    isSecret: true
 })
 
+// ------------------- js/commands/edit.js --------------------
+terminal.addCommand("edit", async function(args) {
+    function makeTextarea(textContent) {
+        const textarea = document.createElement("textarea")
+        textarea.value = textContent
+        
+        textarea.style.position = "relative"
+        textarea.style.background = "var(--background)"
+        textarea.style.color = "var(--foreground)"
+        textarea.style.marginTop = `calc(var(--font-size) * 0.8)`
+        textarea.style.padding = `calc(var(--font-size) * 0.8)`
+        textarea.style.border = "1px solid var(--foreground)"
+        textarea.style.borderRadius = `calc(var(--font-size) * 0.5)`
 
+        textarea.style.width = `calc(var(--font-size) * 35)`
+        textarea.style.minWidth = `calc(var(--font-size) * 15)`
+        textarea.style.maxWidth = `calc(var(--font-size) * 100)`
+
+        textarea.rows = 20
+
+        return textarea
+    }
+
+    function makeButton(text) {
+        const button = terminal.createTerminalButton({text})
+
+        button.style.marginTop = `calc(var(--font-size) * -0.5)`
+        button.style.marginRight = `calc(var(--font-size) * 0.2)`
+        button.style.padding = `calc(var(--font-size) * 0.5)`
+        button.style.border = "1px solid var(--foreground)"
+        button.style.borderRadius = `0 0 calc(var(--font-size) * 0.5) calc(var(--font-size) * 0.5)`
+        button.style.width = "5em"
+
+        return button
+    }
+
+    const file = terminal.getFile(args.file)
+
+    if (file.isDirectory) {
+        throw new Error("Cannot edit directory data")
+    }
+
+    const textarea = makeTextarea(file.content)
+    const saveButton = makeButton("Save")
+    const cancelButton = makeButton("Cancel")
+    const br = document.createElement("br")
+    let editingActive = true
+
+    terminal.parentNode.appendChild(textarea)
+    terminal.parentNode.appendChild(br)
+    terminal.parentNode.appendChild(saveButton)
+    terminal.parentNode.appendChild(cancelButton)
+    terminal.scroll()
+    textarea.focus()
+
+    function removeElements() {
+        textarea.remove()
+        saveButton.remove()
+        cancelButton.remove()
+        br.remove()
+    }
+
+    function cancel() {
+        if (!editingActive) {
+            return
+        }
+
+        editingActive = false
+        removeElements()
+        terminal.printLine("[Pressed Cancel]")
+    }
+
+    function save() {
+        if (!editingActive) {
+            return
+        }
+
+        file.content = textarea.value
+        editingActive = false
+        removeElements()
+        terminal.printSuccess(`Changes saved at ${file.path}`)
+    }
+
+    saveButton.onclick = save
+    cancelButton.onclick = cancel
+
+    textarea.onkeydown = function(event) {
+        if (!editingActive) {
+            return
+        }
+
+        if (event.key == "Tab") {
+            event.preventDefault()
+            let start = this.selectionStart
+            let end = this.selectionEnd
+        
+            this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
+        
+            this.selectionStart = this.selectionEnd = start + 1;
+        }
+
+        if (event.key == "s" && event.ctrlKey) {
+            event.preventDefault()
+            save()
+        }
+    }
+
+    terminal.onInterrupt(() => {
+        removeElements()
+    })
+
+    while (editingActive) {
+        await sleep(1000)
+    }
+}, {
+    description: "edit a file",
+    args: {
+        "file:f": "file to edit",
+    }
+})
 
 // ------------------- js/commands/enigma.js --------------------
 class EnigmaWheel {
@@ -8568,47 +10241,118 @@ terminal.addCommand("exit", function() {
 
 
 
-// ------------------- js/commands/f.js --------------------
-terminal.addCommand("f", async function(args) {
-    async function randomFriendScore(friendName) {
-        const round = (num, places) => Math.round(num * 10**places) / 10**places
-        let msgBuffer = new TextEncoder().encode(friendName)
-        let hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer)
-        let hashArray = Array.from(new Uint8Array(hashBuffer))
-        return round(hashArray[0] / 255 * 10, 2)
+// ------------------- js/commands/f-optimize.js --------------------
+terminal.addCommand("f-optimize", async function(args) {
+    if (args.seconds < 0) {
+        throw new Error("Argument 'seconds' can't be negative.")
     }
 
-    let lowerCaseName = args.friend.toLowerCase()
+    if (!args.names) {
+        args.names = "alex ben colin"
+    }
 
-    // best salt was chosen by maximizing the average friendship score
-    // of the names of my best friends
-    const bestSalt = "oJOMDCVmMJ"
+    const friendNames = args.names.split(" ").map(n => n.toLowerCase())
 
-    let friendScore = await randomFriendScore(lowerCaseName + bestSalt)
+    async function randomFriendScore(friendName) {
+        const msgBuffer = new TextEncoder().encode(friendName)
+        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const score = hashArray[0] * 256 + hashArray[1]
+        return score / (256 * 256) * 10
+    }
 
-    terminal.printLine(`Your friendship score with ${args.friend} is ${friendScore}/10.`)
+    async function error(nonce) {
+        let worstScore = 10
+        for (const name of friendNames) {
+            const score = await randomFriendScore(name + nonce)
+            worstScore = Math.min(worstScore, score)
+        }
+        return worstScore
+    }
+
+    let bestScore = -Infinity
+    let nonceIndex = 0
+    const startTime = Date.now()
+    let bestNonce = null
+
+    let stopFlag = false
+
+    while (Date.now() - startTime < args.seconds * 1000) {
+        const nonce = (nonceIndex).toString()
+        const worstNonceScore = await error(nonce)
+        
+        if (worstNonceScore > bestScore) {
+            terminal.printLine(`nonce: "${nonce}" worstScore=${worstNonceScore}`)
+            bestScore = worstNonceScore
+            bestNonce = nonce
+            
+            const scoreNameObj = []
+            for (const name of friendNames) {
+                const score = await randomFriendScore(name + bestNonce)
+                scoreNameObj.push([name, score.toFixed(2)])
+            }
+            terminal.printLine(scoreNameObj.map(([n, s]) => `${n}=${s}`).join(", "))
+            terminal.addLineBreak()
+
+            terminal.scroll()
+        }
+
+        nonceIndex++
+
+        if (nonceIndex % 100 == 0) {
+            await sleep(0)
+        }
+    }
+}, {
+    args: {
+        "?*names": "names to optimize",
+        "?s=seconds:i": "how long to optimize for (seconds)"
+    },
+    defaultValues: {
+        seconds: 99999999
+    },
+    description: "finds a good nonce value for the friendship score generator"
+})
+
+// ------------------- js/commands/f.js --------------------
+terminal.addCommand("f", async function(args) {
+    const round = (num, places) => Math.round(num * 10**places) / 10**places
+
+    async function randomFriendScore(friendName) {
+        const msgBuffer = new TextEncoder().encode(friendName)
+        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const score = hashArray[0] * 256 + hashArray[1]
+        return round(score / (256 * 256) * 10, 2)
+    }
+
+    const lowerCaseName = args.name.toLowerCase()
+    const friendScore = await randomFriendScore(lowerCaseName + "pXxThFnonv4Qtbzz")
+
+    terminal.printLine(`friendship score with ${args.name}: ${friendScore}/10`)
 }, {
     description: "calculate friendship score with a friend",
-    args: ["*friend"]
+    args: {
+        "*name": "name of friend"
+    }
 })
 
 
 
 // ------------------- js/commands/factor.js --------------------
 terminal.addCommand("factor", async function(args) {
-
     function primeFactors(n) {
-        let i = 2
+        let i = 2n
         let factors = []
         while (i * i <= n) {
             if (n % i) {
-                i += 1
+                i++
             } else {
-                n = parseInt(n / i)
+                n /= i
                 factors.push(i)
             }
         }
-        if (n > 1) {
+        if (n > 1n) {
             factors.push(n)
         }
         return factors
@@ -8637,7 +10381,7 @@ terminal.addCommand("factor", async function(args) {
             if (word.length == 0 || isNaN(word)) {
                 terminal.printLine(`${word}: Invalid number!`)
             } else {
-                let num = parseInt(word)
+                let num = BigInt(word)
                 printFactors(num)
             }
         }
@@ -8645,7 +10389,7 @@ terminal.addCommand("factor", async function(args) {
 }, {
     description: "print the prime factors of a number",
     args: {
-        "?n:n": "number to factorize"
+        "?n:bn": "number to factorize"
     },
     standardVals: {
         n: null
@@ -9536,6 +11280,29 @@ terminal.addCommand("fraction", function(args) {
     }
 })
 
+// ------------------- js/commands/freq.js --------------------
+terminal.addCommand("freq", async function(args) {
+    await playFrequency(args.f, args.t * 1000)
+
+    if (args.f == 3500) {
+        terminal.print("Random Fun Fact! ", Color.COLOR_1)
+        terminal.printEasterEgg("Loudest-Egg")
+        terminal.printLine("According to some research, the perceived loundness of")
+        terminal.printLine("sounds is actually very different from the actual amplitude")
+        terminal.printLine("of the soundwaves. For example, a frequency of 3500 is")
+        terminal.printLine("found to be the perceived* loudest that a speaker can play!")
+    }
+}, {
+    description: "play a frequency for an amount of time",
+    args: {
+        "f=frequency:n:0~30000": "the frequency to play",
+        "?t=time:n:0~9999": "time in seconds to play frequency"
+    },
+    defaultValues: {
+        time: 0.5
+    }
+})
+
 // ------------------- js/commands/games.js --------------------
 terminal.addCommand("games", function() {
     let gameCommands = Object.entries(terminal.commandData)
@@ -9923,15 +11690,15 @@ terminal.addCommand("grep", async function(args) {
 
     let matches = []
 
-    function processFile(file, filename, allowRecursionOnce=false) {
-        if (file.type == FileType.FOLDER) {
+    function processFile(file, allowRecursionOnce=false) {
+        if (file.type == FileType.DIRECTORY) {
             if (recursive || allowRecursionOnce) {
-                for (let [newName, newFile] of Object.entries(file.content)) {
-                    if (!recursive && newFile.type == FileType.FOLDER) continue
-                    processFile(newFile, newName)
+                for (let newFile of file.children) {
+                    if (!recursive && newFile.type == FileType.DIRECTORY) continue
+                    processFile(newFile)
                 }
             } else {
-                throw new Error(`File ${filename} is a directory!`)
+                throw new Error(`File ${file.name} is a directory!`)
             }
         } else {
             for (let line of file.content.split("\n")) {
@@ -9952,7 +11719,7 @@ terminal.addCommand("grep", async function(args) {
                         var offset = line.indexOf(args.pattern)
                     }
                     matches.push({
-                        filename: filename,
+                        filename: file.name,
                         filepath: file.path,
                         line: line,
                         offset: offset,
@@ -9963,7 +11730,7 @@ terminal.addCommand("grep", async function(args) {
     }
 
     if (args.file == "*") {
-        processFile(terminal.currFolder, ".", true)
+        processFile(terminal.currDirectory, true)
     } else {
         for (let filename of args.file.split(" ")) {
             let file = terminal.getFile(filename)
@@ -10003,14 +11770,24 @@ terminal.addCommand("grep", async function(args) {
     args: {
         "pattern": "the pattern to search for",
         "file": "the file to search in",
-        "?r:b": "search recursively",
-        "?i:b": "ignore case",
-        "?v:b": "invert match",
-        "?x:b": "match whole lines",
+        "?r=recurse:b": "search recursively",
+        "?i=ignore-case:b": "ignore case",
+        "?v=invert-match:b": "invert match",
+        "?x=match-whole-lines:b": "match whole lines",
     }
 })
 
 
+
+// ------------------- js/commands/gui.js --------------------
+terminal.addCommand("gui", async function(args) {
+    terminal.href(`gui/${args.command}/index.html`)
+}, {
+    description: "open the GUI page for a given command",
+    args: {
+        "command:c": "a terminal command"
+    }
+}) 
 
 // ------------------- js/commands/hangman.js --------------------
 var englishWords = [
@@ -10283,6 +12060,14 @@ terminal.addCommand("head", function(args) {
 
 // ------------------- js/commands/helloworld.js --------------------
 terminal.addCommand("helloworld", async function() {
+    const printLinks = links => {
+        for (const {name, url} of links) {
+            terminal.printLink(name, url, undefined, false)
+            terminal.print(" ")
+        }
+        terminal.print(" ")
+    }
+
     const welcomeLineFuncs = [
         () => terminal.print("                  _    __      _          _      _      _       "),
         () => terminal.print("                 | |  / _|    (_)        | |    (_)    | |      "),
@@ -10291,32 +12076,40 @@ terminal.addCommand("helloworld", async function() {
         () => terminal.print("| | | | (_) |  __/ |_| | | |  | |  __/ (_| | |  | | (__| | | |  "),
         () => terminal.print("|_| |_|\\___/ \\___|_(_)_| |_|  |_|\\___|\\__,_|_|  |_|\\___|_| |_|  "),
         () => terminal.print("                                                                "),
-        () => terminal.print("Welcome to my website! It's also a very interactive terminal!   "),
-        () => terminal.print("You may enter commands to navigate over 200 unique features.    "),
+        () => terminal.print("Welcome to my homepage. It's also a very interactive terminal.  "),
+        () => terminal.print(`Enter commands to navigate over ${Object.keys(terminal.allCommands).length - 1} unique tools and features.  `),
         () => {
             terminal.print("Start your adventure using the ")
             terminal.printCommand("help", "help", undefined, false)
             terminal.print(" command. Have lots of fun!  ")
         },
         () => terminal.print("                                                                "),
-        () => {
-            terminal.printLink("Blog", "https://noel-friedrich.de/blobber", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Github", "https://github.com/noel-friedrich/terminal", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Perli", "https://noel-friedrich.de/perli", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Compli", "https://play.google.com/store/apps/details?id=de.noelfriedrich.compli", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("AntiCookieBox", "https://noel-friedrich.de/anticookiebox", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Partycolo", "https://noel-friedrich.de/partycolo", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("Spion", "https://noel-friedrich.de/spion", undefined, false)
-            terminal.print(" ")
-            terminal.printLink("YouTube", "https://www.youtube.com/@noel.friedrich", undefined, false)
-            terminal.print("  ")
-        }
+
+        // --------------------------------------------------------------
+        // Instagram GitHub Perli Library AntiCookieBox Stray GUI YouTube
+        // Partycolo HR-Codes 3d Turtlo Coville Compli Spion Lettre Presi
+
+        () => printLinks([
+                {name: "Instagram", url: "https://instagram.com/noel.friedrich/"},
+                {name: "GitHub", url: "https://github.com/noel-friedrich/terminal"},
+                {name: "Perli", url: "https://noel-friedrich.de/perli"},
+                {name: "Library", url: "https://noel-friedrich.de/lol"},
+                {name: "AntiCookieBox", url: "https://noel-friedrich.de/anticookiebox"},
+                {name: "Stray", url: "https://noel-friedrich.de/stray"},
+                {name: "GUI", url: "https://noel-friedrich.de/terminal/gui"},
+                {name: "YouTube", url: "https://www.youtube.com/@noel.friedrich"}
+        ]),
+        () => printLinks([
+            {name: "Partycolo", url: "https://noel-friedrich.de/partycolo"},
+            {name: "HR-Codes", url: "https://noel-friedrich.de/hr-code"},
+            {name: "3d", url: "https://noel-friedrich.de/3d"},
+            {name: "Turtlo", url: "https://noel-friedrich.de/turtlo"},
+            {name: "Coville", url: "https://noel-friedrich.de/coville"},
+            {name: "Compli", url: "https://play.google.com/store/apps/details?id=de.noelfriedrich.compli"},
+            {name: "Spion", url: "https://noel-friedrich.de/spion"},
+            {name: "Lettre", url: "https://noel-friedrich.de/lettre"},
+            {name: "Presi", url: "https://noel-friedrich.de/presi"}
+        ])
     ]
 
     let size = {
@@ -10324,7 +12117,6 @@ terminal.addCommand("helloworld", async function() {
         y: welcomeLineFuncs.length
     }
 
-    const maxLineWidth = 64
     for (let i = 0; i < size.y; i++) {
 
         welcomeLineFuncs[i]()
@@ -10366,16 +12158,59 @@ terminal.addCommand("help", function() {
 })
 
 // ------------------- js/commands/hi.js --------------------
-async function funnyPrint(msg) {
-    let colors = msg.split("").map(Color.niceRandom)
-    for (let i = 0; i < msg.length; i++) {
-        terminal.print(msg[i], colors[i])
-        await sleep(100)
-    }
-    terminal.addLineBreak()
-}
+terminal.addCommand("hi", async function(args) {
+    const suggestions = [
+        () => {
+            terminal.printLine("You should go for a run outside!", Color.COLOR_1)
+            terminal.print("- download ")
+            terminal.printLink("Strava", "https://www.strava.com/", undefined, false)
+            terminal.print(" or ")
+            terminal.printLink("Nike Run Club", "https://www.nike.com/ie/nrc-app")
+            terminal.printLine("- play some of your favourite music")
+            terminal.printLine("- running is great for mental health")
+        },
+        () => {
+            terminal.print("You should play a round of ", Color.COLOR_1)
+            terminal.printCommand("longjump", "longjump", Color.COLOR_1, false)
+            terminal.printLine("!")
+            terminal.print("- enter '")
+            terminal.printCommand("longjump", "longjump", undefined, false)
+            terminal.printLine("' in the terminal to start")
+            terminal.printLine("- fly turtlo as long as you can")
+            terminal.printLine("- try to beat the highscores")
+        },
+        () => {
+            terminal.printLine("You should go for a walk!", Color.COLOR_1)
+            terminal.print("- download ")
+            terminal.printLink("Stray", "https://noel-friedrich.de/stray/", undefined, false)
+            terminal.printLine(" to make it fun")
+            terminal.printLine("- don't play music, just explore your sorrounding")
+            terminal.printLine("- go somewhere where you haven't ever been")
+        }
+    ]
 
-terminal.addCommand("hi", async () => await funnyPrint("hello there!"), {
+    await terminal.animatePrint("Hello there!")
+    await terminal.acceptPrompt("Are you bored?")
+    terminal.printLine("\n> Thats fine! If you want, I can give")
+    terminal.printLine("> you some suggestions what to do!")
+    await terminal.acceptPrompt("\nDo you want a suggestion?")
+
+    const indeces = shuffle(suggestions.map((_, i) => i))
+    for (let index of indeces) {
+        terminal.addLineBreak()
+        suggestions[index]()
+        await terminal.acceptPrompt("\nDo you want another suggestion?")
+        if (index == indeces[indeces.length - 1]) {
+            break
+        }
+    }
+
+    await terminal.animatePrint("\nHm. Those were all suggestions I had.")
+    await terminal.animatePrint("Maybe run ", undefined, {newLine: false})
+    terminal.printCommand("lscmds", "lscmds", undefined, false)
+    await terminal.animatePrint(" to see if there's some")
+    await terminal.animatePrint("command that you will enjoy?")
+}, {
     description: "say hello to the terminal"
 })
 
@@ -10383,18 +12218,59 @@ terminal.addCommand("hi", async () => await funnyPrint("hello there!"), {
 terminal.addCommand("highscore-admin", async function(args) {
     await terminal.modules.import("game", window)
     
-    if (args.d) {
+    if (args.delete) {
         localStorage.removeItem("highscore_password")
         HighscoreApi.tempPassword = null
         terminal.printLine("Removed password from local storage")
         return
+    } else if (args.list) {
+        await HighscoreApi.loginAdmin(true)
+        const highscores = await HighscoreApi.getUnconfirmedHighscores()
+        highscores.sort((a, b) => a.game.localeCompare(b.game))
+
+        terminal.printLine(`Showing ${highscores.length} Highscores...`)
+        terminal.printTable(highscores.map(s => [
+            s.id, s.game, s.name, s.score, s.time
+        ]), ["id", "game", "name", "score", "time"])
+    } else if (args.tinder) {
+        await HighscoreApi.loginAdmin(true)
+        const highscores = await HighscoreApi.getUnconfirmedHighscores()
+        highscores.sort((a, b) => a.game.localeCompare(b.game))
+
+        let i = 0
+        for (let s of highscores) {
+            i++
+
+            terminal.printLine(`> Highscore #${i}/${highscores.length}:`)
+
+            const rank = await HighscoreApi.getRank(s.game, s.score)
+
+            try {
+                terminal.printTable([[
+                    rank, s.game, s.name, s.score, s.time
+                ]], ["rank", "game", "name", "score", "time"])
+                await terminal.acceptPrompt("Looks good?")
+                await HighscoreApi.confirmHighscore(s.uid, 1)
+                terminal.addLineBreak()
+            } catch {
+                await HighscoreApi.confirmHighscore(s.uid, 2)
+                terminal.printSuccess("Removed Highscore successfully")
+                terminal.addLineBreak()
+            }
+        }
+
+        terminal.printSuccess("You're finished!")
+    } else {
+        await HighscoreApi.loginAdmin()
     }
-    await HighscoreApi.loginAdmin()
+
 }, {
-    description: "Login as Admin",
+    description: "Highscore Admin Management",
     isSecret: true,
     args: {
-        "?d": "Delete password from local storage"
+        "?l=list:b": "List all unconfirmed highscores",
+        "?t=tinder:b": "Play Tinder Swiping with highscores",
+        "?d=delete:b": "Delete password from local storage"
     }
 })
 
@@ -10404,7 +12280,7 @@ terminal.addCommand("highscore-remove", async function(args) {
     await terminal.modules.import("game", window)
     await HighscoreApi.loginAdmin(true)
     if (args.uid) {
-        await HighscoreApi.removeHighscore(HighscoreApi.tempPassword, args.uid)
+        await HighscoreApi.removeHighscore(args.uid)
         terminal.printSuccess("Removed highscore #" + args.uid)
         return
     }
@@ -10830,6 +12706,363 @@ terminal.addCommand("href", function(args) {
 
 
 
+// ------------------- js/commands/hyp-lines.js --------------------
+terminal.addCommand("hyp-lines", async function(args) {
+    await terminal.modules.import("game", window)
+
+    function initDisplay(size) {
+        let canvas = document.createElement("canvas")
+        let context = canvas.getContext("2d")
+        let widthPx = Math.floor(terminal.charWidth * size.x)
+        let heightPx = Math.floor(terminal.charWidth * size.y)
+        canvas.width = widthPx
+        canvas.height = heightPx
+        canvas.style.width = widthPx + "px"
+        canvas.style.height = heightPx + "px"
+        terminal.parentNode.appendChild(canvas)
+        canvas.style.border = "2px solid var(--foreground)"
+        return [context, canvas]
+    }
+
+    const displaySize = new Vector2d(args.width, args.height)
+    const displayHeaders = ["Poincaré Disk Model", "Upper Half-Plane Model"]
+
+    terminal.addLineBreak()
+    for (const headerText of displayHeaders) {
+        const paddingWidthTotal = displaySize.x - headerText.length
+        const paddingWidthLeft = Math.ceil(paddingWidthTotal / 2)
+        const paddingWidthRight = Math.floor(paddingWidthTotal / 2)
+
+        terminal.print(" ".repeat(paddingWidthLeft))
+        terminal.print(headerText)
+        terminal.print(" ".repeat(paddingWidthRight))
+    }
+
+    class ModelCanvas {
+
+        constructor(viewCentre, viewHeight) {
+            const [context, canvas] = initDisplay(displaySize)
+            this.context = context
+            this.canvas = canvas
+
+            this.viewCentre = viewCentre
+            this.viewHeight = viewHeight
+        }
+
+        get viewWidth() {
+            return this.canvas.width / this.canvas.height * this.viewHeight
+        }
+
+        pointToScreenPos(point) {
+            const relativePoint = point.sub(this.viewCentre)
+            return new Vector2d(
+                (relativePoint.x / (this.viewWidth) + 0.5) * this.canvas.width,
+                (-relativePoint.y / (this.viewHeight) + 0.5) * this.canvas.height
+            )
+        }
+
+        screenPosToPoint(screenPos) {
+            const x = (screenPos.x / this.canvas.width - 0.5) * this.viewWidth
+            const y = -(screenPos.y / this.canvas.height - 0.5) * this.viewHeight
+            const relativePoint = new Vector2d(x, y)
+            return relativePoint.add(this.viewCentre)
+        }
+
+        clear() {
+            this.context.clearRect(0, 0, this.canvas.width, this.canvas.height)
+        }
+
+        drawPoint(point, {atScreenPos=false, radius=5, color="blue",
+            label=null, labelSize=13, labelColor=null, labelOffset=null,
+            labelBaseline="top", labelAlign="left"
+        }={}) {
+            labelColor ??= terminal.data.foreground.toString()
+            
+            this.context.beginPath()
+            let screenPos = null
+            if (atScreenPos) {
+                screenPos = point
+            } else {
+                screenPos = this.pointToScreenPos(point)
+            }
+
+            this.context.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2)
+            this.context.fillStyle = color
+            this.context.fill()
+
+            if (label !== null) {
+                this.context.fillStyle = labelColor
+                this.context.textAlign = labelAlign
+                this.context.textBaseline = labelBaseline
+                this.context.font = `${labelSize}px monospace`
+                const labelPos = screenPos.addX(radius).addY(radius)
+                if (labelOffset !== null) {
+                    labelPos.iadd(labelOffset.scale(labelSize))
+                }
+
+                this.context.fillText(label, screenPos.x + radius, screenPos.y + radius)
+            }
+        }
+
+        connectPoints(points, {atScreenPos=false, color=null, width=1}={}) {
+            color ??= terminal.data.foreground.toString()
+
+            this.context.strokeStyle = color
+            this.context.lineWidth = width
+            this.context.beginPath()
+
+            for (let i = 0; i < points.length; i++) {
+                const screenPos = atScreenPos ? points[i] : this.pointToScreenPos(points[i])
+                if (i == 0) {
+                    this.context.moveTo(screenPos.x, screenPos.y)
+                } else {
+                    this.context.lineTo(screenPos.x, screenPos.y)
+                }
+            }
+
+            this.context.stroke()
+        }
+
+        drawAxes() {
+            const minXY = this.screenPosToPoint(new Vector2d(0, this.canvas.height))
+            const maxXY = this.screenPosToPoint(new Vector2d(this.canvas.width, 0))
+
+            // x axis
+            this.connectPoints([
+                new Vector2d(Math.floor(minXY.x) - 1, 0),
+                new Vector2d(Math.ceil(maxXY.x) + 1, 0)
+            ])
+
+            // y axis
+            this.connectPoints([
+                new Vector2d(0, Math.floor(minXY.y) - 1),
+                new Vector2d(0, Math.ceil(maxXY.y) + 1)
+            ])
+
+            const pinStyling = {color: terminal.data.foreground.toString(), radius: 3}
+
+            for (let x = Math.floor(minXY.x); x <= Math.ceil(maxXY.x); x++) {
+                if (x == 0) continue
+                this.drawPoint(new Vector2d(x, 0), {label: x, ...pinStyling})
+            }
+
+            for (let y = Math.floor(minXY.y); y <= Math.ceil(maxXY.y); y++) {
+                const label = Math.abs(y) > 1 ? `${y}i` : (y < 0 ? "-i" : (y > 0 ? "i" : "0"))
+                this.drawPoint(new Vector2d(0, y), {label, ...pinStyling})
+            }
+        }
+
+        drawCircle(point, radius, {color=null, dashed=false, width=1, startAngle=0, endAngle=Math.PI * 2, clockwise=true}={}) {
+            color ??= terminal.data.foreground.toString()
+
+            radius = radius / this.viewHeight * this.canvas.height
+            this.context.beginPath()
+            const screenPos = this.pointToScreenPos(point)
+            this.context.arc(screenPos.x, screenPos.y, radius, startAngle, endAngle, !clockwise)
+            this.context.strokeStyle = color
+            if (dashed) {
+                this.context.setLineDash([5, 5])
+            }
+            this.context.lineWidth = width
+            this.context.stroke()
+            this.context.setLineDash([])
+        }
+
+    }
+
+    terminal.addLineBreak()
+    const diskCanvas = new ModelCanvas(new Vector2d(0, 0), 2.5)
+    const planeCanvas = new ModelCanvas(new Vector2d(0, 2.5), 6)
+    terminal.addLineBreak(2)
+    terminal.printLine("Drag to move z1/z2 around and see what happens (use a mouse!)")
+    
+    // custom styling
+    diskCanvas.canvas.style.borderRight = "none"
+    planeCanvas.canvas.style.borderLeft = "2px dashed var(--foreground)"
+
+    const z1 = new Vector2d(0.7, 2.5)
+    const z2 = new Vector2d(-1.7, 1.5)
+
+    const movablePoints = [z1, z2]
+
+    function diskToPlaneIso(p) {
+        // from https://en.wikipedia.org/wiki/Poincar%C3%A9_disk_model
+        return new Vector2d(
+            2 * p.x / (p.x ** 2 + (1 - p.y) ** 2),
+            (1 - p.x ** 2 - p.y ** 2) / (p.x ** 2 + (1 - p.y) ** 2)
+        )
+    }
+
+    function planeToDiskIso(p) {
+        // from https://en.wikipedia.org/wiki/Poincar%C3%A9_disk_model
+        return new Vector2d(
+            2 * p.x / (p.x ** 2 + (1 + p.y) ** 2),
+            (p.x ** 2 + p.y ** 2 - 1) / (p.x ** 2 + (1 + p.y) ** 2)
+        )
+    }
+
+    function redraw() {
+        // realign points with half-plane
+        for (const point of movablePoints) {
+            if (point.y < 0) {
+                point.y = 0
+            }
+        }
+
+        diskCanvas.clear()
+        planeCanvas.clear()
+
+        diskCanvas.drawAxes()
+        planeCanvas.drawAxes()
+
+        diskCanvas.drawCircle(new Vector2d(0, 0), 1, {dashed: true})
+
+        // draw movable points in plane
+        for (let i = 0; i < movablePoints.length; i++) {
+            planeCanvas.drawPoint(movablePoints[i], {label: `z${i + 1}`})
+        }
+
+        // draw movable points in disk
+        for (let i = 0; i < movablePoints.length; i++) {
+            const diskPos = planeToDiskIso(movablePoints[i])
+            diskCanvas.drawPoint(diskPos, {label: `z${i + 1}`})
+        }
+
+        const connectingPoints = []
+        const numConnectingPoints = 200
+
+        // draw hyperbolic line on which z1 and z2 lie
+        if (Math.abs(z1.x - z2.x) < 0.01) {
+            // calculate and draw line in plane
+            const minXY = planeCanvas.screenPosToPoint(new Vector2d(0, planeCanvas.canvas.height))
+            const maxXY = planeCanvas.screenPosToPoint(new Vector2d(planeCanvas.canvas.width, 0))
+
+            planeCanvas.connectPoints([
+                new Vector2d(z1.x, 0),
+                new Vector2d(z1.x, maxXY.y),
+            ], {color: "lightblue", width: 2})
+
+            for (let i = 0; i < numConnectingPoints; i++) {
+                const linePos = new Vector2d(z1.x, i / 10)
+                connectingPoints.push(linePos)
+            }
+        } else {
+            // calculate and draw half circle in plane
+            const midPoint = z1.add(z2).scale(0.5)
+            const tanAlpha = Math.tan(z1.angleTo(z2))
+            const halfCircleCentre = new Vector2d(midPoint.x + tanAlpha * midPoint.y, 0)
+            const halfCirlceRadius = halfCircleCentre.distance(z1)
+
+            planeCanvas.drawCircle(halfCircleCentre, halfCirlceRadius, {
+                endAngle: Math.PI, clockwise: false, color: "lightblue", width: 2
+            })
+
+            for (let i = 0; i < numConnectingPoints; i++) {
+                const unitCirclePos = Vector2d.fromAngle(i / (numConnectingPoints - 1) * Math.PI)
+                const circlePos = unitCirclePos.scale(halfCirlceRadius).add(halfCircleCentre)
+                connectingPoints.push(circlePos)
+            }
+        }
+
+        diskCanvas.connectPoints(connectingPoints.map(p => planeToDiskIso(p)), {color: "lightblue", width: 2})
+    }
+
+    let draggingPoint = null
+    const dragMaxDistancePx = 30
+
+    const pointFromEvent = (canvas, event) => {
+        const screenPos = Vector2d.fromEvent(event, canvas.canvas)
+        return canvas.screenPosToPoint(screenPos)
+    }
+
+    const halfPlanePointInFunc = (event) => {
+        const regularPlanePos = pointFromEvent(planeCanvas, event)
+        regularPlanePos.y = Math.abs(regularPlanePos.y)
+        return regularPlanePos.scale(10).round().scale(0.1)
+    }
+
+    const halfPlanePointOutFunc = point => planeCanvas.pointToScreenPos(point)
+
+    const diskPointInFunc = (event) => {
+        const normalPlanePos = pointFromEvent(diskCanvas, event)
+        const planePos = diskToPlaneIso(normalPlanePos)
+        return planePos
+    }
+
+    const diskPointOutFunc = point => diskCanvas.pointToScreenPos(planeToDiskIso(point))
+
+    for (const [canvas, pointInFunc, pointOutFunc] of [
+        [planeCanvas, halfPlanePointInFunc, halfPlanePointOutFunc],
+        [diskCanvas, diskPointInFunc, diskPointOutFunc]
+    ]) {
+        canvas.canvas.addEventListener("mousedown", event => {
+            const mousePos = pointInFunc(event)
+            const mouseScreenPos = pointOutFunc(mousePos)
+            for (const point of movablePoints) {
+                if (pointOutFunc(point).distance(mouseScreenPos) <= dragMaxDistancePx) {
+                    draggingPoint = point
+                    draggingPoint.set(mousePos)
+                    return redraw()
+                }
+            }
+        })
+
+        canvas.canvas.addEventListener("touchstart", event => {
+            const mousePos = pointInFunc(event)
+            const mouseScreenPos = pointOutFunc(mousePos)
+            for (const point of movablePoints) {
+                if (pointOutFunc(point).distance(mouseScreenPos) <= dragMaxDistancePx) {
+                    draggingPoint = point
+                    draggingPoint.set(mousePos)
+                    return redraw()
+                }
+            }
+            event.preventDefault()
+        })
+
+        canvas.canvas.addEventListener("mousemove", event => {
+            if (draggingPoint !== null) {
+                const mousePos = pointInFunc(event)
+                draggingPoint.set(mousePos)
+                redraw()
+            }
+        })
+
+        canvas.canvas.addEventListener("touchmove", event => {
+            if (draggingPoint !== null) {
+                const mousePos = pointInFunc(event)
+                draggingPoint.set(mousePos)
+                redraw()
+                event.preventDefault()
+            }
+        })
+
+        canvas.canvas.addEventListener("mouseup", event => {
+            draggingPoint = null
+            redraw()
+        })
+
+        canvas.canvas.addEventListener("touchend", event => {
+            draggingPoint = null
+            redraw()
+            event.preventDefault()
+        })
+    }
+
+    redraw()
+
+}, {
+    description: "spawn a simulation of the hyperbolic disk and half-plane model",
+    args: {
+        "?w=width:i:22~100": "width of each screen in characters",
+        "?h=height:i:10~100": "height of each screen in characters",
+    },
+    defaultValues: {
+        width: 50,
+        height: 40
+    }
+})
+
 // ------------------- js/commands/image-crop.js --------------------
 terminal.addCommand("image-crop", async function() {
     await terminal.modules.load("window", terminal)
@@ -10905,32 +13138,383 @@ terminal.addCommand("img2ascii", async function(args) {
     }
 })
 
+// ------------------- js/commands/img2pdf.js --------------------
+const img2pdfUrl = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.debug.js"
+
+async function rotateImg90(img) {
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+
+    canvas.width = img.naturalHeight
+    canvas.height = img.naturalWidth
+
+    context.rotate(Math.PI / 2)
+
+    context.drawImage(img, 0, -canvas.width, canvas.height, canvas.width)
+
+    const newImg = new Image()
+
+    return new Promise(resolve => {
+        newImg.onload = () => resolve(newImg)
+        newImg.name = img.name
+        newImg.src = canvas.toDataURL()
+    })
+}
+
+terminal.addCommand("img2pdf", async function(args) {
+    if (!document.getElementById("img2pdfScript")) {
+        await new Promise(resolve => {
+            const script = document.createElement("script")
+            script.addEventListener("load", resolve)
+            script.src = img2pdfUrl
+            script.id = "img2pdfScript"
+            document.body.appendChild(script)
+        })
+    }
+
+    await terminal.modules.load("upload", terminal)
+    const images = await terminal.modules.upload.image({multiple: true})
+
+    const doc = new jsPDF()
+    const pdfWidth = doc.internal.pageSize.getWidth()
+    const pdfHeight = doc.internal.pageSize.getHeight()
+    const pdfPadding = args.padding
+    
+    for (let i = 0; i < images.length; i++) {
+        let img = images[i]
+        const format = img.src.split("image/")[1].split(";")[0]
+        let imgAspectRatio = img.naturalWidth / img.naturalHeight
+
+        if (args.rotate && imgAspectRatio > 1) {
+            img = await rotateImg90(img)
+            imgAspectRatio = img.naturalWidth / img.naturalHeight
+        }
+
+        let imgWidth = pdfWidth - pdfPadding * 2
+        let imgHeight = imgWidth / imgAspectRatio
+
+        if (imgHeight > pdfHeight - pdfPadding * 2) {
+            imgHeight = pdfHeight - pdfPadding * 2
+            imgWidth = imgHeight * imgAspectRatio
+        }
+
+        let xOffset = pdfWidth / 2 - imgWidth / 2
+        let yOffset = pdfHeight / 2 - imgHeight / 2
+
+        try {
+            doc.addImage(img.src, format, xOffset, yOffset, imgWidth, imgHeight)
+        } catch (e) {
+            if (e.message.includes("Supplied Data is not a valid base64-String")) {
+                throw new Error(`${img.name} isn't an image!`)
+            } else {
+                throw e
+            }
+        }
+
+        if (i != images.length - 1) {
+            doc.addPage()
+        }
+
+        if (images.length > 1) {
+            terminal.printLine(`Loaded ${img.name} (${i+1}/${images.length})`)
+            terminal.scroll()
+            await sleep(50)
+
+            if (i == images.length - 1) {
+                terminal.addLineBreak()
+            }
+        }
+    }
+
+    const validFilenameRegex = /^[a-zA-Z0-9\.\_\s\-]+$/
+    let fileName = args.filename
+
+    while (!fileName) {
+        fileName = await terminal.prompt("filename: ")
+        if (!validFilenameRegex.test(fileName)) {
+            terminal.printError("Invalid Filename. Must not include special characters!")
+            fileName = null
+        }
+    }
+
+    if (!fileName.endsWith(".pdf")) {
+        fileName += ".pdf"
+    }
+
+    doc.save(fileName)
+    terminal.printSuccess(`Downloaded ${fileName}`)
+}, {
+    description: "convert image files to pdf",
+    args: {
+        "?f=filename:s": "filename for the pdf",
+        "?p=padding:i:0~50": "padding of pdf (in px)",
+        "?r=rotate:b": "rotate the images to maximise space",
+    },
+    defaultValues: {
+        filename: null,
+        padding: 5,
+    }
+})
+
+// ------------------- js/commands/imgwarp.js --------------------
+terminal.addCommand("imgwarp", async function(args) {
+	await terminal.modules.import("game", window)
+
+    const priorityFunction = new Function("x", "y", `return ${args.f}`)
+
+	function initDisplay() {
+        let canvas = document.createElement("canvas")
+        let context = canvas.getContext("2d")
+        let widthPx = Math.floor(terminal.charWidth * 50)
+        let heightPx = widthPx
+        canvas.width = widthPx
+        canvas.height = heightPx
+        canvas.style.width = widthPx + "px"
+        canvas.style.height = heightPx + "px"
+        terminal.parentNode.appendChild(canvas)
+        context.fillStyle = "white"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        return [context, canvas]
+	}
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => {
+                resolve(img)   
+            }
+            img.onerror = (err) => {
+                reject(err)
+            }
+            img.src = src
+        })
+    }
+
+    terminal.addLineBreak()
+    const backgroundImage = await loadImage("res/img/imgwarp/BlankMap-World-v2.png")
+	const [context2d, canvas] = initDisplay()
+	const [resultContext2d, resultCanvas] = initDisplay()
+
+    const sorroundingDirections = [
+        new Vector2d( 0,  1),
+        new Vector2d( 0, -1),
+        new Vector2d( 1,  0),
+        new Vector2d(-1,  0)
+    ]
+
+    context2d.drawImage(backgroundImage, 0, 0)
+
+    // start exploration
+
+    const startPos = new Vector2d(
+        Math.round(canvas.width / 2),
+        Math.round(canvas.height / 2)
+    )
+
+    const pixelQueue = [[0, startPos]]
+
+    function setPixelToRGBA(imgData, pos, r=null, g=null, b=null, a=null) {
+        if (!isWithinBounds(pos)) {
+            return
+        }
+
+        const i = pos.y * (canvas.width * 4) + pos.x * 4
+        if (r !== null) imgData.data[i]     = r
+        if (g !== null) imgData.data[i + 1] = g
+        if (b !== null) imgData.data[i + 2] = b
+        if (a !== null) imgData.data[i + 3] = a
+    }
+
+    function getPixelRGBA(imgData, pos) {
+        const i = pos.y * (canvas.width * 4) + pos.x * 4
+        return [
+            imgData.data[i],
+            imgData.data[i + 1],
+            imgData.data[i + 2],
+            imgData.data[i + 3],
+        ]
+    }
+    
+    function pixelPosToPriorityPos(pixelPos) {
+        const canvasHalfWidth = canvas.width / 2
+        const canvasHalfHeight = canvas.height / 2
+        return new Vector2d(
+            (pixelPos.x - canvasHalfWidth),
+            (pixelPos.y - canvasHalfHeight)
+        )
+    }
+
+    function popFromQueue() {
+        if (pixelQueue.length == 0) {
+            return null
+        } else {
+            return pixelQueue.shift()[1]
+        }
+    }
+
+    function insortIntoQueue(priority, pos) {
+        if (pixelQueue.length == 0) {
+            pixelQueue.push([priority, pos])
+            return
+        }
+
+        if (priority <= pixelQueue[0][0]) {
+            pixelQueue.unshift([priority, pos])
+            return
+        }
+
+        if (priority >= pixelQueue[pixelQueue.length - 1][0]) {
+            pixelQueue.push([priority, pos])
+            return
+        }
+
+        let left = 0
+        let right = pixelQueue.length
+        let lastLeft = left
+        let lastRight = right
+        while (left < right) {
+            const middle = Math.floor((left + right) / 2)
+            if (pixelQueue[middle][0] < priority) {
+                left = middle
+            } else if (pixelQueue[middle][0] > priority) {
+                right = middle
+            } else {
+                left = middle
+                right = middle
+            }
+
+            if (left === lastLeft && right === lastRight) {
+                break
+            }
+
+            lastLeft = left
+            lastRight = right   
+        }
+
+        pixelQueue.splice(right, 0, [priority, pos])
+    }
+
+    function isMarked(imgData, pos) {
+        const i = pos.y * (canvas.width * 4) + pos.x * 4
+        return imgData.data[i + 3] == 0
+    }
+
+    function markPixel(resultImgData, imgData, pos) {
+        const pixelRGBA = getPixelRGBA(imgData, pos)
+        setPixelToRGBA(imgData, pos, null, null, null, 0)
+        
+        const priorityPos = pixelPosToPriorityPos(pos)
+        const distance = priorityFunction(priorityPos.x, priorityPos.y)
+        const resultPos = new Vector2d(canvas.width, canvas.height)
+            .scale(0.5)
+            .add(priorityPos.normalized.scale(distance))
+
+        const resultFlooredPos = new Vector2d(Math.floor(resultPos.x), Math.floor(resultPos.y))
+        setPixelToRGBA(resultImgData, resultFlooredPos, ...pixelRGBA)
+    }
+
+    function isWithinBounds(pos) {
+        return pos.x >= 0 && pos.y >= 0 && pos.x < canvas.width && pos.y < canvas.height
+    }
+
+    function explorePixel(imgData, pos) {
+        for (const direction of sorroundingDirections) {
+            const newPos = pos.add(direction)
+            if (isWithinBounds(newPos) && !isMarked(imgData, newPos)) {
+                const priorityPos = pixelPosToPriorityPos(newPos)
+                const priority = priorityFunction(priorityPos.x, priorityPos.y)
+                insortIntoQueue(priority, newPos)
+            }
+        }
+    }
+
+    const imgData = context2d.getImageData(0, 0, canvas.width, canvas.height)
+    const resultImgData = resultContext2d.getImageData(0, 0, canvas.width, canvas.height)
+
+    await sleep(100)
+    terminal.scroll()
+    await sleep(100)
+
+    for (let i = 0; pixelQueue.length > 0; i++) {
+        const pos = popFromQueue()
+        if (isMarked(imgData, pos)) {
+            continue
+        }
+
+        markPixel(resultImgData, imgData, pos)
+        explorePixel(imgData, pos)
+
+        context2d.putImageData(imgData, 0, 0)
+        resultContext2d.putImageData(resultImgData, 0, 0)
+
+        if (i % 10 == 0) {
+            await sleep(0)
+        }
+    }
+
+}, {
+	description: "warp an image using a geometric step-distance function",
+    args: {
+        "f=function:s": "step distance function",
+    },
+    isSecret: true
+})
+
 // ------------------- js/commands/isprime.js --------------------
 terminal.addCommand("isprime", async function(args) {
     function isPrime(n) {
         if (n < 2)
-            return false
+            return {result: false}
         if (n === 2)
-            return true
+            return {result: true}
         if (n % 2 === 0)
-            return false
+            return {result: false, divisor: 2}
         for (let i = 3; i <= Math.sqrt(n); i += 2) {
             if (n % i === 0)
-                return false
+                return {result: false, divisor: i}
         }
-        return true
+        return {result: true}
     }
 
-    let result = isPrime(args.n)
-    if (result) {
+    if (args.n < 0) {
+        return terminal.printLine(`${args.n} is not prime (negative numbers just aren't)`)
+    } else if (args.n == 0) {
+        return terminal.printLine("0 is not prime (not even composite!)")
+    } else if (args.n == 1) {
+        return terminal.printLine("1 is not prime (it's the identity, wouldn't make much sense)")
+    } else if (args.n == 2) {
+        return terminal.printLine("2 is prime (the only even prime!)")
+    } else if (args.n.toString().includes("e+")) {
+        return terminal.printLine("Honestly no idea, too large for me.")
+    } else if (args.n == 57) {
+        terminal.printEasterEgg("Grothendieck-Egg")
+        return terminal.printLine("57 looks prime, but isn't")
+    }
+
+    let primeResult = isPrime(args.n)
+    if (primeResult.result) {
         terminal.printLine(`${args.n} is prime`)
     } else {
-        terminal.printLine(`${args.n} is not prime`)
+        if (primeResult.divisor) {
+            const m = args.n / primeResult.divisor
+            terminal.printLine(`${args.n} is not prime (${primeResult.divisor} * ${m} = ${args.n})`)
+        } else {
+            terminal.printLine(`${args.n} is not prime`)
+        }
+
+        let n = args.n
+        let distanceCount = 1
+        if (args["find-next"]) {
+            await sleep(10)
+            while (!isPrime(++n).result) {distanceCount++}
+            terminal.printLine(`the next prime is ${n} (diff=${distanceCount})`)
+        }
     }
 }, {
     description: "Check if a number is prime",
     args: {
-        "n:i": "The number to check"
+        "n:i": "The number to check",
+        "?f=find-next:b": "if n is not prime, find the next one"
     }
 })
 
@@ -12537,9 +15121,7 @@ terminal.addCommand("lorem", async function(args) {
 
 // ------------------- js/commands/ls.js --------------------
 terminal.addCommand("ls", function(args) {
-    let targetFolder = terminal.getFile(!!args.folder ? args.folder : "", FileType.FOLDER)
-
-    let recursive = args.r
+    let targetFolder = terminal.getFile(args.folder || "", FileType.DIRECTORY)
 
     const CHARS = {
         LINE: "│",
@@ -12548,24 +15130,24 @@ terminal.addCommand("ls", function(args) {
         DASH: "─",
     }
 
-    function listFolder(folder, indentation="") {
+    function listFolder(directory, indentation="") {
         let i = 0
         let printedL = false
-        for (let [fileName, file] of Object.entries(folder.content)) {
+        for (let file of directory.children) {
             i++
             if (indentation.length > 0) {
                 terminal.print(indentation)
             }
-            if (i == Object.keys(folder.content).length) {
+            if (i == directory.children.length) {
                 terminal.print(CHARS.L)
                 printedL = true
             } else {
                 terminal.print(CHARS.T)
             }
             terminal.print(CHARS.DASH.repeat(2) + " ")
-            if (file.type == FileType.FOLDER) {
-                terminal.printCommand(`${fileName}/`, `cd ${file.path}/`)
-                if (recursive) {
+            if (file.isDirectory) {
+                terminal.printCommand(`${file.name}/`, `cd ${file.path}`)
+                if (args.recursive) {
                     let indentAddition = `${CHARS.LINE}   `
                     if (printedL) {
                         indentAddition = "    "
@@ -12573,14 +15155,14 @@ terminal.addCommand("ls", function(args) {
                     listFolder(file, indentation + indentAddition)
                 }
             } else {
-                terminal.printLine(fileName)
+                terminal.printLine(file.name)
             }
         }
     }
 
     listFolder(targetFolder)
 
-    if (Object.entries(targetFolder.content).length == 0)
+    if (targetFolder.children.length == 0)
         terminal.printLine(`this directory is empty`)
 
 }, {
@@ -12588,7 +15170,7 @@ terminal.addCommand("ls", function(args) {
     description: "list all files of current directory",
     args: {
         "?folder:f": "folder to list",
-        "?r:b": "list recursively",
+        "?r=recursive:b": "list recursively",
     },
     standardVals: {
         folder: ""
@@ -13701,6 +16283,75 @@ terminal.addCommand("matdet", async function(args) {
     }
 })
 
+// ------------------- js/commands/mateig.js --------------------
+terminal.addCommand("mateig", async function(args) {
+    await terminal.modules.import("matrix", window)
+
+    let matrix = null
+    if (args.A) {
+        matrix = Matrix.fromArray(args.A)
+    } else {
+        const dimensions = await inputMatrixDimensions({matrixName: "A", square: true})
+        matrix = await inputMatrix(dimensions)
+        terminal.addLineBreak()
+    }
+
+    // helpful for debugging
+    terminal.window.m = matrix
+
+    function powerIteration(matrix, basis, iterations=1_000) {
+        let v = Matrix.vector(Array.from({length: matrix.n}).map(Math.random))
+        for (let i = 0; i < iterations; i++) {
+            let w = matrix.multiply(v)
+
+            // project w orthogonal to each u in basis
+            for (let u of basis) {
+                const coeff = (
+                    u.transpose().multiply(w).getCell(0,0).value
+                    / u.transpose().multiply(u).getCell(0,0).value
+                )
+                w = w.add(u.scale(-coeff));
+            }
+
+            // normalize
+            v = w.scale(1 / w.norm())
+        }
+        return v
+    }
+
+    const eigenVectors = []
+
+    for (let i = 0; i < matrix.n; i++) {
+        // find largest (in absolute terms) eigenvector and eigenvalue
+        let eigenVector = powerIteration(matrix, eigenVectors)
+        eigenVectors.push(eigenVector)
+        
+        // compute eigenvalue
+        const eigenValue = (
+            eigenVector.transpose().multiply(matrix.multiply(eigenVector)).getCell(0, 0).value
+            / eigenVector.transpose().multiply(eigenVector).getCell(0, 0).value
+        )
+
+        eigenVector = eigenVector.scale(1 / eigenVector.getCell(0, 0).value)
+
+        terminal.printLine(new MatrixCell(eigenValue).toSimplifiedString(), Color.COLOR_1)
+        terminal.printLine(eigenVector.transpose().toString())
+        terminal.addLineBreak()
+    }
+
+    // const unitMatrix = Matrix.unit(matrix.n)
+    // const charPoly = x => matrix.add(unitMatrix.scale(-x)).determinant()
+    // for (let x = -10; x < 10; x++) {
+    //     terminal.printLine(`${x} -> ${charPoly(x)}`)
+    // }
+}, {
+    description: "find the eigenvalues and eigenspaces of a given matrix",
+    args: {
+        "?A:sm": "square matrix",
+    },
+    isSecret: true
+})
+
 // ------------------- js/commands/matinv.js --------------------
 terminal.addCommand("matinv", async function(args) {
     await terminal.modules.import("matrix", window)
@@ -13768,7 +16419,7 @@ terminal.addCommand("matmul", async function(args) {
         throw new Error("Matrix dimensions are not compatible.")
     }
 
-    const matrixC = matrixA.multiply(matrixB)
+    const matrixC = matrixA.multiply(matrixB).simplify()
 
     terminal.printLine(`Resulting Matrix [${matrixC.dimensions}]:`)
     terminal.printLine(matrixC.toString())
@@ -13938,6 +16589,343 @@ terminal.addCommand("matred", async function(args) {
     description: "reduce a given matrix to reduced row echelon form",
     args: {
         "?A:m": "matrix to reduce",
+    }
+})
+
+// ------------------- js/commands/matvisualize.js --------------------
+terminal.addCommand("matvisualize", async function(args) {
+    await terminal.modules.import("matrix", window)
+    await terminal.modules.import("game", window)
+
+    let matrix = null
+    if (args.matrix) {
+        matrix = Matrix.fromArray(args.matrix)
+    } else {
+        matrix = await inputMatrix(new MatrixDimensions(2, 2))
+        terminal.addLineBreak()
+    }
+
+    if (!matrix.containsOnlyNumbers()) {
+        throw new Error("Matrix may not contain any variables")
+    }
+
+    if (matrix.nRows != 2 || matrix.nCols != 2) {
+        throw new Error("Matrix must be 2x2")
+    }
+
+    function makeCanvas({widthChars=30}={}) {
+        const container = document.createElement("div")
+        container.style.position = "relative"
+
+        const canvas = document.createElement("canvas")
+        canvas.style.width = `calc(var(--font-size) * ${widthChars})`
+        canvas.style.height = `calc(var(--font-size) * ${widthChars})`
+
+        container.appendChild(canvas)
+        terminal.parentNode.appendChild(container)
+        canvas.width = canvas.clientWidth
+        canvas.height = canvas.clientHeight
+
+        return {canvas, container}
+    }
+
+    const {canvas, container} = makeCanvas()
+    const context = canvas.getContext("2d")
+
+    function makeCornerButton(text, {
+        left = undefined,
+        right = undefined,
+        top = undefined,
+        bottom = undefined
+    }={}) {
+        const button = document.createElement("button")
+        button.textContent = text
+
+        button.style.position = "absolute"
+        if (left   !== undefined) button.style.left = left
+        if (right  !== undefined) button.style.right = right
+        if (top    !== undefined) button.style.top = top
+        if (bottom !== undefined) button.style.bottom = bottom
+
+        container.appendChild(button)
+        return button
+    }
+
+    context.fillStyle = "blue"
+    context.fillRect(20, 20, 50, 50)
+
+    const zoomInButton = makeCornerButton("+", {left: 0, top: 0})
+    const zoomOutButton = makeCornerButton("-", {left: "30px", top: 0})
+
+    const slider = document.createElement("input")
+    slider.type = "range"
+    slider.value = 0
+    slider.min = 0
+    slider.max = 500
+
+    slider.style.display = "block"
+    slider.style.width = canvas.style.width
+    terminal.parentNode.appendChild(slider)
+
+    let viewCenter = new Vector2d(args.x, args.y)
+    let zoomFactor = args.zoom
+    const pointSizeFactor = (zoomFactor / 5)
+
+    let startPoints = []
+    let startPointColors = []
+
+    const minZoomFactor = 0.01
+    const maxZoomFactor = 99999999
+
+    function pointToScreenPos(point) {
+        const normalisedPos = point.sub(viewCenter).scale(1 / zoomFactor)
+        normalisedPos.y *= -1
+        return new Vector2d(
+            canvas.width / 2 + normalisedPos.x * canvas.width / 2,
+            canvas.height / 2 + normalisedPos.y * canvas.height / 2
+        )
+    }
+
+    function screenPosToPoint(pos) {
+        const normalisedPos = pos.scale(1 / (canvas.width / 2)).sub(new Vector2d(1, 1))
+        normalisedPos.y *= -1
+        return normalisedPos.scale(zoomFactor).add(viewCenter)
+    }
+
+    function drawLine(p1, p2, {
+        color = terminal.data.foreground.toString(),
+        lineWidth = 2
+    }={}) {
+        context.beginPath()
+        context.moveTo(p1.x, p1.y)
+        context.lineTo(p2.x, p2.y)
+        context.strokeStyle = color
+        context.lineWidth = lineWidth
+        context.stroke()
+    }
+
+    function drawText(point, text, {
+        color = terminal.data.foreground.toString(),
+        fontSize = 0.03,
+        offset = new Vector2d(0.01, 0.01)
+    }={}) {
+        context.fillStyle = color
+        context.font = `${fontSize * canvas.width}px monospace`
+        context.textBaseline = "top"
+        context.textAlign = "left"
+        const textPos = point.add(offset.scale(canvas.width))
+        context.fillText(text, textPos.x, textPos.y)
+    }
+
+    function drawGrid() {
+        const minXY = screenPosToPoint(new Vector2d(0, canvas.height))
+        const maxXY = screenPosToPoint(new Vector2d(canvas.width, 0))
+        
+        drawLine( // x axis
+            pointToScreenPos(new Vector2d(0, minXY.y)),
+            pointToScreenPos(new Vector2d(0, maxXY.y)))
+
+        drawLine( // y axis
+            pointToScreenPos(new Vector2d(minXY.x, 0)),
+            pointToScreenPos(new Vector2d(maxXY.x, 0)))
+
+        const xJumpSize = 10 ** Math.round(Math.log10((maxXY.x - minXY.x) / 10) + 0.2)
+        const yJumpSize = 10 ** Math.round(Math.log10((maxXY.y - minXY.y) / 10))
+
+        let currX = Math.floor(minXY.x) - Math.floor(minXY.x) % xJumpSize
+        while (currX < Math.ceil(maxXY.x) + 1) {
+            drawText(pointToScreenPos(new Vector2d(currX, 0)), Math.round(currX * 100) / 100)
+            currX += xJumpSize
+        }
+
+        let currY = Math.floor(minXY.y) - Math.floor(minXY.y) % yJumpSize
+        while (currY < Math.ceil(maxXY.y) + 1) {
+            if (currY != 0) {
+                // only draw it once (in the x loop)
+                drawText(pointToScreenPos(new Vector2d(0, currY)), Math.round(currY * 10) / 10)
+            }
+            currY += yJumpSize
+        }
+    }
+
+    function applyTransform(point, t) {
+        const columnVector = Matrix.fromArray([[point.x], [point.y]])
+        const resultMatrix = matrix.multiply(columnVector)
+        const resultPoint = new Vector2d(resultMatrix.getCellValue(0, 0), resultMatrix.getCellValue(1, 0))
+        return point.lerp(resultPoint, t)
+    }
+
+    function drawCirlce(pos, {
+        radius = 0.05,
+        color = terminal.data.accentColor1,
+    }={}) {
+        context.fillStyle = color
+        context.beginPath()
+        context.arc(pos.x, pos.y, Math.max(radius * canvas.width / zoomFactor * pointSizeFactor, 2), 0, 2 * Math.PI)
+        context.fill()
+    }
+
+    function drawPoints(t) {
+        for (let i = 0; i < startPoints.length; i++) {
+            const transformedPoint = applyTransform(startPoints[i], t)
+            drawCirlce(pointToScreenPos(transformedPoint),
+                {color: startPointColors[i]})
+        }
+    }
+
+    function updateDrawing() {
+        const t = slider.value / slider.max
+        canvas.width = canvas.clientWidth
+        canvas.height = canvas.clientHeight
+
+        context.clearRect(0, 0, canvas.width, canvas.height)
+        context.fillStyle = terminal.data.background.toString()
+        context.fillRect(0, 0, canvas.width, canvas.height)
+
+        drawGrid()
+        drawPoints(t)
+    }
+
+    function generateStartPoints(n) {
+        const randomPoints = Array.from({length: n})
+            .map(() => Vector2d.fromFunc(Math.random).scale(canvas.width))
+            .map(v => screenPosToPoint(v))
+        
+        const linePoints = []
+
+        const corner1 = screenPosToPoint(new Vector2d(0, 0))
+        const corner2 = screenPosToPoint(new Vector2d(canvas.width, 0))
+        const corner3 = screenPosToPoint(new Vector2d(canvas.width, canvas.height))
+        const corner4 = screenPosToPoint(new Vector2d(0, canvas.height))
+        for (let t = 0; t < 1; t += 0.01) {
+            linePoints.push(corner1.lerp(corner2, t))
+            linePoints.push(corner2.lerp(corner3, t))
+            linePoints.push(corner3.lerp(corner4, t))
+            linePoints.push(corner4.lerp(corner1, t))
+        }
+
+        return randomPoints.concat(linePoints)
+    }
+
+    function generateStartPointColors(points) {
+        return points.map(p => {
+            const normalisedPos = pointToScreenPos(p).scale(2 / canvas.width).add(new Vector2d(-1, -1))
+            const angle = Math.atan2(normalisedPos.y, normalisedPos.x) / Math.PI * 180
+            const hue = Math.round(angle)
+            return Color.hsl(hue / 360, 1, 0.5)
+        })
+    }
+
+    startPoints = generateStartPoints(500)
+    startPointColors = generateStartPointColors(startPoints)
+
+    function getEventPoint(event, {attrX="clientX", attrY="clientY"}={}) {
+        let rect = canvas.getBoundingClientRect()
+        return screenPosToPoint(new Vector2d(
+            event[attrX] - rect.left,
+            event[attrY] - rect.top
+        ))
+    }
+
+    let dragStartPoint = null
+    let dragStartViewOffset = null
+    let dragEndViewOffset = null
+
+    canvas.onmousedown = event => {
+        dragStartPoint = getEventPoint(event, {
+            attrX: "clientX", attrY: "clientY"
+        })
+        dragStartViewOffset = viewCenter.copy()
+        dragEndViewOffset = dragStartViewOffset.copy()
+    }
+
+    canvas.onmousemove = event => {
+        if (!dragStartPoint) {
+            return
+        }
+
+        const point = getEventPoint(event, {
+            attrX: "clientX", attrY: "clientY"
+        })
+        const diff = point.sub(dragStartPoint).scale(-1)
+        dragEndViewOffset = dragStartViewOffset.add(diff)
+
+        viewCenter = dragEndViewOffset
+        updateDrawing()
+        viewCenter = dragStartViewOffset
+    }
+
+    canvas.onmouseup = () => {
+        viewCenter = dragEndViewOffset
+        updateDrawing()
+        dragStartPoint = null
+    }
+
+    canvas.onwheel = (event, steps=1) => {
+        const delta = Math.sign(event.deltaY)
+        for (let i = 0; i < steps; i++) {
+            if (delta > 0) {
+                zoomFactor /= 0.95
+            } else if (delta < 0) {
+                zoomFactor *= 0.95
+            } else {
+                return
+            }
+        }
+
+        zoomFactor = Math.max(Math.min(zoomFactor, maxZoomFactor), minZoomFactor)
+        if (event.preventDefault) {
+            event.preventDefault()
+        }
+        updateDrawing()
+    }
+
+    zoomInButton.onclick = () => canvas.onwheel({deltaY: -1}, 6)
+    zoomOutButton.onclick = () => canvas.onwheel({deltaY: 1}, 6)
+
+    terminal.scroll()
+
+    updateDrawing(0)
+
+    function easeInOut(t) {
+        if ((t /= 1 / 2) < 1) return 1 / 2 * t * t
+        return -1 / 2 * ((--t) * (t - 2) - 1)
+    }
+
+    let endAnimationFlag = false
+    slider.oninput = () => {
+        updateDrawing()
+        endAnimationFlag = true
+    }
+
+    async function playAnimation() {
+        let animationProgress = 0
+        while (animationProgress < 1 && !endAnimationFlag) {
+            animationProgress = Math.min(animationProgress + 0.005, 1)
+            const t = easeInOut(animationProgress)
+            slider.value = Math.round(t * 500)
+            updateDrawing()
+            await sleep(1000 / 60)
+        }
+    }
+
+    playAnimation()
+
+    terminal.printLine("\n- Use the slider to go through the animation")
+    terminal.printLine("- Use your mouse wheel / buttons to zoom in & out")
+
+}, {
+    description: "visualize a given 2x2 matrix transformation",
+    args: {
+        "?m=matrix:sm": "2x2 matrix to left-multiply by",
+        "?x:n": "x coordinate of center",
+        "?y:n": "y coordinate of center",
+        "?z=zoom:n:0.01~99999": "zoom level"
+    },
+    defaultValues: {
+        x: 0,
+        y: 0,
+        zoom: 5
     }
 })
 
@@ -15760,17 +18748,19 @@ terminal.addCommand("minigolf", async function(args) {
 
 // ------------------- js/commands/mkdir.js --------------------
 terminal.addCommand("mkdir", async function(args) {
-    if (args.directory_name.match(/[\\\/\.\s]/))
-        throw new Error("File may not contain '/' or '\\'")
-    if (terminal.fileExists(args.directory_name))
+    if (!terminal.isValidFileName(args.name))
+        throw new Error("Invalid filename")
+    if (terminal.fileExists(args.name))
         throw new Error("File/Directory already exists")
-    let newFolder = new Directory({})
-    terminal.currFolder.content[args.directory_name] = newFolder
-    await terminal.fileSystem.reload()
-    terminal.printLine(`Created ${terminal.fileSystem.pathStr}/${args.directory_name}/`)
+
+    let newFolder = new DirectoryFile().setName(args.name)
+    terminal.currDirectory.addChild(newFolder)
+    terminal.printLine(`Created ${newFolder.path}`)
 }, {
     description: "create a new directory",
-    args: ["directory_name"]
+    args: {
+        "name:s": "name for your shiny new directory"
+    }
 })
 
 
@@ -15897,28 +18887,75 @@ terminal.addCommand("morse", async function(args) {
 // ------------------- js/commands/mv.js --------------------
 terminal.addCommand("mv", async function(args) {
     let file = terminal.getFile(args.file)
-    if (["..", "-"].includes(args.directory)) {
-        if (terminal.currFolder == terminal.rootFolder)
-            throw new Error("You are already at ground level")
-        var directory = terminal.currFolder.parent
-    } else if (["/", "~"].includes(args.directory)) {
-        var directory = terminal.rootFolder
-    } else if ("." == args.directory) {
-        var directory = terminal.currFolder
-    } else {
-        var directory = terminal.getFile(args.directory, FileType.FOLDER)
+    if (file == terminal.currDirectory) {
+        throw new Error("Cannot move active directory")
     }
-    let fileCopy = file.copy()
-    directory.content[file.name] = fileCopy
-    fileCopy.parent = directory
-    delete file.parent.content[file.name]
-    await terminal.fileSystem.reload()
+
+    let directory = terminal.getFile(args.directory, FileType.DIRECTORY)
+    
+    if (args.name) {
+        if (!terminal.isValidFileName(args.name)) {
+            throw new Error("Invalid Filename")
+        } else if (directory.getFile(args.name)) {
+            throw new Error("File with that name already exists in directory")
+        } else {
+            file.setName(args.name)
+        }
+    } else if (directory == file.parent || directory.fileExists(file.name)) {
+        let nameFromNumber = undefined
+
+        let nameStart = ""
+        let nameEnding = ""
+        let foundPoint = false
+        for (let char of [...file.name].reverse()) {
+            if (!foundPoint && char == ".") {
+                foundPoint = true
+            } else if (foundPoint) {
+                nameStart = char + nameStart
+            } else {
+                nameEnding = char + nameEnding
+            }
+        }
+
+        if (!foundPoint) {
+            // swap them
+            let temp = nameStart
+            nameStart = nameEnding
+            nameEnding = temp
+        }
+
+        let match = nameStart.match(/^(.+?)([0-9]+)$/)
+        let dotQ = foundPoint ? "." : ""
+        if (match) {
+            nameFromNumber = n => `${match[1]}${(BigInt(match[2]) + BigInt(n))}${dotQ}${nameEnding}`
+        } else {
+            nameFromNumber = n => `${nameStart}${n}${dotQ}${nameEnding}`
+        }
+
+        const maxNumberingTries = 1000
+        for (let i = 1; i <= maxNumberingTries; i++) {
+            let fileName = nameFromNumber(i)
+            if (terminal.isValidFileName(fileName) && !directory.fileExists(fileName)) {
+                file.setName(fileName)
+                break
+            }
+            
+            if (i == maxNumberingTries) {
+                throw new Error("Couldn't generate new unique filename. Provide one using the --name option")
+            }
+        }
+    }
+
+    file.parent.deleteChild(file)
+    directory.addChild(file)
 }, {
     description: "move a file",
-    args: ["file", "directory"]
+    args: {
+        "file:f": "file to move",
+        "d=directory:f": "directory to move to",
+        "?n=name:s": "new filename",
+    }
 })
-
-
 
 // ------------------- js/commands/name-gen.js --------------------
 terminal.addCommand("name-gen", async function(args) {
@@ -17450,6 +20487,21 @@ terminal.addCommand("neural-rocket", async function(args) {
 })
 
 
+// ------------------- js/commands/np.js --------------------
+terminal.addCommand("np", async function(args) {
+    const np = await terminal.modules.load("np", terminal)
+    terminal.window.np = np
+
+    // const a = np.array([[[[1,2,3,4], [7,5,2,1], [1,2,3,0]]], [[[1,2,3,4], [7,5,2,1], [1,2,3,0]]]])
+    const a = np.array([[1,2,3,4], [4,5,6,7], [8,9,10,11]])
+    terminal.window.a = a
+
+    terminal.printLine(a.toString())
+}, {
+    description: "start a noelpy interpreter for calculations",
+    isSecret: false
+})
+
 // ------------------- js/commands/nsolve.js --------------------
 terminal.addCommand("nsolve", async function(args) {
     function makeDerivative(f, h=0.0001) {
@@ -17550,6 +20602,454 @@ terminal.addCommand("number-guess", async function(args) {
 }, {
     description: "guess a random number",
     isGame: true
+})
+
+// ------------------- js/commands/old-edit.js --------------------
+const cssCode = {
+    ".editor-parent": {
+        "width": "100%",
+        "resize": "both",
+        "display": "grid",
+        "grid-template-rows": "auto 1fr",
+        "grid-template-columns": "1fr",
+    },
+
+    ".editor-header-title": {
+        "width": "fit-content",
+        "color": "var(--background)",
+        "background": "var(--foreground)",
+    },
+
+    ".editor-body": {
+        "display": "grid",
+        "grid-template-rows": "1fr",
+        "grid-template-columns": "auto 1fr",
+    },
+
+    ".editor-sidebar": {
+        "color": "var(--background)",
+        "background": "var(--foreground)",
+        "padding-right": "0.1em",
+        "padding-left": "0.1em",
+    },
+
+    ".editor-content": {
+        "outline": "none",
+        "padding-right": "0.5em",
+        "padding-left": "0.5em",
+    },
+
+    ".editor-content > div:focus-visible": {
+        "outline": "none",
+        "background": "#1d1d1d",
+    },
+}
+
+function createEditorHTML() {
+    let parent = createElement("div", {className: "editor-parent"})
+    let header = createElement("div", {className: "editor-header"}, parent)
+    let headerTitle = createElement("div", {className: "editor-header-title"}, header)
+    let body = createElement("div", {className: "editor-body"}, parent)
+    let sidebar = createElement("div", {className: "editor-sidebar"}, body)
+    let contentScroll = createElement("div", {className: "editor-content-scroll"}, body)
+    let content = createElement("div", {
+        className: "editor-content",
+        contentEditable: true,
+    }, contentScroll)
+
+    return {
+        parent, header, headerTitle, body, sidebar, content, contentScroll
+    }
+}
+
+function implementCSS(code) {
+    let style = document.createElement("style")
+    for (const [selector, properties] of Object.entries(code)) {
+        let css = selector + " {"
+        for (const [property, value] of Object.entries(properties))
+            css += property + ": " + value + ";"
+        css += "}"
+        style.innerHTML += css
+    }
+    terminal.document.head.appendChild(style)
+}
+
+let tempFileContent = null
+let tempFileName = null
+let elements = null
+let lineCount = null
+let prevLineCount = null
+let currentlyEditing = false
+
+function updateLineNums() {
+    lineCount = elements.content.childNodes.length
+
+    if (lineCount == 0) {
+        elements.sidebar.textContent = "1"
+        prevLineCount = lineCount
+    } else if (prevLineCount !== lineCount) {
+        elements.sidebar.textContent = ""
+        for (let i = 0; i < lineCount; i++) {
+            let line = createElement("div", {className: "editor-line-num"}, elements.sidebar)
+            line.textContent = i + 1
+        }
+        prevLineCount = lineCount
+    }
+}
+
+function createElement(tag, props, parent=null) {
+    const element = document.createElement(tag)
+    for (const [key, value] of Object.entries(props))
+        element[key] = value
+    if (parent)
+        parent.appendChild(element)
+    return element
+}
+
+function getText() {
+    let text = ""
+    for (let line of elements.content.querySelectorAll("div")) {
+        text += line.textContent + "\n"
+    }
+    return text.slice(0, -1)
+}
+
+function loadContent() {
+    let lastElement = null
+    for (let line of tempFileContent.split("\n")) {
+        let lineElement = createElement("div", {}, elements.content)
+        lineElement.textContent = line
+        if (lineElement.textContent.trim() == "")
+            lineElement.appendChild(document.createElement("br"))
+        lastElement = lineElement
+    }
+    if (lastElement)
+        setTimeout(() => lastElement.focus(), 100)
+    lineCount = tempFileContent.split("\n").length
+    updateLineNums()
+}
+
+terminal.addCommand("old-edit", async function(args) {
+    if (terminal.inTestMode) return
+
+    tempFileContent = ""
+    tempFileName = "Untitled File"
+    currentlyEditing = true
+    prevLineCount = null
+    elements = createEditorHTML()
+    
+    if (args.file) {
+        let file = terminal.getFile(args.file)
+        if (file.type == FileType.FOLDER)
+            throw new Error("cannot edit a folder")
+        tempFileContent = file.content
+        tempFileName = file.path
+    }
+
+    implementCSS(cssCode)
+    terminal.parentNode.appendChild(elements.parent)
+
+    elements.headerTitle.textContent = tempFileName
+    elements.content.addEventListener("input", updateLineNums)
+    loadContent()
+
+    terminal.document.addEventListener("keydown", event => {
+        // save
+        if (event.ctrlKey && event.key == "s") {
+            currentlyEditing = false
+            event.preventDefault()
+        }
+    })
+
+    while (currentlyEditing) {
+        await sleep(100)
+    }
+
+    while (tempFileName == "" || tempFileName == "Untitled File") {
+        tempFileName = await terminal.prompt("file name: ")
+        while (!terminal.isValidFileName(tempFileName)) {
+            terminal.printError("invalid file name")
+            tempFileName = await terminal.prompt("file name: ")
+        }
+    }
+
+    if (terminal.fileExists(tempFileName)) {
+        let file = terminal.getFile(tempFileName)
+        if (file.type == FileType.FOLDER)
+            throw new Error("cannot edit a folder")
+        file.content = getText()
+    } else {
+        terminal.currDirectory.addChild(
+            new PlainTextFile(getText()).setName(tempFileName)
+        )
+    }
+}, {
+    description: "edit a file of the current directory (old version of editor)",
+    args: {
+        "?file:f": "the file to open",
+    },
+    isSecret: true,
+})
+
+
+
+// ------------------- js/commands/panik.js --------------------
+terminal.addCommand("panik", async function(args) {
+    await terminal.modules.import("game", window)
+
+    terminal.printError("This command is in german.\n", "Warning")
+
+    await terminal.animatePrint("Du hast eine Panikattacke oder fühlst, dass es", 20)
+    await terminal.animatePrint("dir nicht gut geht?", 20)
+    await sleep(200)
+    await terminal.animatePrint("Dann bist du hier richtig!\n", 20)
+
+    terminal.printLine("Wie geht es dir aktuell? Wähle eine option aus:\n")
+    terminal.printLine("(a) ich habe eine panikattacke und brauche akut hilfe.")
+    terminal.printLine("(b) ich merke dass es sich was aufbaut und will verhindern,")
+    terminal.printLine("    dass sich eine Panikattacke aufbaut.\n")
+
+    let answer = (await terminal.prompt("['a' oder 'b']: ")).toLowerCase().trim()
+    while (!["a", "b"].includes(answer)) {
+        terminal.printError("Die Antwort habe ich nicht verstanden.")
+        terminal.printLine("Gib nur den Buchstaben 'a' oder 'b' ein, ohne Anführungszeichen.\n")
+        answer = (await terminal.prompt("['a' oder 'b']: ")).toLowerCase().trim()
+    }
+
+    if (answer == "a") {
+
+        terminal.print("\nOkay. ")
+        terminal.print("Wir schaffen das.\n", undefined, {forceElement: true, element: "b"})
+        await terminal.sleep(1000)
+        await terminal.animatePrint("Ich starte jetzt einen timer, der die ganze zeit")
+        await terminal.sleep(300)
+        await terminal.animatePrint("zeigen wird, wie lange wir bisher hier machen:\n")
+        await terminal.sleep(2000)
+        terminal.scroll()
+
+        let timeOutput = terminal.print("00:00:00:000", undefined, {forceElement: true})
+        timeOutput.style.fontSize = "2em"
+        const startTime = Date.now()
+
+        function updateTime() {
+            const timeDiff = Date.now() - startTime
+            let [ms, s, m, h] = [
+                (timeDiff % 1000),
+                (Math.floor(timeDiff / 1000) % 60),
+                (Math.floor(timeDiff / 60000) % 60),
+                (Math.floor(timeDiff / 3600000) % 24),
+            ].map(n => n.toString().padStart(2, "0"))
+            ms = ms.padStart(3, "0")
+            timeOutput.textContent = `${h}:${m}:${s}:${ms}`
+
+            terminal.window.requestAnimationFrame(updateTime)
+        }
+
+        updateTime()
+
+        await terminal.sleep(2000)
+        terminal.printLine("\n\nOkay. Es geht jetzt nur ums Überleben.")
+        await terminal.sleep(700)
+        await terminal.animatePrint("In deinem Körper wurde gerade Adrenalin")
+        await terminal.animatePrint("ausgeschüttet. Das ist nicht schlimm,")
+        await terminal.animatePrint("aber verhindert dass du klar denken kannst.\n")
+        
+        terminal.scroll(); await terminal.sleep(2000)
+
+        await terminal.animatePrint("Wenn du jemanden in deiner Nähe hast oder")
+        await terminal.animatePrint("anrufen kannst, wäre jetzt ein guter Zeitpunkt.\n")
+        await terminal.animatePrint("Wenn du es gerade nicht kannst oder keiner da ist,")
+        await terminal.animatePrint("schaffen wir das jetzt auch zusammen.\n")
+        
+        terminal.scroll(); await terminal.sleep(2000)
+
+        await terminal.animatePrint("Ab jetzt bitte auf Atemübungen fokussieren!")
+        await terminal.animatePrint("Versuche dich auf deinen Atem zu konzentrieren.")
+        await terminal.animatePrint("Du schaffst das. Alles ist gut. Du hast eine")
+        await terminal.animatePrint("Panikattacke und du wirst *nicht* sterben.\n")
+        terminal.scroll(); await terminal.sleep(1000)
+        await terminal.animatePrint("Deine Sinne sind gerade völlig außer rand und band.")
+        terminal.scroll(); await terminal.sleep(1000)
+        await terminal.animatePrint("Das fühlt sich scheiße an, aber das geht weg.")
+        terminal.scroll(); await terminal.sleep(1000)
+        await terminal.animatePrint("Versuche so ruhig wie nur möglich zu atmen.\n")
+        terminal.scroll(); await terminal.sleep(1000)
+
+        await terminal.animatePrint("Ich habe hier eine Grafik für dich, mit der es")
+        await terminal.animatePrint("dir vielleicht einfacher fällt, rythmisch zu atmen.")
+
+        terminal.scroll(); await terminal.sleep(1000)
+
+        const canvas = printSquareCanvas({widthChars: 30})
+        const context = canvas.getContext("2d")
+
+        function easeInOut(t) {
+            if ((t /= 1 / 2) < 1) return 1 / 2 * t * t
+            return -1 / 2 * ((--t) * (t - 2) - 1)
+        }
+        
+        const startCanvasTime = Date.now()
+        function redrawCanvas() {
+            const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
+            const breathTime = (Date.now() - startCanvasTime) % 10000
+            let t = 0
+            if (breathTime < 5000) {
+                t = breathTime / 5000
+            } else {
+                t = 1 - (breathTime - 5000) / 5000
+            }
+
+            const cirlceMaxRadius = Math.min(canvas.width, canvas.height) / 2.5
+
+            context.clearRect(0, 0, canvas.width, canvas.height)
+            const cirlceSize = easeInOut(t * 0.9 + 0.1)
+            context.beginPath()
+            context.arc(middle.x, middle.y, cirlceSize * cirlceMaxRadius, 0, Math.PI * 2)
+            context.fillStyle = "rgba(255, 255, 255, 0.8)"
+            context.fill()
+            context.lineWidth = 3
+            context.strokeStyle = "black"
+            context.stroke()
+
+            const timeDiff = Date.now() - startTime
+            let [ms, s, m, h] = [
+                (timeDiff % 1000),
+                (Math.floor(timeDiff / 1000) % 60),
+                (Math.floor(timeDiff / 60000) % 60),
+                (Math.floor(timeDiff / 3600000) % 24),
+            ].map(n => n.toString().padStart(2, "0"))
+            ms = ms.padStart(3, "0")
+            const timeString = `${h}:${m}:${s}:${ms}`
+            context.textBaseline = "middle"
+            context.textAlign = "center"
+            context.font = "20px monospace"
+            context.fillStyle = "blue"
+            context.fillText(timeString, middle.x, middle.y)
+
+            terminal.window.requestAnimationFrame(redrawCanvas)
+        }
+
+        terminal.window.requestAnimationFrame(redrawCanvas)
+
+        terminal.scroll(); await terminal.sleep(1000)
+
+        await terminal.animatePrint("\n\nDenk dran: in ein paar minuten ist das vorbei.")
+        await terminal.animatePrint("Es *wird* besser, du wirst *nicht* sterben.")
+        await terminal.animatePrint("Das Gefühl ist ganz normal. Nach ungefähr 5 Minuten")
+        await terminal.animatePrint("Sollte die akute Panik weg sein. Du wirst wieder")
+        await terminal.animatePrint("Denken können. Bis dahin: Atmen!")
+
+        await terminal.animatePrint("\nIch melde mich wieder in 8 minuten. Bleib dran.")
+        terminal.scroll()
+        await sleep(1000 * 60 * 8)
+
+        await terminal.animatePrint("\nOkay. Das waren 8 Minuten.\n")
+        await sleep(1000)
+        await terminal.animatePrint("Hier endet die Akuthilfe. Aber!:")
+        await terminal.animatePrint("Die Panikattacke ist noch nicht ganz vorbei.")
+        await terminal.animatePrint("Die Grafiken laufen weiter, ruf am besten")
+        await terminal.animatePrint("Personen an, die die jetzt helfen können.\n")
+
+        terminal.scroll(); await sleep(1000)
+        await terminal.animatePrint("Wenn die Panik wieder kommt, mache weiter")
+        await terminal.animatePrint("die Übungen. Du schaffst das.\n")
+
+        terminal.scroll(); await sleep(1000)
+        await terminal.animatePrint("Wenn du Tipps brauchst, was du jetzt tun kannst,")
+        await terminal.animatePrint("tippe nochmal den Befehl ein und öffne Option (b).\n")
+        terminal.scroll(); await sleep(1000)
+
+        await terminal.animatePrint("Viel Erfolg (ruf Leute an!)")
+
+        terminal.scroll()
+
+    } else {
+
+        terminal.print("\nOkay. ")
+        terminal.print("Wir schaffen das!\n", undefined, {forceElement: true, element: "b"})
+        terminal.scroll()
+        await terminal.sleep(1000)
+
+        await terminal.animatePrint("Das schwerste hast du gerade schon geschafft:")
+        await terminal.animatePrint("Du hast erkannt, dass eine Panikattacke kommt")
+        await terminal.animatePrint("und machst jetzt etwas dagegen. Perfekt!\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+        await terminal.animatePrint("Wenn du merkst, dass es schlimm wird, lad")
+        await terminal.animatePrint("die Website neu und führ den Befehl nochmal")
+        await terminal.animatePrint("aus und öffne Option (a). Alles gut.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Hm. Jetzt musst du etwas machen, damit es dir")
+        await terminal.animatePrint("besser geht. Am besten rufst du jemanden an")
+        await terminal.animatePrint("oder frag jemanden in deiner Nähe, ob ihr")
+        await terminal.animatePrint("quatschen wollt. Es hilft, zu erklären, dass")
+        await terminal.animatePrint("es dir komisch geht. Alles gut.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Auch wenn du noch keine Panikattacke hast,")
+        await terminal.animatePrint("lohnt es sich jetzt jemanden anzuschreiben.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Wenn du wirklich niemanden hast, z.b. weil")
+        await terminal.animatePrint("es Nacht ist, dann machen wir jetzt hier weiter.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Was würde dir jetzt gut tun? Trink Wasser!")
+        await terminal.animatePrint("Vielleicht hilft es, aufzustehen?")
+        await terminal.animatePrint("Lauf ein paar Schritte, vielleicht kannst du")
+        await terminal.animatePrint("sogar Sport machen? Das soll helfen? Glaube ich.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Mach nichts langweiliges zur Ablenkung. Instagram")
+        await terminal.animatePrint("ist keine gute Idee. Dein Lieblingsfilm und")
+        await terminal.animatePrint("Lieblingsmusik aber vielleicht schon?\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Mir hilft es, Schach auf ")
+        terminal.printLink("chess.com", "https://chess.com", undefined, false)
+        await terminal.animatePrint(" zu spielen.")
+        await terminal.animatePrint("Oder einen Zauberwürfel zu lösen.")
+        await terminal.animatePrint("Oder einfach nur jemanden anzuschreiben.\n")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Wahrscheinlich ist dein Körper gerade")
+        await terminal.animatePrint("sehr angespannt. Mir hilft es sehr zu lachen!")
+        await terminal.animatePrint("Hier eine auswahl an lustigen Videos (Playlist):")
+        terminal.printLink("youtube.com/playlist?list=PLZX43-yn58b1WVAWo8TRpL1uJ5yFRioZ1",
+            "https://www.youtube.com/playlist?list=PLZX43-yn58b1WVAWo8TRpL1uJ5yFRioZ1")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+    
+        await terminal.animatePrint("\nMehr Tipps habe ich gerade nicht.")
+        await terminal.animatePrint("Bitte schreib jemanden an! Du schaffst das!")
+
+        terminal.scroll()
+        await terminal.sleep(3000)
+
+        await terminal.animatePrint("Wenn es dir schlecht geht, führ den")
+        await terminal.animatePrint("Befehl nochmal aus und wähle option (a).")
+        await terminal.animatePrint("DU SCHAFFST DAS!")
+    }
+}, {
+    description: "[german command] mäßige hilfe bei einer panikattacke",
+    isSecret: true
 })
 
 // ------------------- js/commands/particle.js --------------------
@@ -17764,116 +21264,317 @@ terminal.addCommand("physics", async function(args) {
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
 })
 
-// ------------------- js/commands/pi.js --------------------
-terminal.addCommand("pi", function(args) {
-    let pi = ""
-    pi += "1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679"
-    pi += "8214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196"
-    pi += "4428810975665933446128475648233786783165271201909145648566923460348610454326648213393607260249141273"
-    pi += "7245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094"
-    pi += "3305727036575959195309218611738193261179310511854807446237996274956735188575272489122793818301194912"
-    pi += "9833673362440656643086021394946395224737190702179860943702770539217176293176752384674818467669405132"
-    pi += "0005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235"
-    pi += "4201995611212902196086403441815981362977477130996051870721134999999837297804995105973173281609631859"
-    pi += "5024459455346908302642522308253344685035261931188171010003137838752886587533208381420617177669147303"
-    pi += "5982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989"
-    pi += "3809525720106548586327886593615338182796823030195203530185296899577362259941389124972177528347913151"
-    pi += "5574857242454150695950829533116861727855889075098381754637464939319255060400927701671139009848824012"
-    pi += "8583616035637076601047101819429555961989467678374494482553797747268471040475346462080466842590694912"
-    pi += "9331367702898915210475216205696602405803815019351125338243003558764024749647326391419927260426992279"
-    pi += "6782354781636009341721641219924586315030286182974555706749838505494588586926995690927210797509302955"
-    pi += "3211653449872027559602364806654991198818347977535663698074265425278625518184175746728909777727938000"
-    pi += "8164706001614524919217321721477235014144197356854816136115735255213347574184946843852332390739414333"
-    pi += "4547762416862518983569485562099219222184272550254256887671790494601653466804988627232791786085784383"
-    pi += "8279679766814541009538837863609506800642251252051173929848960841284886269456042419652850222106611863"
-    pi += "0674427862203919494504712371378696095636437191728746776465757396241389086583264599581339047802759009"
-    pi += "9465764078951269468398352595709825822620522489407726719478268482601476990902640136394437455305068203"
-    pi += "4962524517493996514314298091906592509372216964615157098583874105978859597729754989301617539284681382"
-    pi += "6868386894277415599185592524595395943104997252468084598727364469584865383673622262609912460805124388"
-    pi += "4390451244136549762780797715691435997700129616089441694868555848406353422072225828488648158456028506"
-    pi += "0168427394522674676788952521385225499546667278239864565961163548862305774564980355936345681743241125"
-    pi += "1507606947945109659609402522887971089314566913686722874894056010150330861792868092087476091782493858"
-    pi += "9009714909675985261365549781893129784821682998948722658804857564014270477555132379641451523746234364"
-    pi += "5428584447952658678210511413547357395231134271661021359695362314429524849371871101457654035902799344"
-    pi += "0374200731057853906219838744780847848968332144571386875194350643021845319104848100537061468067491927"
-    pi += "8191197939952061419663428754440643745123718192179998391015919561814675142691239748940907186494231961"
-    pi += "5679452080951465502252316038819301420937621378559566389377870830390697920773467221825625996615014215"
-    pi += "0306803844773454920260541466592520149744285073251866600213243408819071048633173464965145390579626856"
-    pi += "1005508106658796998163574736384052571459102897064140110971206280439039759515677157700420337869936007"
-    pi += "2305587631763594218731251471205329281918261861258673215791984148488291644706095752706957220917567116"
-    pi += "7229109816909152801735067127485832228718352093539657251210835791513698820914442100675103346711031412"
-    pi += "6711136990865851639831501970165151168517143765761835155650884909989859982387345528331635507647918535"
-    pi += "8932261854896321329330898570642046752590709154814165498594616371802709819943099244889575712828905923"
-    pi += "2332609729971208443357326548938239119325974636673058360414281388303203824903758985243744170291327656"
-    pi += "1809377344403070746921120191302033038019762110110044929321516084244485963766983895228684783123552658"
-    pi += "2131449576857262433441893039686426243410773226978028073189154411010446823252716201052652272111660396"
-    pi += "6655730925471105578537634668206531098965269186205647693125705863566201855810072936065987648611791045"
-    pi += "3348850346113657686753249441668039626579787718556084552965412665408530614344431858676975145661406800"
-    pi += "7002378776591344017127494704205622305389945613140711270004078547332699390814546646458807972708266830"
-    pi += "6343285878569830523580893306575740679545716377525420211495576158140025012622859413021647155097925923"
-    pi += "0990796547376125517656751357517829666454779174501129961489030463994713296210734043751895735961458901"
-    pi += "9389713111790429782856475032031986915140287080859904801094121472213179476477726224142548545403321571"
-    pi += "8530614228813758504306332175182979866223717215916077166925474873898665494945011465406284336639379003"
-    pi += "9769265672146385306736096571209180763832716641627488880078692560290228472104031721186082041900042296"
-    pi += "6171196377921337575114959501566049631862947265473642523081770367515906735023507283540567040386743513"
-    pi += "6222247715891504953098444893330963408780769325993978054193414473774418426312986080998886874132604721"
-    pi += "5695162396586457302163159819319516735381297416772947867242292465436680098067692823828068996400482435"
-    pi += "4037014163149658979409243237896907069779422362508221688957383798623001593776471651228935786015881617"
-    pi += "5578297352334460428151262720373431465319777741603199066554187639792933441952154134189948544473456738"
-    pi += "3162499341913181480927777103863877343177207545654532207770921201905166096280490926360197598828161332"
-    pi += "3166636528619326686336062735676303544776280350450777235547105859548702790814356240145171806246436267"
-    pi += "9456127531813407833033625423278394497538243720583531147711992606381334677687969597030983391307710987"
-    pi += "0408591337464144282277263465947047458784778720192771528073176790770715721344473060570073349243693113"
-    pi += "8350493163128404251219256517980694113528013147013047816437885185290928545201165839341965621349143415"
-    pi += "9562586586557055269049652098580338507224264829397285847831630577775606888764462482468579260395352773"
-    pi += "4803048029005876075825104747091643961362676044925627420420832085661190625454337213153595845068772460"
-    pi += "2901618766795240616342522577195429162991930645537799140373404328752628889639958794757291746426357455"
-    pi += "2540790914513571113694109119393251910760208252026187985318877058429725916778131496990090192116971737"
-    pi += "2784768472686084900337702424291651300500516832336435038951702989392233451722013812806965011784408745"
-    pi += "1960121228599371623130171144484640903890644954440061986907548516026327505298349187407866808818338510"
-    pi += "2283345085048608250393021332197155184306354550076682829493041377655279397517546139539846833936383047"
-    pi += "4611996653858153842056853386218672523340283087112328278921250771262946322956398989893582116745627010"
-    pi += "2183564622013496715188190973038119800497340723961036854066431939509790190699639552453005450580685501"
-    pi += "9567302292191393391856803449039820595510022635353619204199474553859381023439554495977837790237421617"
-    pi += "2711172364343543947822181852862408514006660443325888569867054315470696574745855033232334210730154594"
-    pi += "0516553790686627333799585115625784322988273723198987571415957811196358330059408730681216028764962867"
-    pi += "4460477464915995054973742562690104903778198683593814657412680492564879855614537234786733039046883834"
-    pi += "3634655379498641927056387293174872332083760112302991136793862708943879936201629515413371424892830722"
-    pi += "0126901475466847653576164773794675200490757155527819653621323926406160136358155907422020203187277605"
-    pi += "2772190055614842555187925303435139844253223415762336106425063904975008656271095359194658975141310348"
-    pi += "2276930624743536325691607815478181152843667957061108615331504452127473924544945423682886061340841486"
-    pi += "3776700961207151249140430272538607648236341433462351897576645216413767969031495019108575984423919862"
-    pi += "9164219399490723623464684411739403265918404437805133389452574239950829659122850855582157250310712570"
-    pi += "1266830240292952522011872676756220415420516184163484756516999811614101002996078386909291603028840026"
-    pi += "9104140792886215078424516709087000699282120660418371806535567252532567532861291042487761825829765157"
-    pi += "9598470356222629348600341587229805349896502262917487882027342092222453398562647669149055628425039127"
-    pi += "5771028402799806636582548892648802545661017296702664076559042909945681506526530537182941270336931378"
-    pi += "5178609040708667114965583434347693385781711386455873678123014587687126603489139095620099393610310291"
-    pi += "6161528813843790990423174733639480457593149314052976347574811935670911013775172100803155902485309066"
-    pi += "9203767192203322909433467685142214477379393751703443661991040337511173547191855046449026365512816228"
-    pi += "8244625759163330391072253837421821408835086573917715096828874782656995995744906617583441375223970968"
-    pi += "3408005355984917541738188399944697486762655165827658483588453142775687900290951702835297163445621296"
-    pi += "4043523117600665101241200659755851276178583829204197484423608007193045761893234922927965019875187212"
-    pi += "7267507981255470958904556357921221033346697499235630254947802490114195212382815309114079073860251522"
-    pi += "7429958180724716259166854513331239480494707911915326734302824418604142636395480004480026704962482017"
-    pi += "9289647669758318327131425170296923488962766844032326092752496035799646925650493681836090032380929345"
-    pi += "9588970695365349406034021665443755890045632882250545255640564482465151875471196218443965825337543885"
-    pi += "6909411303150952617937800297412076651479394259029896959469955657612186561967337862362561252163208628"
-    pi += "6922210327488921865436480229678070576561514463204692790682120738837781423356282360896320806822246801"
-    pi += "2248261177185896381409183903673672220888321513755600372798394004152970028783076670944474560134556417"
-    pi += "2543709069793961225714298946715435784687886144458123145935719849225284716050492212424701412147805734"
-    pi += "5510500801908699603302763478708108175450119307141223390866393833952942578690507643100638351983438934"
-    pi += "1596131854347546495569781038293097164651438407007073604112373599843452251610507027056235266012764848"
-    pi += "3084076118301305279320542746286540360367453286510570658748822569815793678976697422057505968344086973"
-    pi += "5020141020672358502007245225632651341055924019027421624843914035998953539459094407046912091409387001"
-    pi += "2645600162374288021092764579310657922955249887275846101264836999892256959688159205600101655256375678"
+// ------------------- js/commands/pi-blocks.js --------------------
+terminal.addCommand("pi-blocks", async function(args) {
+    await terminal.modules.import("game", window)
+    await terminal.modules.load("window", terminal)
 
-    let digits = "3." + pi.slice(0, args.n)
-    terminal.printLine(digits)
+    function loadSound(url) {
+        return new Promise((resolve, reject) => {
+            const audio = terminal.document.createElement("audio")
+            audio.src = url
+            audio.style.display = "none"
+            terminal.parentNode.appendChild(audio)
+            audio.addEventListener('canplaythrough', () => resolve(audio), { once: true })
+            audio.addEventListener('error', err => {
+                reject(err)
+            }, { once: true })
+        })
+    }
+
+    const tickAudios = []
+    const numTickAudios = 10
+    try {
+        for (let i = 0; i < numTickAudios; i++) {
+            tickAudios.push(await loadSound("./res/sounds/tick.mp3"))
+        }
+        terminal.printLine("Loaded audios.")
+    } catch (e) {
+        console.error(e)
+        terminal.printError("Couldn't load audios.")
+    }
+
+    let tickSoundIndex = 0
+    function tickSound() {
+        const audio = tickAudios[(tickSoundIndex++) % numTickAudios]
+        if (audio) audio.play()
+    }
+
+    let terminalWindow = terminal.modules.window.make({
+        name: "Simulathon Challenge Colliding Blocks", fullscreen: true
+    })
+
+    const canvas = terminalWindow.CANVAS
+    const context = terminalWindow.CONTEXT
+
+    const canvasSize = () => new Vector2d(canvas.width, canvas.height)
+
+    let gameRunning = true
+    let collisionCount = 0
+
+    const updatesPerFrame = 1000
+
+    terminal.onInterrupt(() => {
+        gameRunning = false
+        terminalWindow.close()
+    })
+
+    function drawBackground() {
+        context.fillStyle = "white"
+        const size = canvasSize()
+        context.fillRect(0, 0, size.x, size.y)
+    }
+
+    function worldPosToScreenPos(pos) {
+        pos = new Vector2d(pos.x, pos.y * -1)
+        const screen = canvasSize()
+        pos = pos.add(new Vector2d(0.1, 0.6))
+        return new Vector2d(pos.x * screen.x, pos.y * screen.y)
+    }
+
+    function drawTextAt(text, pos, size) {
+        const fontSize = canvasSize().y * size
+        context.font = `${fontSize}px serif`
+        const screenPos = worldPosToScreenPos(pos)
+        context.textBaseline = "middle"
+        context.textAlign = "left"
+        context.fillStyle = "black"
+        context.fillText(text, screenPos.x, screenPos.y)
+    }
+
+    const initialSpeed = 0.0015 * args.speed / updatesPerFrame
+
+    const collisionPoints = []
+    const collisionPointSpeeds = []
+
+    class Cube {
+
+        constructor(pos, vel, weight, size, color) {
+            this.pos = pos
+            this.vel = vel
+            this.weight = weight
+            this.size = size
+            this.color = color
+            this.hasCollided = false
+        }
+
+        get corners() {
+            return [
+                this.pos.add(new Vector2d(0, 0)),
+                this.pos.add(new Vector2d(this.size.x, 0)),
+                this.pos.add(new Vector2d(this.size.x, this.size.y)),
+                this.pos.add(new Vector2d(0, this.size.y)),
+                this.pos.add(new Vector2d(0, 0)),
+            ]
+        }
+
+        render() {
+            context.fillStyle = this.color
+            context.strokeStyle = "black"
+            
+            context.beginPath()
+            let i = 0
+            for (const corner of this.corners) {
+                const screenPos = worldPosToScreenPos(corner)
+                if (i == 0) {
+                    context.moveTo(screenPos.x, screenPos.y)
+                } else {
+                    context.lineTo(screenPos.x, screenPos.y)
+                }
+                i++
+            }
+            
+            const lastScreenPos = worldPosToScreenPos(this.corners[3])
+            context.lineTo(lastScreenPos.x, lastScreenPos.y)
+
+            context.fill()
+            context.stroke()
+        }
+
+        update(otherCubes) {
+            this.pos.iadd(this.vel)
+            if (this.pos.x < 0) {
+                this.vel.x *= -1
+                collisionCount++
+                tickSound()
+                collisionPoints.push(this.pos.x)
+                collisionPointSpeeds.push(this.vel.length)
+            }
+
+            for (const cube of otherCubes) {
+                if (this.collides(cube)) {
+                    this.calcCollision(cube)
+                }
+            }
+        }
+
+        calcCollision(other, e=1.0) {
+            if (this.hasCollided) {
+                return
+            }
+
+            const velPrime = (this.vel.x * (this.weight - e * other.weight) + 2 * other.weight * other.vel.x) / (this.weight + other.weight)
+            other.vel.x = (other.vel.x * (other.weight - e * this.weight) + 2 * this.weight * this.vel.x) / (this.weight + other.weight)
+            this.vel.x = velPrime
+
+            this.hasCollided = true
+            other.hasCollided = true
+            collisionCount++
+            collisionPoints.push(this.pos.x)
+            collisionPointSpeeds.push(this.vel.length)
+            tickSound()
+        }
+
+        getMinX() {
+            return this.pos.x
+        }
+
+        getMaxX() {
+            return this.pos.x + this.size.x
+        }
+
+        collides(otherCube) {
+            const minSelfX = this.getMinX()
+            const maxSelfX = this.getMaxX()
+            const minOtherX = otherCube.getMinX()
+            const maxOtherX = otherCube.getMaxX()
+
+            return (minOtherX >= minSelfX && minOtherX <= maxSelfX) || (maxOtherX >= minSelfX && maxOtherX <= maxSelfX) 
+        }
+
+    }
+
+    const widthFactor = 1 / (canvasSize().x / canvasSize().y)
+
+    const cubes = [
+        new Cube(new Vector2d(0.1, 0), new Vector2d(0, 0), 1, new Vector2d(0.1 * widthFactor, 0.1), "red"),
+        new Cube(new Vector2d(0.5, 0), new Vector2d(-initialSpeed, 0), args.factor, new Vector2d(0.2 * widthFactor, 0.2), "blue")
+    ]
+
+    const backgroundLines = [
+        [new Vector2d(0, 0), new Vector2d(1, 0)],
+        [new Vector2d(0, 0), new Vector2d(0, 0.35)]
+    ]
+
+    function update() {
+        for (const cube of cubes) {
+            cube.update(cubes.filter(c => c !== cube))
+        }
+        for (const cube of cubes) {
+            cube.hasCollided = false
+        }
+    }
+
+    function draw() {
+        context.lineWidth = 1
+
+        for (const [start, end] of backgroundLines) {
+            const startScreen = worldPosToScreenPos(start)
+            const endScreen = worldPosToScreenPos(end)
+            context.beginPath()
+            context.moveTo(startScreen.x, startScreen.y)
+            context.lineTo(endScreen.x, endScreen.y)
+            context.strokeStyle = "black"
+            context.stroke()
+        }
+
+        for (const cube of cubes) {
+            cube.render()
+        }
+
+        let i = 0
+        for (const point of collisionPoints) {
+            const start = new Vector2d(point, 0)
+            const end = new Vector2d(point, - collisionPointSpeeds[i] * 3000)
+
+
+            const startScreen = worldPosToScreenPos(start)
+            const endScreen = worldPosToScreenPos(end)
+            context.beginPath()
+            context.moveTo(startScreen.x, startScreen.y)
+            context.lineTo(endScreen.x, endScreen.y)
+            context.strokeStyle = "red"
+            context.stroke()
+
+            i++
+        }
+
+        drawTextAt(`${collisionCount} collisions`, new Vector2d(0.015, 0.3), 0.05)
+    }
+
+    function loop() {
+        drawBackground()
+        draw()
+
+        for (let i = 0; i < updatesPerFrame; i++) {
+            update()
+        }
+
+        if (gameRunning)
+            terminal.window.requestAnimationFrame(loop)
+    }
+
+    loop()
+    while (gameRunning) {
+        await terminal.sleep(100)
+    }
+
+}, {
+    description: "simulate the bouncy blocks from 3b1b",
+    args: {
+        "f=factor:i": "the factor of the two blocks",
+        "?s=speed:n:0~10": "the speed factor"
+    },
+    defaultValues: {
+        speed: 1
+    }
+})
+
+// ------------------- js/commands/pi.js --------------------
+terminal.addCommand("pi", async function(args) {
+    if (args.n < 0) {
+        throw new Error("number of digits can't be negative")
+    }
+
+    if (!args.yes) {
+        if (args.n > 100000) {
+            await terminal.acceptPrompt("This will take very long to calculate. Continue? ", false)
+        } else if (args.n > 10000) {
+            await terminal.acceptPrompt("This will take a bit to calculate. Continue?")
+        }
+    }
+
+    let i = 1n
+    let x = 3n * (10n ** (BigInt(args.n - 2) + 20n))
+    let pi = x
+
+    while (x > 0) {
+        x = x * i / ((i + 1n) * 4n)
+        pi += x / (i + 2n)
+        i += 2n
+    }
+    
+    const piString = "3." + (pi / (10n ** 20n)).toString().slice(1)
+
+    if (args.unwrap) {
+        terminal.printLine(piString)
+    } else {
+        for (i = 0; i < piString.length; i += 100) {
+            terminal.printLine(piString.slice(i, i + 100))
+        }
+    }
+
+    if (args.copy) {
+        await terminal.copy(piString)
+        terminal.printLine("\nCopied digits to Clipboard ✓") 
+    }
 }, {
     description: "calculate pi to the n-th digit",
     args: {
-        "?n:i:1~10000": "the number of digits"
+        "?n:i": "the number of digits",
+        "?w=unwrap:b": "don't split the digits into lines.",
+        "?c=copy:b": "copy the digits to the clipboard",
+        "?y=yes:b": "ignore any computation warnings"
     },
     standardVals: {
         n: 100
@@ -18186,6 +21887,7 @@ terminal.addCommand("plotter", async function(args) {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(1000)
 }, {
     description: "plot mathematical functions",
     args: {"?f=fullscreen:b": "Open in fullscreen mode"}
@@ -18264,23 +21966,30 @@ terminal.addCommand("polyrythm", async function(args) {
     context.lineWidth = 2
 
     const startTime = Date.now()
+    
+    function frequencyFromNoteOffset(n) {
+        return 220.0 * 2 ** (n / 12)
+    }
 
-    const noteFrequencies = [
-        523.25,
-        587.33,
-        659.25,
-        698.46,
-        783.99,
-        880.00,
-        987.77,
-        1046.50,
-        1174.66,
-        1318.51,
-        1396.91,
-        1567.98,
-        1760.00,
-        1975.53
-    ]
+    const notePlayers = polyrythms.map((_, index) => {
+        const context = new AudioContext()
+        const osc = context.createOscillator()
+        const gain = context.createGain()
+
+        osc.connect(gain)
+        gain.connect(context.destination)
+
+        osc.frequency.value = frequencyFromNoteOffset(index * 2 + 8)
+        osc.start()
+        terminal.onInterrupt(() => osc.stop())
+
+        gain.gain.setValueAtTime(0, context.currentTime)
+
+        return () => {
+            gain.gain.setValueAtTime(1, context.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 2)
+        }
+    })
 
     let running = true
 
@@ -18298,7 +22007,7 @@ terminal.addCommand("polyrythm", async function(args) {
             fillCircle(position)
 
             if (deltaSideProgress > 0.5) {
-                playFrequency(noteFrequencies[i % noteFrequencies.length], args.beepMs)
+                notePlayers[i]()
             }
 
             polyrythmPrevSideProgress[i] = sideProgress
@@ -18322,11 +22031,9 @@ terminal.addCommand("polyrythm", async function(args) {
     args: {
         "*numbers": "numbers (e.g. \"3 4 5\")",
         "?t=time:n:10~99999": "time in miliseconds for full rotation",
-        "?b=beepMs:n": "time in miliseconds that they beep for" 
     },
     defaultValues: {
-        time: 4000,
-        beepMs: 150
+        time: 4000
     }
 })
 
@@ -18552,7 +22259,15 @@ terminal.addCommand("pong", async function(args) {
 
 // ------------------- js/commands/primes.js --------------------
 terminal.addCommand("primes", async function() {
-    function sqrt(value) {
+    function newtonSqrtIteration(n, x0) {
+        const x1 = ((n / x0) + x0) >> 1n;
+        if (x0 === x1 || x0 === (x1 - 1n)) {
+            return x0;
+        }
+        return newtonSqrtIteration(n, x1);
+    }
+
+    function fastSqrt(value) {
         if (value < 0n) {
             throw 'square root of negative numbers is not supported'
         }
@@ -18561,15 +22276,7 @@ terminal.addCommand("primes", async function() {
             return value;
         }
     
-        function newtonIteration(n, x0) {
-            const x1 = ((n / x0) + x0) >> 1n;
-            if (x0 === x1 || x0 === (x1 - 1n)) {
-                return x0;
-            }
-            return newtonIteration(n, x1);
-        }
-    
-        return newtonIteration(value, 1n);
+        return newtonSqrtIteration(value, 1n);
     }
 
     function isPrime(n) {
@@ -18579,7 +22286,8 @@ terminal.addCommand("primes", async function() {
             return true
         if (n % 2n === 0n)
             return false
-        for (let i = 3n; i <= sqrt(n); i += 2n) {
+        const upperLimit = fastSqrt(n)
+        for (let i = 3n; i <= upperLimit; i += 2n) {
             if (n % i === 0n)
                 return false
         }
@@ -18625,9 +22333,8 @@ terminal.addCommand("pull", async function(args) {
     }
 
     try {
-        let file = File.fromObject(JSON.parse(content))
-        terminal.currFolder.content[args.file] = file
-        await terminal.fileSystem.reload()
+        let file = TerminalFile.fromObject(JSON.parse(content)).setName(args.file)
+        terminal.currDirectory.addChild(file)
         terminal.printSuccess("pulled file from server")
     } catch (e) {
         console.error(e)
@@ -18645,10 +22352,10 @@ terminal.addCommand("push", async function(args) {
     if (!terminal.isValidFileName(args.file))
         throw new Error("invalid file name")
     let file = terminal.getFile(args.file)
-    let content = JSON.stringify(file.toJSON())
+    let content = JSON.stringify(file.toObject())
 
     await terminal.modules.load("cliapi", terminal)
-    let result = await terminal.modules.cliapi.pushFile(args.file, content)
+    let result = await terminal.modules.cliapi.pushFile(file.name, content)
     if (result.ok) {
         terminal.printSuccess("pushed file to server")
     } else {
@@ -18657,7 +22364,7 @@ terminal.addCommand("push", async function(args) {
 }, {
     description: "push a file to the server",
     args: {
-        "file": "file to push"
+        "file:f": "file to push"
     }
 })
 
@@ -18759,7 +22466,7 @@ terminal.addCommand("python", async function(args) {
 
     if (args.file) {
         let file = terminal.getFile(args.file)
-        if (file instanceof Directory) {
+        if (file.isDirectory) {
             throw new Error("Cannot run a directory")
         }
         let code = file.content
@@ -18782,22 +22489,637 @@ terminal.addCommand("python", async function(args) {
 }, {
     description: "run a script or open a python shell",
     args: {
-        "?f=file:s": "the script to run",
+        "?f=file:f": "the script to run",
         "?c=code:s": "the code to run"
     },
     disableEqualsArgNotation: true
 })
 
 // ------------------- js/commands/qr.js --------------------
+/**
+ * @fileoverview
+ * - Using the 'QRCode for Javascript library'
+ * - Fixed dataset of 'QRCode for Javascript library' for support full-spec.
+ * - this library has no dependencies.
+ * 
+ * @author davidshimjs
+ * @see <a href="http://www.d-project.com/" target="_blank">http://www.d-project.com/</a>
+ * @see <a href="http://jeromeetienne.github.com/jquery-qrcode/" target="_blank">http://jeromeetienne.github.com/jquery-qrcode/</a>
+ */
+var QRCode;
+
+(function () {
+	//---------------------------------------------------------------------
+	// QRCode for JavaScript
+	//
+	// Copyright (c) 2009 Kazuhiko Arase
+	//
+	// URL: http://www.d-project.com/
+	//
+	// Licensed under the MIT license:
+	//   http://www.opensource.org/licenses/mit-license.php
+	//
+	// The word "QR Code" is registered trademark of 
+	// DENSO WAVE INCORPORATED
+	//   http://www.denso-wave.com/qrcode/faqpatent-e.html
+	//
+	//---------------------------------------------------------------------
+	function QR8bitByte(data) {
+		this.mode = QRMode.MODE_8BIT_BYTE;
+		this.data = data;
+		this.parsedData = [];
+
+		// Added to support UTF-8 Characters
+		for (var i = 0, l = this.data.length; i < l; i++) {
+			var byteArray = [];
+			var code = this.data.charCodeAt(i);
+
+			if (code > 0x10000) {
+				byteArray[0] = 0xF0 | ((code & 0x1C0000) >>> 18);
+				byteArray[1] = 0x80 | ((code & 0x3F000) >>> 12);
+				byteArray[2] = 0x80 | ((code & 0xFC0) >>> 6);
+				byteArray[3] = 0x80 | (code & 0x3F);
+			} else if (code > 0x800) {
+				byteArray[0] = 0xE0 | ((code & 0xF000) >>> 12);
+				byteArray[1] = 0x80 | ((code & 0xFC0) >>> 6);
+				byteArray[2] = 0x80 | (code & 0x3F);
+			} else if (code > 0x80) {
+				byteArray[0] = 0xC0 | ((code & 0x7C0) >>> 6);
+				byteArray[1] = 0x80 | (code & 0x3F);
+			} else {
+				byteArray[0] = code;
+			}
+
+			this.parsedData.push(byteArray);
+		}
+
+		this.parsedData = Array.prototype.concat.apply([], this.parsedData);
+
+		if (this.parsedData.length != this.data.length) {
+			this.parsedData.unshift(191);
+			this.parsedData.unshift(187);
+			this.parsedData.unshift(239);
+		}
+	}
+
+	QR8bitByte.prototype = {
+		getLength: function (buffer) {
+			return this.parsedData.length;
+		},
+		write: function (buffer) {
+			for (var i = 0, l = this.parsedData.length; i < l; i++) {
+				buffer.put(this.parsedData[i], 8);
+			}
+		}
+	};
+
+	function QRCodeModel(typeNumber, errorCorrectLevel) {
+		this.typeNumber = typeNumber;
+		this.errorCorrectLevel = errorCorrectLevel;
+		this.modules = null;
+		this.moduleCount = 0;
+		this.dataCache = null;
+		this.dataList = [];
+	}
+
+	QRCodeModel.prototype={addData:function(data){var newData=new QR8bitByte(data);this.dataList.push(newData);this.dataCache=null;},isDark:function(row,col){if(row<0||this.moduleCount<=row||col<0||this.moduleCount<=col){throw new Error(row+","+col);}
+	return this.modules[row][col];},getModuleCount:function(){return this.moduleCount;},make:function(){this.makeImpl(false,this.getBestMaskPattern());},makeImpl:function(test,maskPattern){this.moduleCount=this.typeNumber*4+17;this.modules=new Array(this.moduleCount);for(var row=0;row<this.moduleCount;row++){this.modules[row]=new Array(this.moduleCount);for(var col=0;col<this.moduleCount;col++){this.modules[row][col]=null;}}
+	this.setupPositionProbePattern(0,0);this.setupPositionProbePattern(this.moduleCount-7,0);this.setupPositionProbePattern(0,this.moduleCount-7);this.setupPositionAdjustPattern();this.setupTimingPattern();this.setupTypeInfo(test,maskPattern);if(this.typeNumber>=7){this.setupTypeNumber(test);}
+	if(this.dataCache==null){this.dataCache=QRCodeModel.createData(this.typeNumber,this.errorCorrectLevel,this.dataList);}
+	this.mapData(this.dataCache,maskPattern);},setupPositionProbePattern:function(row,col){for(var r=-1;r<=7;r++){if(row+r<=-1||this.moduleCount<=row+r)continue;for(var c=-1;c<=7;c++){if(col+c<=-1||this.moduleCount<=col+c)continue;if((0<=r&&r<=6&&(c==0||c==6))||(0<=c&&c<=6&&(r==0||r==6))||(2<=r&&r<=4&&2<=c&&c<=4)){this.modules[row+r][col+c]=true;}else{this.modules[row+r][col+c]=false;}}}},getBestMaskPattern:function(){var minLostPoint=0;var pattern=0;for(var i=0;i<8;i++){this.makeImpl(true,i);var lostPoint=QRUtil.getLostPoint(this);if(i==0||minLostPoint>lostPoint){minLostPoint=lostPoint;pattern=i;}}
+	return pattern;},createMovieClip:function(target_mc,instance_name,depth){var qr_mc=target_mc.createEmptyMovieClip(instance_name,depth);var cs=1;this.make();for(var row=0;row<this.modules.length;row++){var y=row*cs;for(var col=0;col<this.modules[row].length;col++){var x=col*cs;var dark=this.modules[row][col];if(dark){qr_mc.beginFill(0,100);qr_mc.moveTo(x,y);qr_mc.lineTo(x+cs,y);qr_mc.lineTo(x+cs,y+cs);qr_mc.lineTo(x,y+cs);qr_mc.endFill();}}}
+	return qr_mc;},setupTimingPattern:function(){for(var r=8;r<this.moduleCount-8;r++){if(this.modules[r][6]!=null){continue;}
+	this.modules[r][6]=(r%2==0);}
+	for(var c=8;c<this.moduleCount-8;c++){if(this.modules[6][c]!=null){continue;}
+	this.modules[6][c]=(c%2==0);}},setupPositionAdjustPattern:function(){var pos=QRUtil.getPatternPosition(this.typeNumber);for(var i=0;i<pos.length;i++){for(var j=0;j<pos.length;j++){var row=pos[i];var col=pos[j];if(this.modules[row][col]!=null){continue;}
+	for(var r=-2;r<=2;r++){for(var c=-2;c<=2;c++){if(r==-2||r==2||c==-2||c==2||(r==0&&c==0)){this.modules[row+r][col+c]=true;}else{this.modules[row+r][col+c]=false;}}}}}},setupTypeNumber:function(test){var bits=QRUtil.getBCHTypeNumber(this.typeNumber);for(var i=0;i<18;i++){var mod=(!test&&((bits>>i)&1)==1);this.modules[Math.floor(i/3)][i%3+this.moduleCount-8-3]=mod;}
+	for(var i=0;i<18;i++){var mod=(!test&&((bits>>i)&1)==1);this.modules[i%3+this.moduleCount-8-3][Math.floor(i/3)]=mod;}},setupTypeInfo:function(test,maskPattern){var data=(this.errorCorrectLevel<<3)|maskPattern;var bits=QRUtil.getBCHTypeInfo(data);for(var i=0;i<15;i++){var mod=(!test&&((bits>>i)&1)==1);if(i<6){this.modules[i][8]=mod;}else if(i<8){this.modules[i+1][8]=mod;}else{this.modules[this.moduleCount-15+i][8]=mod;}}
+	for(var i=0;i<15;i++){var mod=(!test&&((bits>>i)&1)==1);if(i<8){this.modules[8][this.moduleCount-i-1]=mod;}else if(i<9){this.modules[8][15-i-1+1]=mod;}else{this.modules[8][15-i-1]=mod;}}
+	this.modules[this.moduleCount-8][8]=(!test);},mapData:function(data,maskPattern){var inc=-1;var row=this.moduleCount-1;var bitIndex=7;var byteIndex=0;for(var col=this.moduleCount-1;col>0;col-=2){if(col==6)col--;while(true){for(var c=0;c<2;c++){if(this.modules[row][col-c]==null){var dark=false;if(byteIndex<data.length){dark=(((data[byteIndex]>>>bitIndex)&1)==1);}
+	var mask=QRUtil.getMask(maskPattern,row,col-c);if(mask){dark=!dark;}
+	this.modules[row][col-c]=dark;bitIndex--;if(bitIndex==-1){byteIndex++;bitIndex=7;}}}
+	row+=inc;if(row<0||this.moduleCount<=row){row-=inc;inc=-inc;break;}}}}};QRCodeModel.PAD0=0xEC;QRCodeModel.PAD1=0x11;QRCodeModel.createData=function(typeNumber,errorCorrectLevel,dataList){var rsBlocks=QRRSBlock.getRSBlocks(typeNumber,errorCorrectLevel);var buffer=new QRBitBuffer();for(var i=0;i<dataList.length;i++){var data=dataList[i];buffer.put(data.mode,4);buffer.put(data.getLength(),QRUtil.getLengthInBits(data.mode,typeNumber));data.write(buffer);}
+	var totalDataCount=0;for(var i=0;i<rsBlocks.length;i++){totalDataCount+=rsBlocks[i].dataCount;}
+	if(buffer.getLengthInBits()>totalDataCount*8){throw new Error("code length overflow. ("
+	+buffer.getLengthInBits()
+	+">"
+	+totalDataCount*8
+	+")");}
+	if(buffer.getLengthInBits()+4<=totalDataCount*8){buffer.put(0,4);}
+	while(buffer.getLengthInBits()%8!=0){buffer.putBit(false);}
+	while(true){if(buffer.getLengthInBits()>=totalDataCount*8){break;}
+	buffer.put(QRCodeModel.PAD0,8);if(buffer.getLengthInBits()>=totalDataCount*8){break;}
+	buffer.put(QRCodeModel.PAD1,8);}
+	return QRCodeModel.createBytes(buffer,rsBlocks);};QRCodeModel.createBytes=function(buffer,rsBlocks){var offset=0;var maxDcCount=0;var maxEcCount=0;var dcdata=new Array(rsBlocks.length);var ecdata=new Array(rsBlocks.length);for(var r=0;r<rsBlocks.length;r++){var dcCount=rsBlocks[r].dataCount;var ecCount=rsBlocks[r].totalCount-dcCount;maxDcCount=Math.max(maxDcCount,dcCount);maxEcCount=Math.max(maxEcCount,ecCount);dcdata[r]=new Array(dcCount);for(var i=0;i<dcdata[r].length;i++){dcdata[r][i]=0xff&buffer.buffer[i+offset];}
+	offset+=dcCount;var rsPoly=QRUtil.getErrorCorrectPolynomial(ecCount);var rawPoly=new QRPolynomial(dcdata[r],rsPoly.getLength()-1);var modPoly=rawPoly.mod(rsPoly);ecdata[r]=new Array(rsPoly.getLength()-1);for(var i=0;i<ecdata[r].length;i++){var modIndex=i+modPoly.getLength()-ecdata[r].length;ecdata[r][i]=(modIndex>=0)?modPoly.get(modIndex):0;}}
+	var totalCodeCount=0;for(var i=0;i<rsBlocks.length;i++){totalCodeCount+=rsBlocks[i].totalCount;}
+	var data=new Array(totalCodeCount);var index=0;for(var i=0;i<maxDcCount;i++){for(var r=0;r<rsBlocks.length;r++){if(i<dcdata[r].length){data[index++]=dcdata[r][i];}}}
+	for(var i=0;i<maxEcCount;i++){for(var r=0;r<rsBlocks.length;r++){if(i<ecdata[r].length){data[index++]=ecdata[r][i];}}}
+	return data;};var QRMode={MODE_NUMBER:1<<0,MODE_ALPHA_NUM:1<<1,MODE_8BIT_BYTE:1<<2,MODE_KANJI:1<<3};var QRErrorCorrectLevel={L:1,M:0,Q:3,H:2};var QRMaskPattern={PATTERN000:0,PATTERN001:1,PATTERN010:2,PATTERN011:3,PATTERN100:4,PATTERN101:5,PATTERN110:6,PATTERN111:7};var QRUtil={PATTERN_POSITION_TABLE:[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],G15:(1<<10)|(1<<8)|(1<<5)|(1<<4)|(1<<2)|(1<<1)|(1<<0),G18:(1<<12)|(1<<11)|(1<<10)|(1<<9)|(1<<8)|(1<<5)|(1<<2)|(1<<0),G15_MASK:(1<<14)|(1<<12)|(1<<10)|(1<<4)|(1<<1),getBCHTypeInfo:function(data){var d=data<<10;while(QRUtil.getBCHDigit(d)-QRUtil.getBCHDigit(QRUtil.G15)>=0){d^=(QRUtil.G15<<(QRUtil.getBCHDigit(d)-QRUtil.getBCHDigit(QRUtil.G15)));}
+	return((data<<10)|d)^QRUtil.G15_MASK;},getBCHTypeNumber:function(data){var d=data<<12;while(QRUtil.getBCHDigit(d)-QRUtil.getBCHDigit(QRUtil.G18)>=0){d^=(QRUtil.G18<<(QRUtil.getBCHDigit(d)-QRUtil.getBCHDigit(QRUtil.G18)));}
+	return(data<<12)|d;},getBCHDigit:function(data){var digit=0;while(data!=0){digit++;data>>>=1;}
+	return digit;},getPatternPosition:function(typeNumber){return QRUtil.PATTERN_POSITION_TABLE[typeNumber-1];},getMask:function(maskPattern,i,j){switch(maskPattern){case QRMaskPattern.PATTERN000:return(i+j)%2==0;case QRMaskPattern.PATTERN001:return i%2==0;case QRMaskPattern.PATTERN010:return j%3==0;case QRMaskPattern.PATTERN011:return(i+j)%3==0;case QRMaskPattern.PATTERN100:return(Math.floor(i/2)+Math.floor(j/3))%2==0;case QRMaskPattern.PATTERN101:return(i*j)%2+(i*j)%3==0;case QRMaskPattern.PATTERN110:return((i*j)%2+(i*j)%3)%2==0;case QRMaskPattern.PATTERN111:return((i*j)%3+(i+j)%2)%2==0;default:throw new Error("bad maskPattern:"+maskPattern);}},getErrorCorrectPolynomial:function(errorCorrectLength){var a=new QRPolynomial([1],0);for(var i=0;i<errorCorrectLength;i++){a=a.multiply(new QRPolynomial([1,QRMath.gexp(i)],0));}
+	return a;},getLengthInBits:function(mode,type){if(1<=type&&type<10){switch(mode){case QRMode.MODE_NUMBER:return 10;case QRMode.MODE_ALPHA_NUM:return 9;case QRMode.MODE_8BIT_BYTE:return 8;case QRMode.MODE_KANJI:return 8;default:throw new Error("mode:"+mode);}}else if(type<27){switch(mode){case QRMode.MODE_NUMBER:return 12;case QRMode.MODE_ALPHA_NUM:return 11;case QRMode.MODE_8BIT_BYTE:return 16;case QRMode.MODE_KANJI:return 10;default:throw new Error("mode:"+mode);}}else if(type<41){switch(mode){case QRMode.MODE_NUMBER:return 14;case QRMode.MODE_ALPHA_NUM:return 13;case QRMode.MODE_8BIT_BYTE:return 16;case QRMode.MODE_KANJI:return 12;default:throw new Error("mode:"+mode);}}else{throw new Error("type:"+type);}},getLostPoint:function(qrCode){var moduleCount=qrCode.getModuleCount();var lostPoint=0;for(var row=0;row<moduleCount;row++){for(var col=0;col<moduleCount;col++){var sameCount=0;var dark=qrCode.isDark(row,col);for(var r=-1;r<=1;r++){if(row+r<0||moduleCount<=row+r){continue;}
+	for(var c=-1;c<=1;c++){if(col+c<0||moduleCount<=col+c){continue;}
+	if(r==0&&c==0){continue;}
+	if(dark==qrCode.isDark(row+r,col+c)){sameCount++;}}}
+	if(sameCount>5){lostPoint+=(3+sameCount-5);}}}
+	for(var row=0;row<moduleCount-1;row++){for(var col=0;col<moduleCount-1;col++){var count=0;if(qrCode.isDark(row,col))count++;if(qrCode.isDark(row+1,col))count++;if(qrCode.isDark(row,col+1))count++;if(qrCode.isDark(row+1,col+1))count++;if(count==0||count==4){lostPoint+=3;}}}
+	for(var row=0;row<moduleCount;row++){for(var col=0;col<moduleCount-6;col++){if(qrCode.isDark(row,col)&&!qrCode.isDark(row,col+1)&&qrCode.isDark(row,col+2)&&qrCode.isDark(row,col+3)&&qrCode.isDark(row,col+4)&&!qrCode.isDark(row,col+5)&&qrCode.isDark(row,col+6)){lostPoint+=40;}}}
+	for(var col=0;col<moduleCount;col++){for(var row=0;row<moduleCount-6;row++){if(qrCode.isDark(row,col)&&!qrCode.isDark(row+1,col)&&qrCode.isDark(row+2,col)&&qrCode.isDark(row+3,col)&&qrCode.isDark(row+4,col)&&!qrCode.isDark(row+5,col)&&qrCode.isDark(row+6,col)){lostPoint+=40;}}}
+	var darkCount=0;for(var col=0;col<moduleCount;col++){for(var row=0;row<moduleCount;row++){if(qrCode.isDark(row,col)){darkCount++;}}}
+	var ratio=Math.abs(100*darkCount/moduleCount/moduleCount-50)/5;lostPoint+=ratio*10;return lostPoint;}};var QRMath={glog:function(n){if(n<1){throw new Error("glog("+n+")");}
+	return QRMath.LOG_TABLE[n];},gexp:function(n){while(n<0){n+=255;}
+	while(n>=256){n-=255;}
+	return QRMath.EXP_TABLE[n];},EXP_TABLE:new Array(256),LOG_TABLE:new Array(256)};for(var i=0;i<8;i++){QRMath.EXP_TABLE[i]=1<<i;}
+	for(var i=8;i<256;i++){QRMath.EXP_TABLE[i]=QRMath.EXP_TABLE[i-4]^QRMath.EXP_TABLE[i-5]^QRMath.EXP_TABLE[i-6]^QRMath.EXP_TABLE[i-8];}
+	for(var i=0;i<255;i++){QRMath.LOG_TABLE[QRMath.EXP_TABLE[i]]=i;}
+	function QRPolynomial(num,shift){if(num.length==undefined){throw new Error(num.length+"/"+shift);}
+	var offset=0;while(offset<num.length&&num[offset]==0){offset++;}
+	this.num=new Array(num.length-offset+shift);for(var i=0;i<num.length-offset;i++){this.num[i]=num[i+offset];}}
+	QRPolynomial.prototype={get:function(index){return this.num[index];},getLength:function(){return this.num.length;},multiply:function(e){var num=new Array(this.getLength()+e.getLength()-1);for(var i=0;i<this.getLength();i++){for(var j=0;j<e.getLength();j++){num[i+j]^=QRMath.gexp(QRMath.glog(this.get(i))+QRMath.glog(e.get(j)));}}
+	return new QRPolynomial(num,0);},mod:function(e){if(this.getLength()-e.getLength()<0){return this;}
+	var ratio=QRMath.glog(this.get(0))-QRMath.glog(e.get(0));var num=new Array(this.getLength());for(var i=0;i<this.getLength();i++){num[i]=this.get(i);}
+	for(var i=0;i<e.getLength();i++){num[i]^=QRMath.gexp(QRMath.glog(e.get(i))+ratio);}
+	return new QRPolynomial(num,0).mod(e);}};function QRRSBlock(totalCount,dataCount){this.totalCount=totalCount;this.dataCount=dataCount;}
+	QRRSBlock.RS_BLOCK_TABLE=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]];QRRSBlock.getRSBlocks=function(typeNumber,errorCorrectLevel){var rsBlock=QRRSBlock.getRsBlockTable(typeNumber,errorCorrectLevel);if(rsBlock==undefined){throw new Error("bad rs block @ typeNumber:"+typeNumber+"/errorCorrectLevel:"+errorCorrectLevel);}
+	var length=rsBlock.length/3;var list=[];for(var i=0;i<length;i++){var count=rsBlock[i*3+0];var totalCount=rsBlock[i*3+1];var dataCount=rsBlock[i*3+2];for(var j=0;j<count;j++){list.push(new QRRSBlock(totalCount,dataCount));}}
+	return list;};QRRSBlock.getRsBlockTable=function(typeNumber,errorCorrectLevel){switch(errorCorrectLevel){case QRErrorCorrectLevel.L:return QRRSBlock.RS_BLOCK_TABLE[(typeNumber-1)*4+0];case QRErrorCorrectLevel.M:return QRRSBlock.RS_BLOCK_TABLE[(typeNumber-1)*4+1];case QRErrorCorrectLevel.Q:return QRRSBlock.RS_BLOCK_TABLE[(typeNumber-1)*4+2];case QRErrorCorrectLevel.H:return QRRSBlock.RS_BLOCK_TABLE[(typeNumber-1)*4+3];default:return undefined;}};function QRBitBuffer(){this.buffer=[];this.length=0;}
+	QRBitBuffer.prototype={get:function(index){var bufIndex=Math.floor(index/8);return((this.buffer[bufIndex]>>>(7-index%8))&1)==1;},put:function(num,length){for(var i=0;i<length;i++){this.putBit(((num>>>(length-i-1))&1)==1);}},getLengthInBits:function(){return this.length;},putBit:function(bit){var bufIndex=Math.floor(this.length/8);if(this.buffer.length<=bufIndex){this.buffer.push(0);}
+	if(bit){this.buffer[bufIndex]|=(0x80>>>(this.length%8));}
+	this.length++;}};var QRCodeLimitLength=[[17,14,11,7],[32,26,20,14],[53,42,32,24],[78,62,46,34],[106,84,60,44],[134,106,74,58],[154,122,86,64],[192,152,108,84],[230,180,130,98],[271,213,151,119],[321,251,177,137],[367,287,203,155],[425,331,241,177],[458,362,258,194],[520,412,292,220],[586,450,322,250],[644,504,364,280],[718,560,394,310],[792,624,442,338],[858,666,482,382],[929,711,509,403],[1003,779,565,439],[1091,857,611,461],[1171,911,661,511],[1273,997,715,535],[1367,1059,751,593],[1465,1125,805,625],[1528,1190,868,658],[1628,1264,908,698],[1732,1370,982,742],[1840,1452,1030,790],[1952,1538,1112,842],[2068,1628,1168,898],[2188,1722,1228,958],[2303,1809,1283,983],[2431,1911,1351,1051],[2563,1989,1423,1093],[2699,2099,1499,1139],[2809,2213,1579,1219],[2953,2331,1663,1273]];
+	
+	function _isSupportCanvas() {
+		return typeof CanvasRenderingContext2D != "undefined";
+	}
+	
+	// android 2.x doesn't support Data-URI spec
+	function _getAndroid() {
+		var android = false;
+		var sAgent = navigator.userAgent;
+		
+		if (/android/i.test(sAgent)) { // android
+			android = true;
+			var aMat = sAgent.toString().match(/android ([0-9]\.[0-9])/i);
+			
+			if (aMat && aMat[1]) {
+				android = parseFloat(aMat[1]);
+			}
+		}
+		
+		return android;
+	}
+	
+	var svgDrawer = (function() {
+
+		var Drawing = function (el, htOption) {
+			this._el = el;
+			this._htOption = htOption;
+		};
+
+		Drawing.prototype.draw = function (oQRCode) {
+			var _htOption = this._htOption;
+			var _el = this._el;
+			var nCount = oQRCode.getModuleCount();
+			var nWidth = Math.floor(_htOption.width / nCount);
+			var nHeight = Math.floor(_htOption.height / nCount);
+
+			this.clear();
+
+			function makeSVG(tag, attrs) {
+				var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+				for (var k in attrs)
+					if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+				return el;
+			}
+
+			var svg = makeSVG("svg" , {'viewBox': '0 0 ' + String(nCount) + " " + String(nCount), 'width': '100%', 'height': '100%', 'fill': _htOption.colorLight});
+			svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
+			_el.appendChild(svg);
+
+			svg.appendChild(makeSVG("rect", {"fill": _htOption.colorLight, "width": "100%", "height": "100%"}));
+			svg.appendChild(makeSVG("rect", {"fill": _htOption.colorDark, "width": "1", "height": "1", "id": "template"}));
+
+			for (var row = 0; row < nCount; row++) {
+				for (var col = 0; col < nCount; col++) {
+					if (oQRCode.isDark(row, col)) {
+						var child = makeSVG("use", {"x": String(col), "y": String(row)});
+						child.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#template")
+						svg.appendChild(child);
+					}
+				}
+			}
+		};
+		Drawing.prototype.clear = function () {
+			while (this._el.hasChildNodes())
+				this._el.removeChild(this._el.lastChild);
+		};
+		return Drawing;
+	})();
+
+	var useSVG = document.documentElement.tagName.toLowerCase() === "svg";
+
+	// Drawing in DOM by using Table tag
+	var Drawing = useSVG ? svgDrawer : !_isSupportCanvas() ? (function () {
+		var Drawing = function (el, htOption) {
+			this._el = el;
+			this._htOption = htOption;
+		};
+			
+		/**
+		 * Draw the QRCode
+		 * 
+		 * @param {QRCode} oQRCode
+		 */
+		Drawing.prototype.draw = function (oQRCode) {
+            var _htOption = this._htOption;
+            var _el = this._el;
+			var nCount = oQRCode.getModuleCount();
+			var nWidth = Math.floor(_htOption.width / nCount);
+			var nHeight = Math.floor(_htOption.height / nCount);
+			var aHTML = ['<table style="border:0;border-collapse:collapse;">'];
+			
+			for (var row = 0; row < nCount; row++) {
+				aHTML.push('<tr>');
+				
+				for (var col = 0; col < nCount; col++) {
+					aHTML.push('<td style="border:0;border-collapse:collapse;padding:0;margin:0;width:' + nWidth + 'px;height:' + nHeight + 'px;background-color:' + (oQRCode.isDark(row, col) ? _htOption.colorDark : _htOption.colorLight) + ';"></td>');
+				}
+				
+				aHTML.push('</tr>');
+			}
+			
+			aHTML.push('</table>');
+			_el.innerHTML = aHTML.join('');
+			
+			// Fix the margin values as real size.
+			var elTable = _el.childNodes[0];
+			var nLeftMarginTable = (_htOption.width - elTable.offsetWidth) / 2;
+			var nTopMarginTable = (_htOption.height - elTable.offsetHeight) / 2;
+			
+			if (nLeftMarginTable > 0 && nTopMarginTable > 0) {
+				elTable.style.margin = nTopMarginTable + "px " + nLeftMarginTable + "px";	
+			}
+		};
+		
+		/**
+		 * Clear the QRCode
+		 */
+		Drawing.prototype.clear = function () {
+			this._el.innerHTML = '';
+		};
+		
+		return Drawing;
+	})() : (function () { // Drawing in Canvas
+		function _onMakeImage() {
+			this._elImage.src = this._elCanvas.toDataURL("image/png");
+			this._elImage.style.display = "block";
+			this._elCanvas.style.display = "none";			
+		}
+		
+		// Android 2.1 bug workaround
+		// http://code.google.com/p/android/issues/detail?id=5141
+		if (this._android && this._android <= 2.1) {
+	    	var factor = 1 / window.devicePixelRatio;
+	        var drawImage = CanvasRenderingContext2D.prototype.drawImage; 
+	    	CanvasRenderingContext2D.prototype.drawImage = function (image, sx, sy, sw, sh, dx, dy, dw, dh) {
+	    		if (("nodeName" in image) && /img/i.test(image.nodeName)) {
+		        	for (var i = arguments.length - 1; i >= 1; i--) {
+		            	arguments[i] = arguments[i] * factor;
+		        	}
+	    		} else if (typeof dw == "undefined") {
+	    			arguments[1] *= factor;
+	    			arguments[2] *= factor;
+	    			arguments[3] *= factor;
+	    			arguments[4] *= factor;
+	    		}
+	    		
+	        	drawImage.apply(this, arguments); 
+	    	};
+		}
+		
+		/**
+		 * Check whether the user's browser supports Data URI or not
+		 * 
+		 * @private
+		 * @param {Function} fSuccess Occurs if it supports Data URI
+		 * @param {Function} fFail Occurs if it doesn't support Data URI
+		 */
+		function _safeSetDataURI(fSuccess, fFail) {
+            var self = this;
+            self._fFail = fFail;
+            self._fSuccess = fSuccess;
+
+            // Check it just once
+            if (self._bSupportDataURI === null) {
+                var el = document.createElement("img");
+                var fOnError = function() {
+                    self._bSupportDataURI = false;
+
+                    if (self._fFail) {
+                        self._fFail.call(self);
+                    }
+                };
+                var fOnSuccess = function() {
+                    self._bSupportDataURI = true;
+
+                    if (self._fSuccess) {
+                        self._fSuccess.call(self);
+                    }
+                };
+
+                el.onabort = fOnError;
+                el.onerror = fOnError;
+                el.onload = fOnSuccess;
+                el.src = "data:image/gif;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="; // the Image contains 1px data.
+                return;
+            } else if (self._bSupportDataURI === true && self._fSuccess) {
+                self._fSuccess.call(self);
+            } else if (self._bSupportDataURI === false && self._fFail) {
+                self._fFail.call(self);
+            }
+		};
+		
+		/**
+		 * Drawing QRCode by using canvas
+		 * 
+		 * @constructor
+		 * @param {HTMLElement} el
+		 * @param {Object} htOption QRCode Options 
+		 */
+		var Drawing = function (el, htOption) {
+    		this._bIsPainted = false;
+    		this._android = _getAndroid();
+		
+			this._htOption = htOption;
+			this._elCanvas = document.createElement("canvas");
+			this._elCanvas.width = htOption.width;
+			this._elCanvas.height = htOption.height;
+			el.appendChild(this._elCanvas);
+			this._el = el;
+			this._oContext = this._elCanvas.getContext("2d");
+			this._bIsPainted = false;
+			this._elImage = document.createElement("img");
+			this._elImage.alt = "Scan me!";
+			this._elImage.style.display = "none";
+			this._el.appendChild(this._elImage);
+			this._bSupportDataURI = null;
+		};
+			
+		/**
+		 * Draw the QRCode
+		 * 
+		 * @param {QRCode} oQRCode 
+		 */
+		Drawing.prototype.draw = function (oQRCode) {
+            var _elImage = this._elImage;
+            var _oContext = this._oContext;
+            var _htOption = this._htOption;
+            
+			var nCount = oQRCode.getModuleCount();
+			var nWidth = _htOption.width / nCount;
+			var nHeight = _htOption.height / nCount;
+			var nRoundedWidth = Math.round(nWidth);
+			var nRoundedHeight = Math.round(nHeight);
+
+			_elImage.style.display = "none";
+			this.clear();
+			
+			for (var row = 0; row < nCount; row++) {
+				for (var col = 0; col < nCount; col++) {
+					var bIsDark = oQRCode.isDark(row, col);
+					var nLeft = col * nWidth;
+					var nTop = row * nHeight;
+					_oContext.strokeStyle = bIsDark ? _htOption.colorDark : _htOption.colorLight;
+					_oContext.lineWidth = 1;
+					_oContext.fillStyle = bIsDark ? _htOption.colorDark : _htOption.colorLight;					
+					_oContext.fillRect(nLeft, nTop, nWidth, nHeight);
+					
+					// 안티 앨리어싱 방지 처리
+					_oContext.strokeRect(
+						Math.floor(nLeft) + 0.5,
+						Math.floor(nTop) + 0.5,
+						nRoundedWidth,
+						nRoundedHeight
+					);
+					
+					_oContext.strokeRect(
+						Math.ceil(nLeft) - 0.5,
+						Math.ceil(nTop) - 0.5,
+						nRoundedWidth,
+						nRoundedHeight
+					);
+				}
+			}
+			
+			this._bIsPainted = true;
+		};
+			
+		/**
+		 * Make the image from Canvas if the browser supports Data URI.
+		 */
+		Drawing.prototype.makeImage = function () {
+			if (this._bIsPainted) {
+				_safeSetDataURI.call(this, _onMakeImage);
+			}
+		};
+			
+		/**
+		 * Return whether the QRCode is painted or not
+		 * 
+		 * @return {Boolean}
+		 */
+		Drawing.prototype.isPainted = function () {
+			return this._bIsPainted;
+		};
+		
+		/**
+		 * Clear the QRCode
+		 */
+		Drawing.prototype.clear = function () {
+			this._oContext.clearRect(0, 0, this._elCanvas.width, this._elCanvas.height);
+			this._bIsPainted = false;
+		};
+		
+		/**
+		 * @private
+		 * @param {Number} nNumber
+		 */
+		Drawing.prototype.round = function (nNumber) {
+			if (!nNumber) {
+				return nNumber;
+			}
+			
+			return Math.floor(nNumber * 1000) / 1000;
+		};
+		
+		return Drawing;
+	})();
+	
+	/**
+	 * Get the type by string length
+	 * 
+	 * @private
+	 * @param {String} sText
+	 * @param {Number} nCorrectLevel
+	 * @return {Number} type
+	 */
+	function _getTypeNumber(sText, nCorrectLevel) {			
+		var nType = 1;
+		var length = _getUTF8Length(sText);
+		
+		for (var i = 0, len = QRCodeLimitLength.length; i <= len; i++) {
+			var nLimit = 0;
+			
+			switch (nCorrectLevel) {
+				case QRErrorCorrectLevel.L :
+					nLimit = QRCodeLimitLength[i][0];
+					break;
+				case QRErrorCorrectLevel.M :
+					nLimit = QRCodeLimitLength[i][1];
+					break;
+				case QRErrorCorrectLevel.Q :
+					nLimit = QRCodeLimitLength[i][2];
+					break;
+				case QRErrorCorrectLevel.H :
+					nLimit = QRCodeLimitLength[i][3];
+					break;
+			}
+			
+			if (length <= nLimit) {
+				break;
+			} else {
+				nType++;
+			}
+		}
+		
+		if (nType > QRCodeLimitLength.length) {
+			throw new Error("Too long data");
+		}
+		
+		return nType;
+	}
+
+	function _getUTF8Length(sText) {
+		var replacedText = encodeURI(sText).toString().replace(/\%[0-9a-fA-F]{2}/g, 'a');
+		return replacedText.length + (replacedText.length != sText ? 3 : 0);
+	}
+	
+	/**
+	 * @class QRCode
+	 * @constructor
+	 * @example 
+	 * new QRCode(document.getElementById("test"), "http://jindo.dev.naver.com/collie");
+	 *
+	 * @example
+	 * var oQRCode = new QRCode("test", {
+	 *    text : "http://naver.com",
+	 *    width : 128,
+	 *    height : 128
+	 * });
+	 * 
+	 * oQRCode.clear(); // Clear the QRCode.
+	 * oQRCode.makeCode("http://map.naver.com"); // Re-create the QRCode.
+	 *
+	 * @param {HTMLElement|String} el target element or 'id' attribute of element.
+	 * @param {Object|String} vOption
+	 * @param {String} vOption.text QRCode link data
+	 * @param {Number} [vOption.width=256]
+	 * @param {Number} [vOption.height=256]
+	 * @param {String} [vOption.colorDark="#000000"]
+	 * @param {String} [vOption.colorLight="#ffffff"]
+	 * @param {QRCode.CorrectLevel} [vOption.correctLevel=QRCode.CorrectLevel.H] [L|M|Q|H] 
+	 */
+	QRCode = function (el, vOption) {
+		this._htOption = {
+			width : 256, 
+			height : 256,
+			typeNumber : 4,
+			colorDark : "#000000",
+			colorLight : "#ffffff",
+			correctLevel : QRErrorCorrectLevel.H
+		};
+		
+		if (typeof vOption === 'string') {
+			vOption	= {
+				text : vOption
+			};
+		}
+		
+		// Overwrites options
+		if (vOption) {
+			for (var i in vOption) {
+				this._htOption[i] = vOption[i];
+			}
+		}
+		
+		if (typeof el == "string") {
+			el = document.getElementById(el);
+		}
+
+		if (this._htOption.useSVG) {
+			Drawing = svgDrawer;
+		}
+		
+		this._android = _getAndroid();
+		this._el = el;
+		this._oQRCode = null;
+		this._oDrawing = new Drawing(this._el, this._htOption);
+		
+		if (this._htOption.text) {
+			this.makeCode(this._htOption.text);	
+		}
+	};
+	
+	/**
+	 * Make the QRCode
+	 * 
+	 * @param {String} sText link data
+	 */
+	QRCode.prototype.makeCode = function (sText) {
+		this._oQRCode = new QRCodeModel(_getTypeNumber(sText, this._htOption.correctLevel), this._htOption.correctLevel);
+		this._oQRCode.addData(sText);
+		this._oQRCode.make();
+		this._el.title = sText;
+		this._oDrawing.draw(this._oQRCode);			
+		this.makeImage();
+	};
+	
+	/**
+	 * Make the Image from Canvas element
+	 * - It occurs automatically
+	 * - Android below 3 doesn't support Data-URI spec.
+	 * 
+	 * @private
+	 */
+	QRCode.prototype.makeImage = function () {
+		if (typeof this._oDrawing.makeImage == "function" && (!this._android || this._android >= 3)) {
+			this._oDrawing.makeImage();
+		}
+	};
+	
+	/**
+	 * Clear the QRCode
+	 */
+	QRCode.prototype.clear = function () {
+		this._oDrawing.clear();
+	};
+	
+	/**
+	 * @name QRCode.CorrectLevel
+	 */
+	QRCode.CorrectLevel = QRErrorCorrectLevel;
+})();
+
 terminal.addCommand("qr", async function(args) {
-    
-    let api = "https://chart.apis.google.com/chart?chs=500x500&cht=qr&chld=L&chl="
-    let url = api + encodeURIComponent(args.text)
-
     terminal.addLineBreak()
-    terminal.printImg(url)
+    const div = document.createElement("div")
+    new QRCode(div, args.text)
+    terminal.parentNode.appendChild(div)
     terminal.addLineBreak()
 
+    div.style.border = "10px solid white"
+    div.style.width = "fit-content"
 }, {
     description: "generate a qr code",
     args: {
@@ -18890,24 +23212,15 @@ terminal.addCommand("rename", async function(args) {
         throw new Error("file already exists in folder")
 
     let file = terminal.getFile(args.file)
-    if (terminal.rootFolder.id == file.id)
+    if (terminal.rootDirectory.id == file.id)
         throw new Error("cannot rename root folder")
-    let renamingCurrentFolder = file.id == terminal.currFolder.id
-    delete file.parent.content[file.name]
-    file.parent.content[args.name] = file
-    terminal.log(`renamed ${file.path} to ${args.name}`)
-    file.name = args.name
 
-    if (renamingCurrentFolder) {
-        terminal.fileSystem.currPath = file.pathArray
-    }
-
-    await terminal.fileSystem.reload()
+    file.setName(args.name)
 }, {
     description: "rename a file or folder",
     args: {
-        "file": "the file or folder to rename",
-        "name": "the new name of the file or folder"
+        "file:f": "the file or folder to rename",
+        "name:s": "the new name of the file or folder"
     }
 })
 
@@ -18962,30 +23275,24 @@ terminal.addCommand("reverse", async function(args) {
 // ------------------- js/commands/rm.js --------------------
 terminal.addCommand("rm", async function(args) {
     let file = terminal.getFile(args.file)
-    if (file.type == FileType.FOLDER)
-        throw new Error("cannot remove directory. use 'rmdir' instead")
-    delete file.parent.content[file.name]
-    await terminal.fileSystem.reload()
+    if (file == terminal.rootDirectory) {
+        throw new Error("Cannot remove root directory!")
+    }
+
+    file.parent.deleteChild(file)
+
+    let filePath = FilePath.from(terminal.data.path)
+    if (!terminal.fileExists(filePath)) {
+        terminal.fileSystem.currDirectory = terminal.fileSystem.root
+        terminal.updatePath()
+        terminal.printLine("You just cut an active filetree and have been moved back to root/")
+    }
 }, {
     description: "remove a file",
-    args: ["*file"]
-})
-
-// ------------------- js/commands/rmdir.js --------------------
-terminal.addCommand("rmdir", async function(args) {
-    let directory = terminal.getFile(args.directory, FileType.FOLDER)
-    if (Object.keys(directory.content).length > 0) {
-        let msg = "the selected directory isn't empty. Continue?"
-        await terminal.acceptPrompt(msg, false)
+    args: {
+        "file:f": "file to remove"
     }
-    delete directory.parent.content[directory.name]
-    await terminal.fileSystem.reload()
-}, {
-    description: "remove a directory",
-    args: ["directory"]
 })
-
-
 
 // ------------------- js/commands/rndm.js --------------------
 terminal.addCommand("rndm", async function(args) {
@@ -19035,6 +23342,49 @@ terminal.addCommand("rndm", async function(args) {
 })
 
 
+
+// ------------------- js/commands/say.js --------------------
+terminal.addCommand("say", async function({ text, pitch, language }) {
+    return new Promise(async resolve => {
+        if (window.speechSynthesis) {
+    
+            const message = new SpeechSynthesisUtterance();
+    
+            message.text = text;
+            message.pitch = pitch;
+            message.lang = language;
+
+            let running = true;
+            message.onend = () => {
+                resolve();
+                running = false;
+            }
+
+            terminal.onInterrupt(speechSynthesis.cancel.bind(speechSynthesis));
+            
+            window.speechSynthesis.speak(message);
+
+            while (running) {
+                await sleep(1000);
+            }
+    
+        } else {
+            terminal.printError("Sorry, your browser doesn't support text to speech!");
+        }
+    });
+}, {
+    author: "Colin Chadwick",
+    description: "Say something",
+    args: {
+        "*text:s": "The text to say",
+        "?pitch:n:0~2": "The pitch of the voice",
+        "?language:s": "The language of the voice"
+    },
+    defaultValues: {
+        pitch: 1,
+        language: "en-US"
+    }
+})
 
 // ------------------- js/commands/sc.js --------------------
 terminal.addCommand("sc", async function(args) {
@@ -19201,6 +23551,94 @@ terminal.addCommand("search", async function(args) {
 
 
 
+// ------------------- js/commands/session.js --------------------
+terminal.window.addEventListener("beforeunload", function (e) {
+    if (!terminal.fileSystem.inSessionMode) {
+        return
+    }
+
+    e.preventDefault()
+    return "You have an active terminal session. If you leave now, all unsaved changes will be gone"
+})
+
+terminal.addCommand("session", async function(args) {
+    if (args.action == "begin") {
+        if (terminal.fileSystem.inSessionMode) {
+            throw new Error("Session already active")
+        }
+
+        terminal.fileSystem.beginSession()
+        terminal.printSuccess("Successfully started a session.")
+        terminal.printLine("All changes you make to the filesystem are now temporary")
+        terminal.printLine("and will thus be gone when you reload the website. However,")
+        terminal.printLine("this removes the necessary limit of very limited local storage.\n")
+        terminal.print("- To end the session, use ")
+        terminal.printCommand("session end")
+    } else if (args.action == "reset") {
+        if (!terminal.fileSystem.inSessionMode) {
+            throw new Error("No active session found")
+        }
+
+        terminal.fileSystem.reset()
+        terminal.printSuccess("Successfully reset the session filesystem")
+    } else if (args.action == "save") {
+        if (!terminal.fileSystem.inSessionMode) {
+            throw new Error("No active session found")
+        }
+
+        const dateTime = new Date()
+        let fileName = "session-"
+        fileName += `${dateTime.getFullYear().toString().padStart(4, '0')}`
+        fileName += `${(dateTime.getMonth() + 1).toString().padStart(2, '0')}`
+        fileName += `${dateTime.getDate().toString().padStart(2, '0')}`
+        fileName += "-"
+        fileName += `${dateTime.getHours().toString().padStart(2, '0')}`
+        fileName += `${dateTime.getMinutes().toString().padStart(2, '0')}`
+        fileName += `${dateTime.getSeconds().toString().padStart(2, '0')}`
+        fileName += ".json"
+
+        let sessionFile = new PlainTextFile(terminal.fileSystem.toJSON())
+        downloadFile(sessionFile.setName(fileName))
+
+        terminal.printSuccess(`Successfully saved ${sessionFile.name}`)
+
+    } else if (args.action == "load") {
+        if (!terminal.fileSystem.inSessionMode) {
+            throw new Error("No active session found")
+        }
+
+        await terminal.modules.load("upload", terminal)
+        try {
+            var [fileName, fileContent, isDataURL] = await terminal.modules.upload.file()
+        } catch (e) {
+            throw new Error("File Upload Failed")
+        }
+
+        try {
+            terminal.fileSystem.loadJSON(fileContent)
+        } catch (e) {
+            throw new Error("Invalid session file")
+        }
+
+        terminal.printSuccess(`Successfully loaded ${fileName}`)
+
+    } else if (args.action == "end") {
+        if (!terminal.fileSystem.inSessionMode) {
+            throw new Error("No active session found")
+        }
+
+        terminal.fileSystem.endSession()
+        await terminal.fileSystem.load()
+        terminal.printSuccess("Successfully ended the session.")
+        terminal.print("The previous filesystem is restored. All session changes are gone.")
+    }
+}, {
+    description: "manage a filesystem session",
+    args: {
+        "action:e:begin|reset|save|load|end": "<enum>"
+    }
+})  
+
 // ------------------- js/commands/set.js --------------------
 terminal.addCommand("set", async function(args) {
     await terminal.modules.load("cliapi", terminal)
@@ -19231,42 +23669,93 @@ terminal.addCommand("sha256", async function(args) {
     if (!window.crypto || !window.crypto.subtle)
         throw new Error("crypto API not supported")
 
-    if (!args.s && !args.f) {
-        terminal.printError("must specify either -s or -f")
-        terminal.print("Use ")
-        terminal.printCommand("man sha256")
-        terminal.printLine(" for more information")
-        throw new IntendedError()
-    }
-
-    if (args.s && args.f)
-        throw new Error("cannot specify both -s and -f")
-
-    let text = ""
-    if (args.s) {
-        text = args.s
-    } else if (args.f) {
-        let file = terminal.getFile(args.f, FileType.READABLE)
-        text = file.content
-    }
-
-    let hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+    let hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(args.text))
     let hashArray = Array.from(new Uint8Array(hash))
     let hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("")
     terminal.printLine(hashHex)
 }, {
     description: "calculate the SHA-256 hash of a message",
     args: {
-        "?s": "a string to hash",
-        "?f": "a file to hash"
-    },
-    standardVals: {
-        s: null,
-        f: null
+        "*text:s": "ascii text to calculate hash of"
     }
 })
 
+// ------------------- js/commands/shi.js --------------------
+terminal.addCommand("shi", async function(args) {
+    const SHI = args.s ** 2 / args.l
+    await sleep(100)
 
+    await terminal.printLine("Okay. I will begin the calculation now...")
+    await sleep(1000)
+
+    await terminal.animatePrint("Making progress...")
+    await sleep(500)
+
+    await terminal.animatePrint("Almost there...")
+    await sleep(1000)
+
+    await terminal.animatePrint("Okay I got it.")
+    await sleep(500)
+
+    await terminal.animatePrint("In general, a SHI below 10 is considered instable, a SHI")
+    await terminal.animatePrint("below 9 is considered dangerous.")
+    await sleep(300)
+
+    await terminal.animatePrint("Everything above 11 is fine and 10-11 is maybe a bit wonky.")
+    await sleep(700)
+
+    await terminal.animatePrint("Your result is... ", 50, {newLine: false})
+    await sleep(2000)
+
+    terminal.printLine(SHI)
+    await sleep(1000)
+
+    const diagnoses = [
+        {max: 0, diagnosis: "A negative SHI is quite the achievement. Do Kangaroos live in your place?"},
+        {max: 1, diagnosis: "You should officially be considered a skyscraper"},
+        {max: 5, diagnosis: "It's generally interesting that you're still alive. You should have fallen over."},
+        {max: 6, diagnosis: "Well. You should avoid standing up (in general). Good Luck. You'll need it."},
+        {max: 7, diagnosis: "Have you ever considered a wheelchair?"},
+        {max: 8, diagnosis: "Are you sure you typed in everything correctly? It seems unlikely that you're alive."},
+        {max: 8.5, diagnosis: "You're extremely likely to tip over if you go fast around any slight corner."},
+        {max: 9, diagnosis: "You're very likely to tip over if you go fast around a corner. Be aware of that!"},
+        {max: 9.25, diagnosis: "Ouch. That must have hurt (all the 9523 times you've fallen already). You're instable."},
+        {max: 9.5, diagnosis: "Yikes. You're generally pretty instable and people should be afraid around you."},
+        {max: 9.75, diagnosis: "It's not very bad but you should consider buying bigger shoes, please. You're instable around corners."},
+        {max: 10, diagnosis: "You're almost stable. Drink more milk and maybe you'll not tip over around corners any more!"},
+        {max: 10.33, diagnosis: "You should avoid tight corners at all costs, please. You're almost instable!"},
+        {max: 10.66, diagnosis: "Okay. All corners that are sharper than 30° should interest you. But other than that, you're fine!"},
+        {max: 11, diagnosis: "You're almost in the green zone. Buy a bigger shoe size and you wont tip over anymore."},
+        {max: 11.5, diagnosis: "You're as steady as a rock. No chance of tipping over, ever. But still please avoid >80° corners."},
+        {max: 12, diagnosis: "You're as steady as a mountain. Almost. But avoid 90° corners."},
+        {max: 13, diagnosis: "Wow! You could be Hagrid! You're qualified to help those who need it (SHI under 9)"},
+        {max: 14, diagnosis: "Uh-huh. You don't even need this test. You've never tipped over in your life, have you? You're so stable!"},
+        {max: 15, diagnosis: "Have you ever considered a career as a structural beam in a skyscraper?"},
+        {max: 18, diagnosis: "You're half human half pyramid."},
+        {max: 20, diagnosis: "Quite impressive. Tipping you over is like tipping over a flat sheet of paper: impossible!"},
+        {max: 100, diagnosis: "Nah. You're lying, right? If I were a life insurance, I'd invest in you!"},
+        {max: Infinity, diagnosis: "Have you ever tried getting a negative SHI?"}
+    ]
+
+    await terminal.animatePrint("Your Diagnosis is also ready:")
+    await sleep(1000)
+
+    let diagnosis = diagnoses[0]
+    for (let i = 0; i < diagnoses.length; i++) {
+        if (SHI < diagnoses[i].max) {
+            diagnosis = diagnoses[i].diagnosis
+            break
+        }
+    }
+
+    await terminal.animatePrint(diagnosis)
+}, {
+    description: "calculate your SHI (stability height index)",
+    args: {
+        "s=shoe-size:n:1~99999": "shoe size (european)",
+        "l=height:n:1~999999": "body height in centimeters"
+    }
+})
 
 // ------------------- js/commands/shoot.js --------------------
 terminal.addCommand("shoot", async function(args) {
@@ -19758,6 +24247,840 @@ terminal.addCommand("shutdown", async function() {
 })
 
 
+
+// ------------------- js/commands/simulate.js --------------------
+"use strict"
+
+terminal.addCommand("simulate", async function(args) {
+    await terminal.modules.import("game", window)
+    await terminal.modules.load("window", terminal)
+    const simulationName = {
+        "2-masses-1-spring": "2 Masses 1 Spring Simulation",
+        "planets-gravity": "Planets Gravity Simulation (Legacy)",
+        "3-masses-3-springs": "3 Masses 3 Springs Simulation",
+        "1d-3-masses-2-springs": "1d 3 Masses 2 Springs Simulation",
+        "2-body-problem": "2 Body Problem Simulation",
+        "3-body-problem": "3 Body Problem Simulation",
+        "4-body-problem": "4 Body Problem Simulation",
+        "5-body-problem": "5 Body Problem Simulation",
+        "6-body-problem": "6 Body Problem Simulation",
+        "7-body-problem": "7 Body Problem Simulation",
+        "8-body-problem": "8 Body Problem Simulation",
+        "circle-gravity": "Circle Gravity Simulation"
+    }[args.simulation]
+    
+    const defaultDeltaTime = 1000 / 60
+
+    // my professor shared these simulations with the class.
+    // so here's a 10% chance to encounter a rickroll!
+    // (but only once per device and only when simulating gravity)
+    if (
+        !localStorage.getItem("gravity-rickroll")
+        && Math.random() < 0.1
+        && args.simulation == "planets-gravity"
+    ) {
+        localStorage.setItem("gravity-rickroll", true)
+        terminal.printLine("It's your unlucky day!")
+        await sleep(1000)
+        terminal.href("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    }
+
+    let terminalWindow = terminal.modules.window.make({
+        name: simulationName ?? "Simulation", fullscreen: args.fullscreen})
+    const canvas = terminalWindow.CANVAS
+    const context = terminalWindow.CONTEXT
+
+    class PointMass {
+
+        constructor(mass, pos, {
+            vel = new Vector2d(0, 0),
+            acc = new Vector2d(0, 0),
+            color = "#a5a1ff",
+            drawPath = false,
+            pathColor = "blue",
+            maxPathLength = 5000,
+        }={}) {
+            this.mass = mass
+            this.pos = pos
+            this.vel = vel
+            this.acc = acc
+
+            this.color = color
+            this.drawPath = drawPath
+            this.pathColor = pathColor
+            this.maxPathLength = maxPathLength
+
+            this.path = []
+        }
+
+        get radius() {
+            return 20 * Math.sqrt(getValue(this.mass))
+        }
+
+    }
+
+    class Spring {
+
+        constructor(m1, m2, k, length) {
+            this.m1 = m1
+            this.m2 = m2
+            this.k = k
+            this.length = length
+        }
+
+    }
+
+    class SimulationParameter {
+
+        constructor(id, key, action, value, options) {
+            this.id = id
+            this.key = key
+            this.action = action
+            this.value = value
+            this.options = options
+        }
+
+        change() {
+            const index = this.options.indexOf(this.value) ?? 0
+            this.value = this.options[(index + 1) % this.options.length]
+        }
+
+    }
+
+    class SimulationSetup {
+
+        constructor() {
+            this.masses = []
+            this.springs = []
+            this.parameters = []
+            this.updateRules = []
+            this.initRules = []
+
+            this.currMousePos = null
+            this.viewCentre = new Vector2d(0, 0)
+
+            this.friction = 0
+            this.drawCOM = false
+            this.COMColor = "#ed9bff"
+            this.drawCOMPath = true
+            this.COMMaxPathLength = 1000
+            this.COMPathColor = "violet"
+            this.COMRadius = 20
+        }
+        
+        addInitRule(rule) {
+            this.initRules.push(rule)
+        }
+
+        addUpdateRule(rule) {
+            this.updateRules.push(rule)
+            return this
+        }
+
+        enableCOM({
+            color="#ed9bff",
+            drawPath=true,
+            radius=20,
+            maxPathLength=1000,
+            pathColor="violet"
+        }={}) {
+            this.drawCOM = true
+            this.drawCOMPath = drawPath
+            this.maxPathLength = maxPathLength
+            this.pathColor = pathColor
+            this.COMRadius = radius
+            this.COMColor = color
+            return this
+        }
+
+        setFriction(friction) {
+            this.friction = friction
+            return this
+        }
+
+        addSpring(spring) {
+            this.springs.push(spring)
+            return this
+        }
+
+        addMass(mass) {
+            this.masses.push(mass)
+            return this
+        }
+
+        addParameter(param) {
+            this.parameters.push(param)
+            return this
+        }
+
+    }
+
+    function getValue(paramOrNumber) {
+        if (paramOrNumber instanceof SimulationParameter) {
+            return paramOrNumber.value
+        } else {
+            return paramOrNumber
+        }
+    }
+
+    function make2dSimulation(setup) {
+        const viewCentreTarget = new Vector2d(0, 0)
+        const COMPath = []
+
+        const R = () => {
+            const pos = new Vector2d(0, 0)
+            let massSum = 0
+            for (const obj of setup.masses) {
+                pos.iadd(obj.pos.scale(getValue(obj.mass)))
+                massSum += getValue(obj.mass)
+            }
+
+            return pos.scale(1 / massSum)
+        }
+
+        function screenPos(pos) {
+            const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
+            return pos.add(middle).add(setup.viewCentre)
+        }
+
+        function drawPath(path, color) {
+            if (path.length < 2) {
+                return
+            }
+
+            context.beginPath()
+
+            for (let i = 0; i < path.length; i++) {
+                const pos = screenPos(path[i])
+                if (i == 0) {
+                    context.moveTo(pos.x, pos.y)
+                } else {
+                    context.lineTo(pos.x, pos.y)
+                }
+            }
+
+            context.strokeStyle = color
+            context.lineWidth = 1
+            context.stroke()
+        }
+
+        function drawBackground(gridSize=50) {
+            context.fillStyle = "white"
+            context.fillRect(0, 0, canvas.width, canvas.height)
+
+            const startX = setup.viewCentre.x % gridSize
+            const startY = setup.viewCentre.y % gridSize
+
+            function drawGridLine(x1, y1, x2, y2) {
+                context.moveTo(x1, y1)
+                context.lineTo(x2, y2)
+                context.strokeStyle = "#eee"
+                context.lineWidth = 1
+                context.stroke()
+            }
+
+            for (let x = startX; x < canvas.width; x += gridSize) {
+                drawGridLine(x, 0, x, canvas.height)
+            }
+
+            for (let y = startY; y < canvas.height; y += gridSize) {
+                drawGridLine(0, y, canvas.width, y)
+            }
+        }
+
+        function screenPosToSimulationPos(screenPos) {
+            const middle = new Vector2d(canvas.width / 2, canvas.height / 2)
+            return screenPos.sub(setup.viewCentre).sub(middle)
+        }
+
+        let cameraFollowing = true
+        let simulationActive = true
+
+        let focusMassNumber = null
+
+        addEventListener("keydown", event => {
+            if (event.key == " ") {
+                focusMassNumber = null
+                cameraFollowing = !cameraFollowing
+                viewCentreTarget.set(setup.viewCentre)
+            }
+
+            if (event.key == "j") {
+                if (focusMassNumber === null) {
+                    focusMassNumber = 0
+                } else {
+                    focusMassNumber++
+                }
+            }
+
+            if (event.key == "s") {
+                simulationActive = !simulationActive
+            }
+
+            const cameraSpeed = 100
+            if (event.key == "ArrowUp") {
+                viewCentreTarget.iadd(new Vector2d(0, 1).scale(cameraSpeed))
+            } else if (event.key == "ArrowDown") {
+                viewCentreTarget.iadd(new Vector2d(0, 1).scale(-cameraSpeed))
+            } else if (event.key == "ArrowLeft") {
+                viewCentreTarget.iadd(new Vector2d(1, 0).scale(cameraSpeed))
+            } else if (event.key == "ArrowRight") {
+                viewCentreTarget.iadd(new Vector2d(1, 0).scale(-cameraSpeed))
+            }
+
+            for (let param of setup.parameters) {
+                if (event.key == param.key) {
+                    param.change()
+                }
+            }
+        })
+
+        let focusedObj = null
+        setup.currMousePos = null
+
+        canvas.onmousedown = event => {
+            setup.currMousePos = Vector2d.fromEvent(event, canvas)
+            const mouse = screenPosToSimulationPos(setup.currMousePos)
+
+            let closestObj = null
+            let minDistance = Infinity
+
+            for (let obj of setup.masses) {
+                const dist = mouse.distance(obj.pos)
+                if (minDistance > dist) {
+                    closestObj = obj
+                    minDistance = dist
+                }
+            }
+
+            if (minDistance < 200 && closestObj) {
+                focusedObj = closestObj
+            }
+        }
+
+        canvas.onmousemove = event => {
+            const mouse = Vector2d.fromEvent(event, canvas)
+            setup.currMousePos = mouse
+        }
+
+        canvas.onmouseup = event => {
+            if (focusedObj && setup.currMousePos) {
+                const mousePos = screenPosToSimulationPos(setup.currMousePos)
+                focusedObj.vel.iadd(mousePos.sub(focusedObj.pos).scale(0.03))
+            }
+
+            focusedObj = null
+            setup.currMousePos = null
+        }
+
+        canvas.ontouchstart = event => canvas.onmousedown(event)
+        canvas.ontouchmove = event => canvas.onmousemove(event)
+        canvas.ontouchend = event => canvas.onmouseup(event)
+
+        function drawArrow(headPos, tailPos, color) {
+            const delta = headPos.sub(tailPos)
+
+            context.save()
+            context.translate(screenPos(tailPos).x, screenPos(tailPos).y)
+            context.rotate(delta.angle)
+            context.scale(delta.length, delta.length)
+
+            const lineWidth = Math.min(Math.max(3, delta.length * 0.05), 10)
+            context.lineWidth = lineWidth / delta.length
+
+            function drawLine(x1, y1, x2, y2) {
+                context.beginPath()
+                context.moveTo(x1, y1)
+                context.lineTo(x2, y2)
+                context.stroke()
+            }
+            
+            context.lineCap = "round"
+            context.strokeStyle = color
+            drawLine(1, 0, 0, 0)
+            drawLine(0, 0, 0.2, -0.2)
+            drawLine(0, 0, 0.2, 0.2)
+
+            context.restore()
+        }
+
+        function drawInstructions() {
+            const lines = [
+                "space : toggle camera",
+                "drag a mass to kick it",
+                "",
+                `camera=${cameraFollowing ? "follow" : "manual"}`
+            ]
+
+            for (const param of setup.parameters) {
+                lines.unshift(`${param.key.padEnd(5)} : ${param.action}`)
+                lines.push(`${param.id}=${param.value}`)
+            }
+
+            if (!cameraFollowing) {
+                lines.unshift("arrow : move camera")
+            }
+
+            context.font = "15px monospace"
+            context.fillStyle = "black"
+            context.textBaseline = "top"
+            for (let i = 0; i < lines.length; i++) {
+                context.fillText(lines[i], 10, i * 20 + 10)
+            }
+        }
+
+        function addToPath(path, v, maxPathLength) {
+            path.unshift(v.copy())
+            if (path.length > maxPathLength) {
+                path.pop()
+            }
+        }
+
+        function update(dt) {
+            if (!simulationActive) {
+                return
+            }
+
+            for (const spring of setup.springs) {
+                const [m1, m2] = [spring.m1, spring.m2]
+                const displacement = m1.pos.distance(m2.pos) - getValue(spring.length)
+                const forceLength = -getValue(spring.k) * displacement
+                m1.vel.iadd(m1.pos.sub(m2.pos).normalized.scale(forceLength / getValue(m1.mass)))
+                m2.vel.iadd(m2.pos.sub(m1.pos).normalized.scale(forceLength / getValue(m2.mass)))
+            }
+
+            for (const rule of setup.updateRules) {
+                rule(dt)
+            }
+
+            for (const obj of setup.masses) {
+                obj.vel.iadd(obj.acc.scale(dt / 16))
+                obj.pos.iadd(obj.vel.scale(dt / 16))
+                obj.vel.iscale(1 - getValue(setup.friction))
+
+                if (obj.drawPath) {
+                    addToPath(obj.path, obj.pos, obj.maxPathLength)
+                }
+            }
+
+            if (setup.drawCOM) {
+                addToPath(COMPath, R(), setup.COMMaxPathLength)
+            }
+
+            if (focusMassNumber !== null) {
+                const mass = setup.masses[focusMassNumber % setup.masses.length]
+                viewCentreTarget.set(mass.pos.scale(-1))
+            } else if (cameraFollowing) { 
+                viewCentreTarget.set(R().scale(-1))
+            }
+
+            setup.viewCentre.iadd(viewCentreTarget.sub(setup.viewCentre).scale(0.05))
+        }
+
+        function drawBall(pos, color, radius) {
+            context.beginPath()
+            context.arc(pos.x, pos.y, radius, 0, Math.PI * 2)
+
+            context.fillStyle = color
+            context.fill()
+
+            context.strokeStyle = "black"
+            context.lineWidth = 1
+            context.stroke()
+        }
+
+        function drawSpring(p1, p2, color, steps=20) {
+            const pos = t => p1.add(p2.sub(p1).scale(t))
+
+            context.beginPath()
+            context.moveTo(p1.x, p1.y)
+
+            const normal = p2.sub(p1).rotate(Math.PI / 2).normalized
+            
+            for (let i = 0; i < steps; i++) {
+                const direction = i % 2 == 0 ? 1 : -1
+                const p = pos((i + 1) / (steps + 1)).add(normal.scale(10 * direction))
+                context.lineTo(p.x, p.y)
+            }
+
+            context.lineTo(p2.x, p2.y)
+            context.lineCap = "round"
+            context.lineWidth = 1
+            context.strokeStyle = color
+            context.stroke()
+        }
+
+        function render() {
+            canvas.width = canvas.clientWidth
+            canvas.height = canvas.clientHeight
+            context.clearRect(0, 0, canvas.width, canvas.height)
+            drawBackground()
+
+            drawInstructions()
+
+            for (const obj of setup.masses.filter(m => m.drawPath)) {
+                drawPath(obj.path, obj.pathColor)
+            }
+
+            if (setup.drawCOMPath) {
+                drawPath(COMPath, setup.COMPathColor)
+            }
+
+            for (const spring of setup.springs) {
+                drawSpring(
+                    screenPos(spring.m1.pos),
+                    screenPos(spring.m2.pos),
+                    "black", Math.floor(getValue(spring.length) / 20))
+            }
+
+            for (const obj of setup.masses) {
+                drawBall(screenPos(obj.pos), obj.color, obj.radius)
+            }
+
+            if (setup.drawCOM) {
+                drawBall(screenPos(R()), setup.COMColor, setup.COMRadius)
+            }
+
+            if (focusedObj && setup.currMousePos) {
+                drawArrow(focusedObj.pos, screenPosToSimulationPos(setup.currMousePos), focusedObj.pathColor)
+            }
+        }
+
+        for (const rule of setup.initRules) {
+            rule()
+        }
+
+        if (args["skip-ticks"] != null) {
+            const skipTicks = args["skip-ticks"]
+            if (skipTicks < 0) {
+                terminalWindow.close()
+                simulationRunning = false
+                throw new Error("Can't skip negative number of ticks")
+            }
+            
+            for (let i = 0; i < skipTicks; i++) {
+                update(defaultDeltaTime)
+            }
+        }
+
+        simulationActive = !args["start-being-halted"]
+
+        return {render, update}
+    }
+
+    function makeNBodyProblem(numMasses) {
+        return () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                args.gravity ?? 1000, [100, 300, 500, 750, 1000, 1500])
+
+            const massColors = []
+            let hueDegOffset = (numMasses == 3) ? 0 : Math.PI / 8
+            for (let i = 0; i < numMasses; i++) {
+                const hue = (i / numMasses + hueDegOffset) % 1
+                const mass = Color.hsl(hue, 0.8, 0.7).string.hex
+                const path = Color.hsl(hue, 1, 0.5).string.hex
+                massColors.push({mass, path})
+            }
+
+            for (let i = 0; i < numMasses; i++) {
+                const angle = i / numMasses * (Math.PI * 2)
+                const massColor = massColors[i % massColors.length]
+                const mass = new PointMass(1, Vector2d.fromAngle(angle).scale(200),
+                    {color: massColor.mass, drawPath: true, pathColor: massColor.path,
+                        vel: Vector2d.fromAngle(angle).rotate(Math.PI / 2)})
+                setup.addMass(mass)
+                setup.enableCOM({radius: 5})
+            }
+
+            setup.setFriction(frictionParam)
+            setup.addParameter(gravityParam)
+                 .addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 0.1)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        }
+    }
+
+    const simulation = {
+        "2-masses-1-spring": () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0.001, [0, 0.0001, 0.001, 0.01, 0.1])
+            const massParam = new SimulationParameter(
+                "mass_ratio", "m", "change mass ratio",
+                1, [1, 2, 5, 10])
+            const springLengthParam = new SimulationParameter(
+                "spring_length", "l", "change spring length",
+                200, [50, 100, 200, 300, 500])
+            const springConstantParam = new SimulationParameter(
+                "spring_const", "k", "change spring constant",
+                0.001, [0.1, 0.01, 0.001, 0.0001, 0.00001])
+
+            const m1 = new PointMass(massParam, new Vector2d(-100, 0),
+                {color: "#94afff", drawPath: true, pathColor: "blue"})
+            const m2 = new PointMass(1, new Vector2d(100, 0),
+                {color: "#ff9494", drawPath: true, pathColor: "red"})
+
+            setup.addParameter(frictionParam).addParameter(massParam)
+                .addParameter(springConstantParam).addParameter(springLengthParam)
+
+            setup.addMass(m1).addMass(m2)
+            setup.addSpring(new Spring(m1, m2, springConstantParam, springLengthParam))
+
+            setup.setFriction(frictionParam)
+            setup.enableCOM({
+                color: "#ed9bff",
+                radius: 5,
+                pathColor: "violet"
+            })
+
+            return make2dSimulation(setup)
+        },
+
+        "3-masses-3-springs": () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0.001, [0, 0.0001, 0.001, 0.01, 0.1])
+            const springLengthParam = new SimulationParameter(
+                "spring_length", "l", "change spring length",
+                300, [100, 200, 300, 400, 500])
+            const springConstantParam = new SimulationParameter(
+                "spring_const", "k", "change spring constant",
+                0.005, [0.1, 0.01, 0.005, 0.001, 0.0001, 0.00001])
+
+            const m1Pos = new Vector2d(0, springLengthParam.value / 2 / Math.cos(Math.PI / 6))
+
+            const m1 = new PointMass(1, m1Pos,
+                {color: "#94afff", drawPath: true, pathColor: "blue"})
+            const m2 = new PointMass(1, m1Pos.rotate(Math.PI * 2 / 3),
+                {color: "#ff9494", drawPath: true, pathColor: "red"})
+            const m3 = new PointMass(1, m1Pos.rotate(Math.PI * -2 / 3),
+                {color: "#a1ff9a", drawPath: true, pathColor: "#00ff00"})
+
+            setup.addParameter(frictionParam)
+                .addParameter(springConstantParam)
+                .addParameter(springLengthParam)
+
+            setup.addMass(m1).addMass(m2).addMass(m3)
+            setup.addSpring(new Spring(m1, m2, springConstantParam, springLengthParam))
+            setup.addSpring(new Spring(m2, m3, springConstantParam, springLengthParam))
+            setup.addSpring(new Spring(m1, m3, springConstantParam, springLengthParam))
+
+            setup.setFriction(frictionParam)
+            setup.enableCOM({radius: 5})
+
+            return make2dSimulation(setup)
+        },
+
+        "planets-gravity": () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+            const massParam = new SimulationParameter(
+                "mass_ratio", "m", "change mass ratio",
+                1, [1, 2, 5, 10, 30])
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                1000, [100, 300, 500, 750, 1000, 1500])
+
+            const m1 = new PointMass(massParam, new Vector2d(-300, 0),
+                {color: "#94afff", drawPath: true, pathColor: "blue",
+                 vel: new Vector2d(0, 0.5)})
+            const m2 = new PointMass(1, new Vector2d(300, 0),
+                {color: "#ff9494", drawPath: true, pathColor: "red",
+                 vel: new Vector2d(0, -0.5)})
+
+            setup.setFriction(frictionParam)
+            setup.addMass(m1).addMass(m2)
+            setup.addParameter(gravityParam).addParameter(massParam).addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 2)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        },
+
+        "2-body-problem": makeNBodyProblem(2),
+        "3-body-problem": makeNBodyProblem(3),
+        "4-body-problem": makeNBodyProblem(4),
+        "5-body-problem": makeNBodyProblem(5),
+        "6-body-problem": makeNBodyProblem(6),
+        "7-body-problem": makeNBodyProblem(7),
+        "8-body-problem": makeNBodyProblem(8),
+
+        "circle-gravity": () => {
+            
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0, [0, 0.0001, 0.001, 0.01, 0.1])
+            const massParam = new SimulationParameter(
+                "mass_ratio", "m", "change mass ratio",
+                1, [1, 2, 5, 10, 30])
+            const gravityParam = new SimulationParameter(
+                "gravity_const", "g", "change gravity const",
+                1000, [100, 300, 500, 750, 1000, 1500])
+
+            const m1 = new PointMass(massParam, new Vector2d(0, 0),
+                {color: "#94afff", drawPath: true, pathColor: "blue",
+                 vel: new Vector2d(0, 0)})
+            const m2 = new PointMass(1, new Vector2d(300, 0),
+                {color: "#ff9494", drawPath: true, pathColor: "red",
+                 vel: new Vector2d(0, 1)})
+
+            setup.setFriction(frictionParam)
+            setup.addMass(m1).addMass(m2)
+            setup.addParameter(gravityParam).addParameter(massParam).addParameter(frictionParam)
+
+            setup.addUpdateRule(dt => {
+                for (const obj of setup.masses) {
+                    for (const other of setup.masses) {
+                        if (obj == other) {
+                            continue
+                        }
+
+                        const delta = other.pos.sub(obj.pos)
+                        const dir = delta.normalized
+
+                        // newtons universal law of gravity:
+                        const gravityStrength = Math.min(getValue(gravityParam) * getValue(other.mass) / (delta.length ** 2), 2)
+                        obj.vel.iadd(dir.scale(gravityStrength).scale(dt / 16))
+                    }
+                }
+            })
+
+            return make2dSimulation(setup)
+        },
+
+        "1d-3-masses-2-springs": () => {
+            const setup = new SimulationSetup()
+
+            const frictionParam = new SimulationParameter(
+                "friction", "f", "change friction",
+                0.001, [0, 0.0001, 0.001, 0.01, 0.1])
+            const springLengthParam = new SimulationParameter(
+                "spring_length", "l", "change spring length",
+                200, [50, 100, 200, 300, 500])
+            const springConstantParam = new SimulationParameter(
+                "spring_const", "k", "change spring constant",
+                0.005, [0.1, 0.01, 0.005, 0.001, 0.0001, 0.00001])
+
+            const m1 = new PointMass(1, new Vector2d(-200, 0),
+                {color: "#94afff", drawPath: true, pathColor: "blue"})
+            const m2 = new PointMass(1, new Vector2d(0, 0),
+                {color: "#ff9494", drawPath: true, pathColor: "red"})
+            const m3 = new PointMass(1, new Vector2d(200, 0),
+                {color: "#a1ff9a", drawPath: true, pathColor: "#00ff00"})
+
+            setup.addParameter(frictionParam)
+                .addParameter(springConstantParam)
+                .addParameter(springLengthParam)
+
+            setup.addMass(m1).addMass(m2).addMass(m3)
+            setup.addSpring(new Spring(m1, m2, springConstantParam, springLengthParam))
+            setup.addSpring(new Spring(m2, m3, springConstantParam, springLengthParam))
+
+            let objY = 0
+            setup.addUpdateRule(dt => {
+                objY += 0.03 * dt
+
+                for (const obj of setup.masses) {
+                    obj.pos.y = objY
+                    obj.vel.y = 0
+                    obj.acc.y = 0
+                }
+
+                if (setup.currMousePos) {
+                    setup.currMousePos.y = setup.masses[0].pos.y + setup.viewCentre.y + canvas.height / 2
+                }
+            })
+
+            setup.setFriction(frictionParam)
+            setup.enableCOM({radius: 5})
+
+            return make2dSimulation(setup)
+        }
+    }[args.simulation]()
+
+    let simulationRunning = true
+
+    terminal.onInterrupt(() => {
+        terminalWindow.close()
+        simulationRunning = false
+    })
+
+    function loop() {
+        if (!simulationRunning) {
+            return
+        }
+
+        simulation.update(defaultDeltaTime)
+        simulation.render()
+
+        terminal.window.requestAnimationFrame(loop)
+    }
+
+    loop()
+    while (simulationRunning) {
+        await sleep(1000)
+    }
+
+    terminalWindow.close()
+
+}, {
+    description: "Run a simulation. Doesn't work well on phones",
+    args: {
+        "s=simulation:e:2-masses-1-spring|3-masses-3-springs|planets-gravity|1d-3-masses-2-springs|2-body-problem|3-body-problem|4-body-problem|5-body-problem|6-body-problem|7-body-problem|8-body-problem|circle-gravity": "simulation to run",
+        "?f=fullscreen:b": "run application in fullscreen",
+        "?g=gravity:n:0~99999999": "initial gravity constant in gravity based simulations",
+        "?s=skip-ticks:i": "ticks to simulate before rendering",
+        "?h=start-being-halted:b": "simulation will start being stopped"
+    }
+})
 
 // ------------------- js/commands/sl.js --------------------
 terminal.addCommand("sl", async function(args) {
@@ -20887,7 +26210,7 @@ terminal.addCommand("sodoku", async function(args) {
 }, {
     description: "Solve or generate a sodoku puzzle",
     args: {
-        "?mode:s": "the mode to run in (play, solve)",
+        "?mode:e:play|solve": "the mode to run in (play, solve)",
         "?fen:s": "a FEN string to load",
         "?give-fen:b": "output the FEN string for the inputted puzzle"
     },
@@ -21260,6 +26583,89 @@ terminal.addCommand("sorting", async function(args) {
 })
 
 
+
+// ------------------- js/commands/sounds.js --------------------
+terminal.addCommand("sounds", async function(args) {
+    if (args.random) {
+        for (let i = 0; i < args.length; i++) {
+            args.text += args.alphabet[Math.floor(Math.random() * args.alphabet.length)]
+        }
+    }
+
+    let context = new AudioContext(),
+        osc = context.createOscillator(),
+        gain = context.createGain()
+
+    osc.connect(gain)
+    gain.connect(context.destination)
+
+    const alphabet = " abcdefghijklmnopqrstuvwxyz.,\n"
+    const frequencies = []
+
+    for (let letter of args.text) {
+        if (!alphabet.includes(letter)) {
+            throw new Error(`Unknown Character: "${letter}"`)
+        }
+
+        const indexInAlphabet = alphabet.indexOf(letter)
+
+        if (indexInAlphabet == 0) {
+            frequencies.push(0)
+        } else {
+            frequencies.push(frequencyFromNoteOffset(indexInAlphabet))
+        }
+    }
+
+    osc.start(0)
+
+    terminal.onInterrupt(() => {
+        osc.stop()
+    })
+
+    const output1 = terminal.print("", undefined, {forceElement: true})
+    const output2 = terminal.print("", new Color(0, 0, 255), {forceElement: true})
+    const output3 = terminal.print("", undefined, {forceElement: true})
+
+    function updateOutput(index) {
+        output1.textContent = args.text.slice(0, index)
+        output2.textContent = args.text[index]
+        output3.textContent = args.text.slice(index + 1, args.text.length)
+    }
+    
+    for (let i = 0; i < frequencies.length; i++) {
+        updateOutput(i)
+        const freq = frequencies[i]
+
+        osc.frequency.value = freq
+    
+        if (freq != 0) {
+            gain.gain.setValueAtTime(1, context.currentTime) 
+            gain.gain.exponentialRampToValueAtTime(0.2, context.currentTime + args.interval / 1000)
+        } else {
+            gain.gain.exponentialRampToValueAtTime(0.000001, context.currentTime + args.interval / 1000)
+        }
+
+        await sleep(args.interval)
+    }
+
+    osc.stop()
+
+}, {    
+    description: "make sounds",
+    args: {
+        "*text:s": "text to speak",
+        "?i=interval:i:1~999999": "interval in ms between letters",
+        "?r=random:b": "make random",
+        "?l=length:i:1~99999": "length of random notes",
+        "?a=alphabet:s": "alphabet of random letters"
+    },
+    defaultValues: {
+        text: "",
+        interval: 500,
+        length: 10,
+        alphabet: " abcdefghijklmnopqrstuvwxyz.,\n"
+    }
+})
 
 // ------------------- js/commands/spion.js --------------------
 const getApiUrl = "../spion/api/get.php"
@@ -23654,7 +29060,21 @@ terminal.addCommand("time", async function(args) {
             return num.toString().padStart(len, "0")
         }
 
-        return `${p(hours)}:${p(minutes)}:${p(seconds)}${args.m ? `:${p(milliseconds, 3)}` : ""}`
+        let str = ""
+        if (!args['no-hours']) str += `${p(hours)}:`
+        if (!args['no-minutes']) str += `${p(minutes)}:`
+        if (!args['no-seconds']) str += `${p(seconds)}`
+        if (args.m) str += `:${p(milliseconds, 3)}`
+
+        if (str.endsWith(":")) {
+            str = str.slice(0, -1) // remove trailing colon
+        }
+
+        if (str === "") {
+            throw new Error("You disabled all time components!")
+        }
+
+        return str
     }
 
     let running = true
@@ -23680,6 +29100,9 @@ terminal.addCommand("time", async function(args) {
 }, {
     description: "Shows the current time.",
     args: {
+        "?no-hours:b": "Hide hours.",
+        "?no-minutes:b": "Hide minutes.",
+        "?no-seconds:b": "Hide seconds.",
         "?m=show-milli:b": "Show milliseconds.",
         "?f=size:n:0.1~99": "Font size in em.",
         "?s=start:b": "Start a stopwatch.",
@@ -23839,104 +29262,162 @@ class TodoApi {
 
 }
 
-terminal.addCommand("todo", async function(rawArgs) {
-    let parsedArgs = TerminalParser.tokenize(rawArgs)
+terminal.addCommand("todo", async function(args) {
+    const getTodoItemChoice = async (headerText) => {
+        return new Promise(async (resolve, reject) => {
+            const elements = []
+    
+            const loadingElement = terminal.printLine("\nLoading...", undefined, {forceElement: true})
+    
+            try {
+                let todos = await TodoApi.getList(args.name)
 
-    const commands = {
-        "list": async function(name) {
-            let data = await TodoApi.getList(name)
-            let formattedData = []
-            for (let rawItem of data) {
-                let check = (rawItem.done == 1) ? "[x]" : "[ ]"
-                let due = rawItem.due_time == "-" ? "" : ` (${rawItem.due_time})`
-                let item = `${rawItem.text_content}${due}`
-                let uid = `#${rawItem.uid}`
-                formattedData.push({
-                    check: check, item: item, uid: uid
-                })
+                if (args.u) {
+                    todos = todos.filter(t => t.done == "0")
+                }
+
+                loadingElement.remove()
+    
+                if (todos.length == 0) {
+                    throw new Error("Specified todo list is empty")
+                }
+    
+                elements.push(terminal.printLine(headerText, Color.COLOR_1, {forceElement: true}))
+                
+                for (let todo of todos) {
+                    let text = todo.done == "1" ? "[x]" : "[ ]"
+                    text += " " + todo.text_content + (todo.due_time != "-" ? ` (${todo.due_time})` : "") + "\n"
+                    elements.push(terminal.printClickable(text, () => {
+                        for (let element of elements) {
+                            element.remove()
+                        }
+                        resolve(todo)
+                    }))
+                }
+            } catch (e) {
+                loadingElement.remove()
+                reject(e)
             }
-            if (formattedData.length == 0) {
-                terminal.printLine(`No items found`)
-            }
-            let maxItemLength = formattedData.reduce((max, item) => Math.max(max, item.item.length), 0)
-            for (let item of formattedData) {
-                terminal.print(item.check, Color.COLOR_1)
-                terminal.print(stringPadBack(item.item, maxItemLength + 1), Color.WHITE)
-                terminal.printLine(item.uid, Color.WHITE)
-            }
-        },
+
+            terminal.scroll()
+        })
+    }
+
+    if (args["rm-completed"]) {
+        await terminal.acceptPrompt(`Do you really want to delete all completed todos from "${args.name}"?`, false)
+        const progressModule = await terminal.modules.load("progressbar", terminal)
         
-        "check": async function(uid) {
-            await TodoApi.checkItem(uid, true)
-        },
+        const todos = await TodoApi.getList(args.name)
+        const completedTodos = todos.filter(t => t.done == "1")
 
-        "uncheck": async function(uid) {
-            await TodoApi.checkItem(uid, false)
-        },
-
-        "add": async function(name, text, due_date="-") {
-            await TodoApi.addItem(name, text, due_date)
-        },
-
-        "edit": async function(uid, text) {
-            await TodoApi.editItem(uid, text)
-        },
-
-        "delete": async function(uid) {
-            await TodoApi.deleteItem(uid)
+        if (completedTodos.length == 0) {
+            throw new Error(`Todo List "${args.name}" doesn't contain any completed todos`)
         }
-    }
 
-    const command_args = {
-        "list": ["name"],
-        "check": ["uid"],
-        "uncheck": ["uid"],
-        "add": ["name", "text", "due_date"],
-        "edit": ["uid", "text"],
-        "delete": ["uid"]
-    }
+        const progressBar = progressModule.printProgressBar({width: 62})
 
-    function showAvailableCommand(command) {
-        terminal.print(`> '`, Color.COLOR_2)
-        terminal.print(`$ todo ${command} ${command_args[command].map(a => `<${a}>`).join(" ")}`, Color.WHITE)
-        terminal.printLine(`'`, Color.COLOR_2)
-    }
-
-    function showAvailableCommands() {
-        terminal.print(`'`, Color.COLOR_2)
-        terminal.print(`$ todo `, Color.WHITE)
-        terminal.print(`<command> [args...]`, Color.COLOR_1)
-        terminal.printLine(`'`, Color.COLOR_2)
-        for (let [command, _] of Object.entries(command_args)) {
-            showAvailableCommand(command)
+        for (let i = 0; i < completedTodos.length; i++) {
+            await TodoApi.deleteItem(completedTodos[i].uid)
+            progressBar.update(i / completedTodos.length)
         }
-    }
 
-    if (parsedArgs.length == 0 || (parsedArgs.length == 1 && parsedArgs[0] == "help")) {
-        terminal.printLine(`You must supply at least 1 argument:`)
-        showAvailableCommands()
+        progressBar.finish()
+        terminal.printSuccess(`Successfully removed ${completedTodos.length} todos.`)
         return
-    }
 
-    let command = parsedArgs[0]
-    let args = parsedArgs.slice(1)
+    } else if (args["rm-item"]) {
+        const choice = await getTodoItemChoice("Please choose an item to delete.")
+        await TodoApi.deleteItem(choice.uid)
 
-    if (!(command in commands)) {
-        terminal.printLine(`Unknown command! Available commands:`)
-        showAvailableCommands()
+        terminal.printSuccess(`Successfully deleted item ("${choice.text_content}")`)
         return
-    }
 
-    if (args.length != command_args[command].length) {
-        terminal.printLine(`Invalid number of arguments!`)
-        showAvailableCommand(command)
+    } else if (args["edit-item"]) {
+        const choice = await getTodoItemChoice("Please choose an item to edit.")
+        const newText = await terminal.prompt("Enter the new text: ")
+        await TodoApi.editItem(choice.uid, newText)
+
+        terminal.printSuccess(`Successfully edited item ("${choice.text_content}")`)
         return
+
+    } else if (args["add-item"]) {
+        const newText = await terminal.prompt("Enter the text: ")
+        let dueDate = "-"
+        try {
+            await terminal.acceptPrompt("Do you want to add a due date?", false)
+            dueDate = await terminal.prompt("Due Date: ")
+        } catch {}
+        await TodoApi.addItem(args.name, newText, dueDate)
+
+        terminal.printSuccess(`Successfully added item to "${args.name}"`)
+        return
+
     }
 
-    await commands[command](...args)
+    const outputElement = terminal.print("", undefined, {forceElement: true})
+
+    let updateCount = 0
+
+    const updateOutput = async () => {
+        const currUpdate = ++ updateCount
+        terminal.printLine("\nLoading...", undefined, {outputNode: outputElement})
+
+        try {
+            let todos = await TodoApi.getList(args.name)
+
+            if (args.u) {
+                todos = todos.filter(t => t.done == "0")
+            }
+
+            outputElement.innerHTML = "<br>"
+            
+            for (let todo of todos) {
+                terminal.printClickable(todo.done == "1" ? "[x]" : "[ ]", async () => {
+                    if (currUpdate != updateCount) return
+                    await TodoApi.checkItem(todo.uid, todo.done != "1")
+                    updateOutput()
+                }, Color.COLOR_1, {outputNode: outputElement})
+
+                const text = " " + todo.text_content + (todo.due_time != "-" ? ` (${todo.due_time})` : "")
+                terminal.printLine(text, undefined, {outputNode: outputElement})
+            }
+
+            if (todos.length == 0) {
+                const text = `< no todo items found >`
+                terminal.printLine(text, undefined, {outputNode: outputElement})
+            }
+
+            terminal.printLine("", undefined, {outputNode: outputElement})
+            terminal.printClickable("[Reload] ", () => {
+                updateOutput()
+            }, undefined, {outputNode: outputElement})
+            terminal.printCommand("[Add Item] ", `todo ${args.name} --add-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printCommand("[Remove Item] ", `todo ${args.name} --rm-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printCommand("[Edit Item] ", `todo ${args.name} --edit-item`,
+                undefined, false, {outputNode: outputElement})
+            terminal.printLine("", undefined, {outputNode: outputElement})
+        } catch (e) {
+            console.error(e)
+            outputElement.innerHTML = "<br>"
+            terminal.printError(e.message, "Unexpected Error", {outputNode: outputElement})
+        }
+
+        outputElement
+    }
+
+    updateOutput()
 }, {
-    description: "manage a todo list",
-    rawArgMode: true
+    description: "show and manage a todo list",
+    args: {
+        "n=name:s": "name of the the todo list",
+        "?u=uncompleted-only:b": "only show the uncompleted todos",
+        "?a=add-item:b": "add an item to the todo list",
+        "?r=rm-item:b": "remove an item from the todo list",
+        "?e=edit-item:b": "edit an item of the todo list",
+        "?rm-completed:b": "remove all completed todos from the todo list"
+    }
 })
 
 // ------------------- js/commands/touch.js --------------------
@@ -23945,16 +29426,13 @@ terminal.addCommand("touch", async function(args) {
         throw new Error("Invalid filename")
     if (terminal.fileExists(args.filename))
         throw new Error("File already exists")
-    if (args.filename.endsWith(".url"))
-        var newFile = new ExecutableFile("")
-    else
-        var newFile = new TextFile("")
-    terminal.currFolder.content[args.filename] = newFile
-    await terminal.fileSystem.reload()
+
+    const file = new PlainTextFile().setName(args.filename)
+    terminal.currDirectory.addChild(file)
 }, {
     description: "create a file in the current directory",
     args: {
-        "filename": "the name of the file"
+        "filename:s": "the name of the file"
     }
 })
 
@@ -24157,7 +29635,7 @@ class TuringMachine {
 			let tapeContent = this.tape[i]
 			writeLine(`  tape[${startIndex + i}] = "${tapeContent}";`)
 		}
-		writeLine(`  let state = ${this.state};`)
+		writeLine(`  let state = "${this.state}";`)
         writeLine(`  let i = 0;`)
         writeLine(`  let start = performance.now();`)
 		writeLine(`  for (;; i++) {`)
@@ -24173,7 +29651,7 @@ class TuringMachine {
 		writeLine(`  }`)
         writeLine(`  let ms = performance.now() - start;`)
 		writeLine(`  const output = tape.filter(t => t != "${this.standardTapeContent}").join("");`)
-		writeLine(`  postMessage([output, i, ms]);`)
+		writeLine(`  postMessage([output, state, i, ms]);`)
 		writeLine(`}`)
 		return code
 	}
@@ -24183,9 +29661,10 @@ class TuringMachine {
 		let worker = new Worker(URL.createObjectURL(blob))
 		let running = true
 		worker.onmessage = e => {
-            let [output, steps, ms] = e.data
+            let [output, state, steps, ms] = e.data
             terminal.printLine(`Finished ${steps} steps in ${ms.toFixed(2)}ms.`)
-			terminal.printLine(output)
+			terminal.printLine(`\nTerminal Tape Content (length=${output.length}):\n${output}`)
+            terminal.printLine(`\nTerminal State: ${state}`)
 			worker.terminate()
 			running = false
 		}
@@ -24254,7 +29733,7 @@ terminal.addCommand("turing", async function(args) {
     terminal.machine = machine
     
     if (args.turbo) {
-		let compiledJS = machine.compile()
+		let compiledJS = machine.compile(args.turboTapeSize)
 		await machine.executeCompiled(compiledJS)
 		return
 	}
@@ -24275,18 +29754,20 @@ terminal.addCommand("turing", async function(args) {
 }, {
     description: "run a turing machine file",
     args: {
-        "file": "file to run",
-        "?t=startTape": "starting tape content",
+        "file:f": "file to run",
+        "?t=startTape:s": "starting tape content",
         "?s=sleep:i:0~10000": "sleep time between steps (in ms)",
-        "?d=startingState": "starting state",
+        "?d=startingState:s": "starting state",
         "?m=maxSteps:i:0~9999999999": "maximum number of steps to run",
+        "?p=turboTapeSize:i:0~9999999999": "size of turing machine tape",
         "?turbo:b": "run as fast as possible",
     },
     standardVals: {
         startTape: "",
-        s: 100,
-        d: "0",
-        m: 100000,
+        sleep: 100,
+        startingState: "0",
+        maxSteps: 100000,
+        turboTapeSize: 10000,
     }
 })
 
@@ -24545,29 +30026,284 @@ terminal.addCommand("uname", function() {
 
 
 
+// ------------------- js/commands/unit.js --------------------
+terminal.addCommand("unit", async function(args) {
+    const unitData = {
+        "distance": [
+            {names: ["m", "meter", "meters"], factor: 1},
+            {names: ["km", "klick", "klicks", "kilometer", "kilometers"], factor: 1e3},
+            {names: ["cm", "centimeter", "centimeters"], factor: 1e-2},
+            {names: ["mm", "millimeter", "millimeter"], factor: 1e-3},
+            {names: ["micrometer", "micrometers", "micro-meter", "micro-meters"], factor: 1e-6},
+            {names: ["nm", "nanometer", "nanometers"], factor: 1e-9},
+            {names: ["mi", "mile", "miles"], factor: 1609.344},
+            {names: ["yd", "yard", "yards"], factor: 0.9144},
+            {names: ["ft", "foot", "feet"], factor: 0.3048},
+            {names: ['"', "in", "inch", "inches"], factor: 0.0254},
+            {names: ["nmi", "nautical-mile", "nautical-miles"], factor: 1852},
+            {names: ["ly", "light-year", "light-y", "light-years"], factor: 9_460_730_472_580.8e3},
+            {names: ["h", "hand", "hands"], factor: 0.1016},
+            {names: ["lns", "light-ns", "light-nanosecond", "light-nanoseconds"], factor: 0.299792458},
+            {names: ["sf", "soccer-field", "soccer-fields", "football-field", "football-fields"], factor: 105},
+            {names: ["asf", "american-football-field", "american-football-fields"], factor: 91.44},
+            {names: ["er", "earth-radius", "earth-radii"], factor: 6378e3}, // surprisingly hard to approximate!
+            {names: ["cu", "cubit", "cubits"], factor: 0.5}, // approximation
+            {names: ["p", "palm", "palms"], factor: 0.075}, // ancient egypt hand size (https://en.wikipedia.org/wiki/Palm_(unit))
+            {names: ["lk", "lks", "look", "looks"], factor: 100_000} // number of looks from a helicopter 1km high (50km in each direction)
+        ],
+        
+        "area": [
+            {names: ["sm", "qm", "m2", "square-meter", "square-meters"], factor: 1},
+            {names: ["skm", "qkm", "km2", "square-kilometer", "square-kilometers"], factor: 1e6},
+            {names: ["scm", "qcm", "cm2", "square-centimeter", "square-centimeters"], factor: 1e-4},
+            {names: ["smm", "qmm", "mm2", "square-millimeter", "square-millimeters"], factor: 1e-6},
+            {names: ["ha", "hectare", "hectares"], factor: 1e4},
+            {names: ["ac", "acre", "acres"], factor: 4046.86},
+            {names: ["sqmi", "square-mile", "square-miles"], factor: 2.58999e6},
+            {names: ["sqyd", "square-yard", "square-yards"], factor: 0.836127},
+            {names: ["sqft", "square-foot", "square-feet"], factor: 0.092903},
+            {names: ["sqin", "square-inch", "square-inches"], factor: 0.00064516},
+            {names: ["sqnmi", "square-nautical-mile", "square-nautical-miles"], factor: 3.4299e6},
+            {names: ["sqkm", "square-kilometer", "square-kilometers"], factor: 1e6},
+            {names: ["sqrd", "rood", "roods"], factor: 1011.71}, // historical unit
+            {names: ["sqch", "square-chain", "square-chains"], factor: 404.686}, // historical unit
+            {names: ["sqrdm", "square-rod", "square-rods"], factor: 25.2929}, // historical unit
+            {names: ["sqperch", "square-perch", "square-perches"], factor: 25.2929}, // historical unit
+            {names: ["sqftus", "square-foot-US-Survey", "square-feet-US-Survey"], factor: 0.0929034116}, // US Survey
+            {names: ["sqmilesus", "square-mile-US-Survey", "square-miles-US-Survey"], factor: 2.5899881103e6} // US Survey
+        ],
+
+        "mass": [
+            {names: ["g", "gram", "grams"], factor: 1},
+            {names: ["kg", "kilogram", "kilograms"], factor: 1e3},
+            {names: ["mg", "milligram", "milligrams"], factor: 1e-3},
+            {names: ["μg", "microgram", "micrograms"], factor: 1e-6},
+            {names: ["tonne", "metric-ton", "metric-tons"], factor: 1e6},
+            {names: ["lb", "pound", "pounds"], factor: 453.592},
+            {names: ["oz", "ounce", "ounces"], factor: 28.3495},
+            {names: ["ct", "carat", "carats"], factor: 0.2},
+            {names: ["st", "stone", "stones"], factor: 6350.29},
+            {names: ["gr", "grain", "grains"], factor: 0.0647989},
+            {names: ["cwt", "hundredweight", "hundredweights"], factor: 50802.3},
+            {names: ["troy-oz", "troy-ounce", "troy-ounces"], factor: 31.1035}, // Precious metals
+            {names: ["troy-lb", "troy-pound", "troy-pounds"], factor: 373.242}, // Precious metals
+            {names: ["dalton", "atomic-mass-unit", "atomic-mass-units"], factor: 1.66053904e-27} // Atomic and molecular masses
+        ],
+
+        "temperature": [
+            {names: ["c", "celsius"], factor: 1},
+            {names: ["f", "fahrenheit"], to: x => (x - 32) * 5/9, from: x => x * 9/5 + 32},
+            {names: ["k", "kelvin"], to: x => x + 273.15, from: x => x - 273.15},
+            {names: ["r", "rankine"], to: x => (x - 491.67) * 5/9, from: x => x * 9/5 + 491.67},
+            {names: ["d", "delisle"], to: x => 100 - x * 2/3, from: x => (100 - x) * 3/2},
+            {names: ["réaumur", "reaumur"], to: x => x * 5/4, from: x => x * 4/5},
+            {names: ["rømer", "romer"], to: x => (x - 7.5) * 40/21, from: x => x * 21/40 + 7.5}
+        ],
+
+        "speed": [
+            {names: ["m/s", "mps", "meter-per-second", "meters-per-second"], factor: 1},
+            {names: ["km/h", "kmh", "kph", "kilometer-per-hour", "kilometers-per-hour"], factor: 1 / 3.6},
+            {names: ["mi/h", "mph", "mile-per-hour", "miles-per-hour"], factor: 0.447},
+            {names: ["ft/s", "fps", "foot-per-second", "feet-per-second"], factor: 0.3048},
+            {names: ["knot", "knots"], factor: 0.51444446046222225277},
+            {names: ["mach", "machs"], factor: 340.29},
+            {names: ["min/km", "minutes-per-kilometer"], to: x => (50/3) / x, from: x => (50/3) / x}
+        ],
+
+        "volume": [
+            {names: ["m3", "cubic-meter", "cubic-meters"], factor: 1},
+            {names: ["km3", "cubic-kilometer", "cubic-kilometers"], factor: 1e9},
+            {names: ["cm3", "cubic-centimeter", "cubic-centimeters"], factor: 1e-6},
+            {names: ["mm3", "cubic-millimeter", "cubic-millimeters"], factor: 1e-9},
+            {names: ["litre", "liter", "liters", "litres"], factor: 1e-3},
+            {names: ["ml", "milliliter", "milliliters"], factor: 1e-6},
+            {names: ["gal", "gallon", "gallons"], factor: 3.78541},
+            {names: ["qt", "quart", "quarts"], factor: 0.946353},
+            {names: ["pt", "pint", "pints"], factor: 0.473176},
+            {names: ["cup", "cups"], factor: 0.236588},
+            {names: ["fl-oz", "fluid-ounce", "fluid-ounces"], factor: 0.0295735},
+            {names: ["tbsp", "tablespoon", "tablespoons"], factor: 0.0147868},
+            {names: ["tsp", "teaspoon", "teaspoons"], factor: 0.00492892},
+            {names: ["yd3", "cubic-yard", "cubic-yards"], factor: 764.554},
+            {names: ["ft3", "cubic-foot", "cubic-feet"], factor: 0.0283168},
+            {names: ["in3", "cubic-inch", "cubic-inches"], factor: 1.63871e-5},
+            {names: ["bbl", "barrel", "barrels"], factor: 0.158987} // Oil barrel (US)
+        ],
+
+        "time": [
+            {names: ["s", "second", "seconds"], factor: 1},
+            {names: ["ms", "millisecond", "milliseconds"], factor: 1e-3},
+            {names: ["μs", "microsecond", "microseconds"], factor: 1e-6},
+            {names: ["ns", "nanosecond", "nanoseconds"], factor: 1e-9},
+            {names: ["min", "minute", "minutes"], factor: 60},
+            {names: ["h", "hour", "hours"], factor: 3600},
+            {names: ["day", "days"], factor: 86400},
+            {names: ["week", "weeks"], factor: 604800},
+            {names: ["fortnight", "fortnights"], factor: 1209600},
+            {names: ["year", "years"], factor: 31536000},
+            {names: ["decade", "decades"], factor: 315360000},
+            {names: ["century", "centuries"], factor: 3153600000},
+            {names: ["millennium", "millennia"], factor: 31536000000}
+        ],
+
+        "digital_storage": [
+            {names: ["bit", "bits"], factor: 1},
+            {names: ["byte", "bytes"], factor: 8},
+            {names: ["kb", "kilobyte", "kilobytes"], factor: 8e3},
+            {names: ["mb", "megabyte", "megabytes"], factor: 8e6},
+            {names: ["gb", "gigabyte", "gigabytes"], factor: 8e9},
+            {names: ["tb", "terabyte", "terabytes"], factor: 8e12},
+            {names: ["pb", "petabyte", "petabytes"], factor: 8e15},
+            {names: ["eb", "exabyte", "exabytes"], factor: 8e18},
+            {names: ["zb", "zettabyte", "zettabytes"], factor: 8e21},
+            {names: ["yb", "yottabyte", "yottabytes"], factor: 8e24},
+            {names: ["kib", "kibibyte", "kibibytes"], factor: 1024 * 8},
+            {names: ["mib", "mebibyte", "mebibytes"], factor: 1024 ** 2 * 8},
+            {names: ["gib", "gibibyte", "gibibytes"], factor: 1024 ** 3 * 8},
+            {names: ["tib", "tebibyte", "tebibytes"], factor: 1024 ** 4 * 8},
+            {names: ["pib", "pebibyte", "pebibytes"], factor: 1024 ** 5 * 8},
+            {names: ["eib", "exbibyte", "exbibytes"], factor: 1024 ** 6 * 8},
+            {names: ["zib", "zebibyte", "zebibytes"], factor: 1024 ** 7 * 8},
+            {names: ["yib", "yobibyte", "yobibytes"], factor: 1024 ** 8 * 8}
+        ]
+    }
+
+    if (args.l) {
+        for (let [category, _units] of Object.entries(unitData)) {
+            terminal.printLine(category, Color.COLOR_1)
+            terminal.printLine("  Base Unit: " + _units[0].names.slice(-1)[0])
+            for (let unit of _units) {
+                let conversion = ""
+                if (unit.factor) {
+                    conversion = `*${unit.factor}`
+                } else if (unit.from && unit.to) {
+                    conversion = `from: ${unit.from}, to: ${unit.to}`
+                }
+
+                terminal.printLine(`  - ${unit.names.slice(-1)} (${conversion})`)
+            }
+        }
+        return
+    }
+
+    const units = []
+    for (let [category, _units] of Object.entries(unitData)) {
+        for (let unit of _units) {
+            unit.category = category
+            unit.properName = unit.names.slice(-1)[0]
+            units.push(unit)
+        }
+    }
+
+    args.s = args.s.trim().toLowerCase()
+    args.r = args.r.trim().toLowerCase()
+
+    const startUnit = units.find(u => u.names.includes(args.s))
+    const resultUnit = units.find(u => u.names.includes(args.r))
+
+    if (startUnit == undefined) {
+        terminal.printError(`Unknown unit "${args['start-unit']}"`)
+        terminal.printCommand("[list all available units]", `unit 1 m m --list-units`)
+        return
+    }
+
+    if (resultUnit == undefined) {
+        terminal.printError(`Unknown unit "${args['result-unit']}"`)
+        terminal.printCommand("[list all available units]", `unit 1 m m --list-units`)
+        return
+    }
+
+    if (startUnit.category != resultUnit.category) {
+        throw new Error(`Unit dimensions don't match (${startUnit.category} ≠ ${resultUnit.category})`)
+    }
+
+    let result = args.v
+    
+    if (startUnit.factor) {
+        result *= startUnit.factor
+    } else if (startUnit.to) {
+        result = startUnit.to(result)
+    }
+
+    if (resultUnit.factor) {
+        result /= resultUnit.factor
+    } else if (resultUnit.from) {
+        result = resultUnit.from(result)
+    }
+
+    terminal.printLine(result)
+}, {
+    description: "convert numbers between units",
+    args: {
+        "v=value:n": "numeric value of unit",
+        "s=start-unit:s": "starting unit",
+        "r=result-unit:s": "resulting unit",
+        "?l=list-units:b": "list all known units"
+    }
+})
+
 // ------------------- js/commands/upload.js --------------------
-terminal.addCommand("upload", async function() {
+terminal.addCommand("upload", async function(args) {
+    if (args.filename && !terminal.isValidFileName(args.filename)) {
+        throw new Error("Invalid Filename")
+    }
+
     await terminal.modules.load("upload", terminal)
+
     try {
         var [fileName, fileContent, isDataURL] = await terminal.modules.upload.file()
     } catch (e) {
         throw new Error("File Upload Failed")
     }
-    let construct = TextFile
+
+    let construct = PlainTextFile
     if (isDataURL) {
         construct = DataURLFile
     }
-    if (terminal.fileExists(fileName))
-        throw new Error("file already exists in folder")
+
+    if (args.filename) {
+        fileName = args.filename
+    }
+
+    if (terminal.fileExists(fileName)) {
+        terminal.printError(`File "${fileName}" already exists in this folder.`)
+        while (true) {
+            fileName = await terminal.prompt("A new filename: ")
+            if (terminal.fileExists(fileName)) {
+                terminal.printError(`File "${fileName}" also already exists in this folder.`)
+            } else if (!terminal.isValidFileName(fileName)) {
+                terminal.printError("Invalid Filename (Contains illegal characters or is too long)")
+            } else {
+                break
+            }
+        }
+    }
     const file = new (construct)(fileContent)
+
+    file.setName(fileName)
 
     const fileSize = file.computeSize()
 
-    terminal.currFolder.content[fileName] = file
-    terminal.printLine(`upload finished (${fileSize / 1000}kb)`)
-    await terminal.fileSystem.reload()
+    if (!terminal.fileSystem.inSessionMode) {
+        const currSystemSize = terminal.rootDirectory.computeSize()
+        const maxSystemSize = terminal.data.storageSize
+        const overdo = (fileSize + currSystemSize) - maxSystemSize
+        if (overdo > 0) {
+            terminal.print(`You have used up ${terminal.fileSystem.filesizeStr(currSystemSize)}`)
+            terminal.print(`/${terminal.fileSystem.filesizeStr(maxSystemSize)} `)
+            terminal.printLine(`(${Math.ceil(currSystemSize / maxSystemSize * 100)}%) of your storage.`)
+            terminal.printLine(`Adding this file would exceed this limit by >${terminal.fileSystem.filesizeStr(overdo)}.`)
+            throw new Error("File upload failed.")
+        }
+    }
+
+    terminal.rootDirectory.addChild(file)
+    terminal.printLine(`File uploaded as ${file.path} (~${terminal.fileSystem.filesizeStr(fileSize)})`)
 }, {
-    description: "upload a file from your computer"
+    description: "upload a file from your computer",
+    args: {
+        "?f=filename:s": "name of your shiny new uploaded file",
+    }
 })
 
 
@@ -24616,12 +30352,324 @@ terminal.addCommand("vigenere", async function(args) {
 
 // ------------------- js/commands/visits.js --------------------
 terminal.addCommand("visits", async function(args) {
-    let visits = await fetch(
+    const visits = await fetch(
         "api/get_visit_count.php"
-    ).then(response => response.text())
-    terminal.printLine(`This page has been visited ${visits} times since implementing the visit-count.`)
+    ).then(response => response.json())
+    terminal.printTable(visits.map(v => [v["url"], v["visits"]]), ["url", "visits"])
 }, {
     "description": "Shows the number of page visits",
+})
+
+// ------------------- js/commands/voronoi.js --------------------
+terminal.addCommand("voronoi", async function(args) {
+    const NUM_RANDOM_POINTS = args.n
+    const POINT_RADIUS_PX = 8
+    const LINES_COLOR = "white"
+
+    await terminal.modules.import("geometry2d", window)
+    await terminal.modules.load("window", terminal)
+
+    const terminalWindow = terminal.modules.window.make({
+        name: args.r ? "Voronoi Diagram Animation" : "Click and Drag Points",
+        fullscreen: args.fullscreen
+    })
+
+    const canvas = terminalWindow.CANVAS
+    const context = terminalWindow.CONTEXT
+
+    const canvasSize = () => new Point(canvas.width, canvas.height)
+
+    const canvasBoundingPoints = new GeometryObjectCollection([
+        new Point(0, 0), new Point(canvas.width, 0),
+        new Point(canvas.width, canvas.height),
+        new Point(0, canvas.height), 
+    ])
+
+    const canvasBoundingLines = new GeometryObjectCollection(
+        canvasBoundingPoints.objects.map((p, i) => {
+            return new LineSegment(p, canvasBoundingPoints.objects[(i + 1) % 4])
+        })
+    )
+
+    function orderPointsByAngleAround(points, center) {
+        const pointAngles = points.map(p => p.angleTo(center))
+        const indeces = Array.from(points.keys())
+        indeces.sort((i, j) => pointAngles[i] - pointAngles[j])
+        return indeces.map(i => points[i])
+    }
+
+    const epsilon = 1e-4
+
+    let lastHue = 0
+    function randomColor() {
+        const color = Color.fromHSL(lastHue, 0.8, 0.5)
+        lastHue = (lastHue + Math.PI / 8) % 1
+        return color
+    }
+
+    class VoronoiDiagram {
+
+        constructor(points) {
+            this.points = points ?? []
+            this.pointColors = []
+            this.polygons = []
+        }
+
+        addPoint(point) {
+            this.points.push(point)
+            this.pointColors.push(randomColor())
+        }
+
+        getClosestPointAt(position) {
+            let closestDistance = Infinity
+            let closestPoint = null
+            for (const point of this.points) {
+                const distance = point.distance(position)
+                if (distance < closestDistance) {
+                    closestDistance = distance
+                    closestPoint = point
+                }
+            }
+            return closestPoint
+        }
+
+        update() {
+            this.polygons = []
+
+            for (const point of this.points) {
+                const bisectors = new GeometryObjectCollection()
+                const boundingIntersections = new GeometryObjectCollection()
+
+                for (const otherPoint of this.points) {
+                    if (point.equals(otherPoint)) {
+                        continue
+                    }
+                    
+                    const midPoint = point.lerp(otherPoint, 0.5)
+                    const bisectorAngle = point.angleTo(otherPoint) + Math.PI / 2
+                    const bisector = new Line(midPoint, bisectorAngle)
+                    bisectors.addObject(bisector)
+
+                    const bisectorEnds = canvasBoundingLines.intersect(bisector)
+                    console.assert(bisectorEnds.objects.length == 2)
+
+                    boundingIntersections.addObjects(bisectorEnds.objects)
+                }
+
+                const bisectorIntersections = bisectors.selfIntersect()
+                const candidatePoints = boundingIntersections
+                    .concat(bisectorIntersections)
+                    .concat(canvasBoundingPoints)
+
+                // filter points by their nearest point being the correct one
+                const goodPoints = candidatePoints.objects.filter(p => {
+                    const nearbyP = p.lerp(point, epsilon)
+                    const closestPoint = this.getClosestPointAt(nearbyP)
+                    return closestPoint.equals(point)
+                })
+
+                const polygon = orderPointsByAngleAround(goodPoints, point)
+                this.polygons.push(polygon)
+            }
+
+            console.assert(this.polygons.length == this.points.length)
+        }
+
+        draw() {
+            context.fillStyle = "white"
+            context.fillRect(0, 0, canvas.width, canvas.height)
+
+            for (let i = 0; i < this.points.length; i++) {
+                const point = this.points[i]
+                const color = this.pointColors[i]
+                const polygon = this.polygons[i]
+                
+                if (polygon.length >= 3) {
+                    context.beginPath()
+                    for (let i = 0; i < polygon.length + 1; i++) {
+                        const point = polygon[(i + 1) % polygon.length]
+                        
+                        if (i == 0) {
+                            context.moveTo(point.x, point.y)
+                        } else {
+                            context.lineTo(point.x, point.y)
+                        }
+                    }
+                    
+                    const {h, s, l} = color.hsl
+                    context.fillStyle = Color.fromHSL(h / 360, s, 0.7).toString()
+                    context.fill()
+
+                    context.strokeStyle = LINES_COLOR
+                    context.stroke()
+                }
+
+                context.beginPath()
+                context.arc(point.x, point.y, POINT_RADIUS_PX, 0, Math.PI * 2)
+                context.fillStyle = color.toString()
+                context.fill()
+                context.strokeStyle = LINES_COLOR
+                context.stroke()
+            }
+        }
+
+    }
+
+    const voronoi = new VoronoiDiagram()
+    const pointCloud = new GeometryObjectCollection()
+
+    const randomPointInCanvas = () => canvasSize().mul(Point.random().scale(0.8).add(Point.unit11.scale(0.1)))
+
+    for (let i = 0; i < NUM_RANDOM_POINTS; i++) {
+        const randomPoint = randomPointInCanvas()
+        const distance = pointCloud.distance(randomPoint)
+
+        if (distance < 4 * POINT_RADIUS_PX) {
+            i--
+            continue
+        }
+
+        pointCloud.addObject(randomPoint)
+        voronoi.addPoint(randomPoint)
+    }
+
+    voronoi.update()
+    voronoi.draw()
+    let dragPoint = null
+
+    function spawnPoint(event) {
+        const point = Point.fromEvent(event, canvas)
+        voronoi.addPoint(point)
+        voronoi.update()
+        voronoi.draw()
+
+        dragPoint = point
+    }
+
+
+    function beginDrag(event) {
+        const eventPoint = Point.fromEvent(event, canvas)
+        const closestPoint = voronoi.getClosestPointAt(eventPoint)
+        if (!closestPoint) {
+            return spawnPoint(event)
+        }
+
+        const distance = eventPoint.distance(closestPoint)
+        if (distance <= POINT_RADIUS_PX * 2) {
+            dragPoint = closestPoint
+        } else {
+            spawnPoint(event)
+        }
+    }
+
+    function continueDrag(event) {
+        if (!dragPoint) {
+            return
+        }
+
+        const eventPoint = Point.fromEvent(event, canvas)
+        dragPoint.x = eventPoint.x
+        dragPoint.y = eventPoint.y
+
+        voronoi.update()
+        voronoi.draw()
+    }
+
+    function releaseDrag(event) {
+        dragPoint = null
+    }
+
+    function removePoint(event) {
+        const eventPoint = Point.fromEvent(event, canvas)
+        
+        const lengthBefore = voronoi.points.length
+
+        let removeIndeces = []
+        for (let i = 0; i < voronoi.points.length; i++) {
+            if (voronoi.points[i].distance(eventPoint) <= POINT_RADIUS_PX * 2) {
+                removeIndeces.push(i)
+            }
+        }
+
+        for (let i = removeIndeces.length - 1; i >= 0; i--) {
+            voronoi.points.splice(removeIndeces[i], 1)
+            voronoi.pointColors.splice(removeIndeces[i], 1)
+        }
+        
+        if (lengthBefore != voronoi.points.length) {
+            event.stopImmediatePropagation()
+        }
+
+        voronoi.update()
+        voronoi.draw()
+
+        return removeIndeces.length > 0
+    }
+
+    canvas.addEventListener("mousedown", event => {
+        if (event.button == 0) {
+            beginDrag(event)
+        }
+    })
+
+    canvas.addEventListener("mousemove", continueDrag)
+    canvas.addEventListener("mouseup", releaseDrag)
+    canvas.addEventListener("contextmenu", event => {
+        if (removePoint(event)) {
+            event.preventDefault()
+        }
+    })
+
+    canvas.addEventListener("touchstart", beginDrag)
+    canvas.addEventListener("touchmove", continueDrag)
+    canvas.addEventListener("touchend", releaseDrag)
+    
+    // for debugging
+    terminal.window.voronoi = voronoi
+
+    if (args["random-move"]) {
+
+        function movePointsToTargets(points, targets, reset=false, speed=1) {
+            for (let i = 0; i < targets.length; i++) {
+                const point = points[i]
+                const target = targets[i]
+
+                const delta = target.sub(point)
+                if (delta.length > speed * 2) {
+                    point.iadd(delta.normalized.scale(speed))
+                } else if (reset) {
+                    targets[i].set(randomPointInCanvas())
+                }
+            }
+        }
+
+        const targetTargets = voronoi.points.map(p => p.copy())
+        const targets = voronoi.points.map(p => p.copy())
+
+        function loop() {
+            movePointsToTargets(targets, targetTargets, true, 0.6)
+            movePointsToTargets(voronoi.points, targets, false, 0.51)
+
+            voronoi.update()
+            voronoi.draw()
+
+            window.requestAnimationFrame(loop)
+        }
+
+        loop()
+        
+    }
+
+}, {
+    description: "create voronoi diagrams interactively",
+    args: {
+        "?n=num-points:i:0~100": "number of random initial points",
+        "?r=random-move:b": "make points wander randomly",
+        "?f=fullscreen:b": "enable fullscreen mode",
+    },
+    defaultValues: {
+        n: 8
+    }
 })
 
 // ------------------- js/commands/w.js --------------------
@@ -24634,6 +30682,199 @@ terminal.addCommand("w", function() {
 })
 
 
+
+// ------------------- js/commands/water.js --------------------
+terminal.addCommand("water", async function(args) {
+    const ithBitNums = Array.from({length: 32}).map((_, i) => (1 << i))
+
+    class SmallWaterGrid {
+
+        constructor(n, rows) {
+            if (n > 32) {
+                throw new Error("Maximum Size is 32")
+            }
+
+            this.n = n
+            this.rows = rows ?? new Uint32Array(n)
+        }
+
+        copy() {
+            return new SmallWaterGrid(this.n, this.rows.slice())
+        }
+
+        fillWithWater(x, y) {
+            this.rows[y] |= ithBitNums[x]
+        }
+
+        static random(n, p=0.2) {
+            const grid = new SmallWaterGrid(n)
+            for (let y = 0; y < n; y++) {
+                for (let x = 0; x < n; x++) {
+                    if (Math.random() < p) {
+                        grid.fillWithWater(x, y)
+                    }
+                }
+            }
+            return grid
+        }
+
+        isFilled(x, y) {
+            return (this.rows[y] & ithBitNums[x]) !== 0
+        }
+
+        toString() {
+            const topBottomLine = "+" + "-".repeat(this.n * 2 + 1) + "+"
+            let outString = topBottomLine + "\n"
+            for (let y = 0; y < this.n; y++) {
+                outString += "|"
+                for (let x = 0; x < this.n; x++) {
+                    if (this.isFilled(x, y)) {
+                        outString += " W"
+                    } else {
+                        outString += " ."
+                    }
+                }
+                outString += " |\n"
+            }
+            return outString + topBottomLine
+        }
+
+        _iterationStep() {
+            const rowCopy = this.rows.slice()
+            let madeChange = false
+
+            for (let y = 0; y < this.n; y++) {
+                for (let x = 0; x < this.n; x++) {
+                    if (rowCopy[y] & ithBitNums[x]) {
+                        continue
+                    }
+
+                    let sum = 0
+                    sum += (x > 0 && (rowCopy[y] & ithBitNums[x - 1]) !== 0)
+                    sum += (x < this.n - 1 && (rowCopy[y] & ithBitNums[x + 1]) !== 0)
+                    sum += (y > 0 && (rowCopy[y - 1] & ithBitNums[x]) !== 0)
+                    sum += (y < this.n - 1 && (rowCopy[y + 1] & ithBitNums[x]) !== 0)
+
+                    if (sum >= 2) {
+                        this.rows[y] |= ithBitNums[x]
+                        madeChange = true
+                    }
+                }
+            }
+
+            return madeChange
+        }
+
+        computeLength(makeCopy=true) {
+            const grid = makeCopy ? this.copy() : this
+            for (let n = 1;; n++) {
+                if (!grid._iterationStep()) {
+                    return n
+                }
+            }
+        }
+
+    }
+
+    async function showAnimation(grid, intervalMs=200) {
+        const gridCopy = grid.copy()
+        const element = terminal.print("", undefined, {forceElement: true})
+        element.textContent = grid.toString()
+        while (gridCopy._iterationStep()) {
+            element.textContent = gridCopy.toString()
+            await sleep(intervalMs)
+        }
+    }
+
+    async function computeMaximumLength(n, {printProgress=true, progressUpdateInterval=10_000}={}) {
+        const maxNumInRow = 2 ** n
+        const rows = new Uint8Array(n)
+        let maxLength = 1
+        const totalNum = 2 ** (n * n)
+        let bestGrid = null
+        const progressOutput = printProgress ? terminal.print("", undefined, {forceElement: true}) : null
+        if (printProgress) {
+            terminal.addLineBreak()
+        }
+
+        let i = 0
+        let carry = false
+        let count = 0
+        while (i < n) {
+            if (!carry) {
+                const grid = new SmallWaterGrid(n, rows)
+                const length = grid.computeLength(true)
+                if (length > maxLength) {
+                    maxLength = length
+                    bestGrid = new SmallWaterGrid(n, rows.slice())
+                }
+
+                if (printProgress) {
+                    count++
+                    const percent = Math.round(count / totalNum * 10_000) / 100
+                    if (count % progressUpdateInterval === 0) {
+                        progressOutput.textContent = `${percent}% done`
+                        await sleep(0)
+                    }
+                }
+            }
+
+            rows[i]++
+            carry = false
+            if (rows[i] >= maxNumInRow) {
+                rows[i] = 0
+                i++
+                carry = true
+            } else {
+                i = 0
+            }
+
+            if (printProgress) {
+                progressOutput.textContent = "Finished."
+            }
+        }
+
+        return {maxLength, bestGrid}
+    }
+
+    const {maxLength, bestGrid} = await computeMaximumLength(6)
+    terminal.printLine(maxLength)
+    terminal.printLine(bestGrid.toString())
+}, {
+    description: "compute solutions to the longest water problem",
+    isSecret: true
+})
+
+// ------------------- js/commands/watti.js --------------------
+terminal.addCommand("watti", async function(args) {
+    if (args.action == "list") {
+        const result = await fetch("https://www.noel-friedrich.de/walk-to-college/api/get_walks.php")
+        const walks = await result.json()
+
+        for (let walk of walks) {
+            terminal.printLine(`${walk.date}: ${walk.names}`)
+        }
+    } else if (args.action == "add") {
+        const names = await terminal.prompt("Names: ")
+        const date = await terminal.prompt("Date: ")
+        const password = await terminal.prompt("Password: ", {password: true})
+
+        let url = "https://www.noel-friedrich.de/walk-to-college/api/add_walk.php?"
+        url += `names=${encodeURIComponent(names)}&`
+        url += `date=${encodeURIComponent(date)}&`
+        url += `password=${encodeURIComponent(password)}`
+
+        const result = await fetch(url)
+        const text = await result.text()
+        terminal.printLine(text)
+    }
+}, {
+    description: "manage the walk to trinity database",
+    isSecret: true,
+    args: {
+        "action:e:list|add": "<enum>"
+    }
+})
 
 // ------------------- js/commands/wave.js --------------------
 terminal.addCommand("wave", async function() {
@@ -24681,7 +30922,7 @@ terminal.addCommand("wc", function(args) {
 }, {
     description: "display word and line count of file",
     args: {
-        "?f=file": "file to open",
+        "?f=file:f": "file to open",
         "?s": "string to count instead of file"
     }
 })
@@ -24931,6 +31172,143 @@ terminal.addCommand("whoami", async function() {
     description: "get client info"
 })
 
+// ------------------- js/commands/wurzle-admin.js --------------------
+terminal.addCommand("wurzle-admin", async function(args) {
+    const apiUrlBase = "https://www.noel-friedrich.de/wurzle-api"
+
+    const localStoragePasswordKey = "wurzle-challenge-password"
+    const password = args.password ?? localStorage.getItem(localStoragePasswordKey)
+
+    async function apiGet(action, params=null) {
+        params ??= {}
+        params["password"] = password
+        let url = `${apiUrlBase}/${action}.php?`
+        for (const [key, value] of Object.entries(params)) {
+            url += `${encodeURIComponent(key)}=${encodeURIComponent(value)}&`
+        }
+        url = url.slice(0, -1)
+
+        const response = await fetch(url)
+        try {
+            const jsonData = await response.json()
+            if (localStorage.getItem(localStoragePasswordKey) != password) {
+                localStorage.setItem(localStoragePasswordKey, password)
+                terminal.printSuccess("Saved Password to Localstorage.")
+            }
+            return jsonData
+        } catch (e) {
+            console.error(e)
+            localStorage.removeItem(localStoragePasswordKey)
+            throw new Error("Incorrect Password.")
+        }
+    }
+
+    if (args.action == "show") {
+        const jsonData = await apiGet("get_all_wurzles")
+        const headerColumns = Array.from(Object.keys(jsonData[0]))
+        terminal.printTable(jsonData.map(r => headerColumns.map(h => r[h])), headerColumns)
+    }
+
+    else if (args.action == "set") {
+        if (!args.date || !args.term) {
+            throw new Error("No date or term provided to set.")
+        }
+
+        const jsonData = await apiGet("insert_wurzle", {date: args.date, term: args.term, author: args.author})
+        terminal.printLine(`success=${jsonData.success} action=${jsonData.action}`)
+    }
+
+    else if (args.action == "delete") {
+        if (!args.date) {
+            throw new Error("No date provided to delete.")
+        }
+
+        const jsonData = await apiGet("remove_wurzle", {date: args.date})
+        terminal.printLine(`success=${jsonData.success} deleted=${jsonData.deleted}`)
+        if (jsonData.error) {
+            terminal.printLine(`error=${jsonData.error}`)
+        }
+    }
+}, {
+    description: "manage wurzles (recmaths.ch/wurzle)",
+    args: {
+        "action:e:show|set|delete": "<enum>",
+        "?d=date:s": "date to set or delete",
+        "?t=term:s": "term to set",
+        "?a=author:s": "author of wurzle",
+        "?password:s": "admin password required to see stats"
+    },
+    defaultValues: {
+        author: "noel"
+    },
+    isSecret: true
+})
+
+// ------------------- js/commands/wurzle-stats.js --------------------
+terminal.addCommand("wurzle-stats", async function(args) {
+    const apiUrlBase = "https://www.noel-friedrich.de/wurzle-api/get_data.php"
+
+    const localStoragePasswordKey = "wurzle-stats-password"
+    const password = args.password ?? localStorage.getItem(localStoragePasswordKey)
+    const date = args.date ?? new Date().toJSON().slice(0, 10).split("-").reverse().join(".")
+
+    const fullApiUrl = `${apiUrlBase}?password=${encodeURIComponent(password)}&date=${encodeURIComponent(date)}`
+
+    const response = await fetch(fullApiUrl)
+    let jsonData = null
+
+    try {
+        jsonData = await response.json()
+
+        // yay, password seems to be correct!
+        if (localStorage.getItem(localStoragePasswordKey) != password) {
+            localStorage.setItem(localStoragePasswordKey, password)
+            terminal.printSuccess("Saved correct password locally.")
+        }
+    } catch (e) {
+        // no, password seems to be incorrect!
+        localStorage.removeItem(localStoragePasswordKey)
+        terminal.printError("Incorrect Password. Aborting.")
+        return
+    }
+
+    if (!args.date) {
+        terminal.printLine(`selected date: ${date}`)
+    }
+
+    if (jsonData.length == 0) {
+        terminal.printLine("no records found on selected date.")
+        return
+    }
+
+    const rowHeaders = (["index"]).concat(Array.from(Object.keys(jsonData[0])))
+    jsonData = jsonData.reverse().map((r, i) => {r.index = i + 1; return r})
+    const dataRows = jsonData.map(rowData => rowHeaders.map(h => rowData[h]))
+
+    const totalStartCount = jsonData.map(r => r.start_count).reduce((p, c) => p + c, 0)
+    const totalFinishCount = jsonData.map(r => r.finish_count).reduce((p, c) => p + c, 0)
+    const totalSuccessCount = jsonData.map(r => r.success_count).reduce((p, c) => p + c, 0)
+
+    terminal.printTable(dataRows, rowHeaders)
+    terminal.addLineBreak()
+
+    terminal.printLine(`total starts: ${totalStartCount}`)    
+    terminal.printLine(`total finishes: ${totalFinishCount}`) 
+
+    const successPercent = Math.round(totalSuccessCount / totalFinishCount * 10000) / 100
+    terminal.printLine(`total successes: ${totalSuccessCount} (${successPercent}%)`)
+    
+}, {
+    description: "show usage stats about wurzle (recmaths.ch/wurzle)",
+    args: {
+        "?d=date:s": "date to see the stats of",
+        "?password": "admin password required to see stats",
+    },
+    isSecret: true
+})
+
+
+
 // ------------------- js/commands/yes.js --------------------
 terminal.addCommand("yes", async function(args) {
     let message = args.message
@@ -25041,7 +31419,7 @@ terminal.modules.cliapi = CliApi
 
 // ------------------- js/modules/game.js --------------------
 function angleDifference(a, b) {
-    var diff = a - b
+    let diff = a - b
     while (diff < -Math.PI/2) diff += Math.PI
     while (diff > Math.PI/2) diff -= Math.PI
     return diff
@@ -25137,6 +31515,10 @@ class Vector2d {
         return this.x * v.y - this.y * v.x
     }
 
+    round() {
+        return new Vector2d(Math.round(this.x), Math.round(this.y))
+    }
+
     static fromAngle(angle) {
         return new Vector2d(Math.cos(angle), Math.sin(angle))
     }
@@ -25150,8 +31532,14 @@ class Vector2d {
     }
 
     set(x, y) {
-        this.x = x
-        this.y = y
+        if (x instanceof Vector2d && y == undefined) {
+            this.x = x.x
+            this.y = x.y
+        } else {
+            this.x = x
+            this.y = y
+        }
+        
     }
 
     addX(x) {
@@ -25216,10 +31604,67 @@ class Vector2d {
         return Math.max(...this.array)
     }
 
+    abs() {
+        return new Vector2d(Math.abs(this.x), Math.abs(this.y))
+    }
+
     toArray() {
         return [this.x, this.y]
     }
 
+    static fromEvent(event, element) {
+        let x = 0, y = 0
+
+        if (event.touches && event.touches[0]) {
+            x = event.touches[0].clientX
+            y = event.touches[0].clientY
+        } else if (event.originalEvent && event.originalEvent.changedTouches[0]) {
+            x = event.originalEvent.changedTouches[0].clientX
+            y = event.originalEvent.changedTouches[0].clientY
+        } else if (event.clientX !== undefined && event.clientY !== undefined) {
+            x = event.clientX
+            y = event.clientY
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            x = event.changedTouches[0].clientX
+            y = event.changedTouches[0].clientY
+        }
+
+        const rect = element.getBoundingClientRect()
+        return new Vector2d(x - rect.left, y - rect.top)
+    }
+
+}
+
+function distancePointLineSegment(point, lineStart, lineEnd) {
+    const delta = lineEnd.sub(lineStart)
+    const deltaLength = delta.length
+    if (deltaLength == 0) {
+        return point.distance(lineStart)
+    }
+
+    const t = Math.max(0, Math.min(1, point.sub(lineStart).dot(delta) / deltaLength ** 2))
+    const projection = lineStart.add(delta.scale(t))
+    return point.distance(projection)
+}
+
+function calcLineIntersection(s1, e1, s2, e2) {
+    // get intersection point between two lines defined each
+    // by start and end position (start n, end n)
+    // algorithm found on https://paulbourke.net/geometry/pointlineplane/
+
+    const denominator = (e2.y - s2.y)*(e1.x - s1.x) - (e2.x - s2.x)*(e1.y - s1.y)
+    if (denominator == 0) {
+        return null
+    }
+
+    const ua = ((e2.x - s2.x) * (s1.y - s2.y) - (e2.y - s2.y) * (s1.x - s2.x)) / denominator
+    const ub = ((e1.x - s1.x) * (s1.y - s2.y) - (e1.y - s1.y) * (s1.x - s2.x)) / denominator
+
+    if (ua < 0 || ua > 1 || ub < 0 || ub > 1) return null
+    return new Vector2d(
+        s1.x + ua * (e1.x - s1.x),
+        s1.y + ua * (e1.y - s1.y),
+    )
 }
 
 class Vector3d {
@@ -25394,6 +31839,11 @@ class Vector3d {
 
 }
 
+const ZeroVector2d = new Vector2d(0, 0)
+const UnitVector2d = new Vector2d(1, 1)
+const ZeroVector3d = new Vector3d(0, 0, 0)
+const UnitVector3d = new Vector3d(1, 1, 1)
+
 class HighscoreApi {
 
     static baseUrl = "./api/"
@@ -25412,15 +31862,27 @@ class HighscoreApi {
 
     static async getHighscores(game) {
         let data = await this.req("get_highscores", {game})
-        return JSON.parse(data)
+        try {
+            return JSON.parse(data)
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                throw new Error("Highscore-Api returned invalid data. Are you hosting the website locally?")
+            } else {
+                throw e
+            }
+        }
     }
 
     static async addHighscore(game, name, score) {
         await this.req("upload_highscore", {game, name, score})
     }
 
-    static async removeHighscore(password, uid) {
-        await this.req("remove_highscore", {password, uid})
+    static async removeHighscore(uid) {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied [E2]")
+        }
+
+        await this.req("remove_highscore", {password: this.savedPassword, uid})
     }
     
     static async getUsername() {
@@ -25486,7 +31948,8 @@ class HighscoreApi {
             terminal.printSuccess("You got rank " + rank)
         }
 
-        terminal.print("You can view the highscores using ")
+        terminal.printLine("[highscores] The highscore won't be public until approved (to prevent abuse).")
+        terminal.print("You can view the public highscores using ")
         terminal.printCommand("highscores " + this.tempGame)
 
         this.tempGame = null
@@ -25496,6 +31959,28 @@ class HighscoreApi {
         let highscores = await this.getHighscores(game)
         if (highscores.length == 0) return null
         return highscores[0]
+    }
+
+    static get savedPassword() {
+        return localStorage.getItem("highscore_password")
+    }
+
+    static async getUnconfirmedHighscores() {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied")
+        }
+
+        let data = await this.req("get_unconfirmed_highscores", {password: this.savedPassword})
+        return JSON.parse(data)
+    }
+
+    static async confirmHighscore(uid, value=1) {
+        if (!this.savedPassword) {
+            throw new Error("Permission denied")
+        }
+
+        await this.req("confirm_highscore",
+            {uid, password: this.savedPassword, value})
     }
 
     static async loginAdmin(silent=false) {
@@ -25518,7 +32003,7 @@ class HighscoreApi {
             localStorage.setItem("highscore_password", password)
         } else {
             localStorage.removeItem("highscore_password")
-            throw new Error("Incorrect password")
+            throw new Error("Permission denied [E1]")
         }
     }
 
@@ -25644,6 +32129,9 @@ function printSquareCanvas({widthChars=60}={}) {
 terminal.modules.game = {
     Vector2d,
     Vector3d,
+    distancePointLineSegment,
+    calcLineIntersection,
+    UnitVector2d, UnitVector3d, ZeroVector2d, ZeroVector3d,
     angleDifference,
     HighscoreApi,
     CanvasDrawer,
@@ -25655,6 +32143,660 @@ terminal.modules.game = {
     setTimeout: terminal.window.setTimeout,
     clearTimeout: terminal.window.clearTimeout,
     printSquareCanvas: printSquareCanvas
+}
+
+// ------------------- js/modules/geometry2d.js --------------------
+class UnknownGeometry2dComparisonError extends Error {
+
+    constructor(message = "", ...args) {
+        super(message, ...args)
+        this.message = message + " cannot be compared (yet?)"
+    }
+
+}
+
+class NotImplementedGeometry2dError extends Error {
+
+    constructor(message = "", ...args) {
+        super(message, ...args)
+
+        if (message.length > 0) {
+            this.message = message + " has not been implemented (yet?)"
+        } else {
+            this.message = "Not implemented (yet?)"
+        }
+    }
+
+}
+
+
+class Geometry2dObject {
+
+    constructor(type) {
+        this.type = type
+    }
+
+    intersect(geometry2dObject) {
+        throw NotImplementedGeometry2dError()
+    }
+
+    distance(geometry2dObject) {
+        throw NotImplementedGeometry2dError()
+    }
+
+    copy() {
+        throw NotImplementedGeometry2dError()
+    }
+
+    equals(geometry2dObject) {
+        if (geometry2dObject.type != this.type) {
+            return false
+        }
+        return this._equalsSameType(geometry2dObject)
+    }
+
+    _equalsSameType() {
+        throw NotImplementedGeometry2dError()
+    }
+
+}
+
+class Point extends Geometry2dObject {
+
+    constructor(x, y) {
+        super("Point")
+        this.x = x
+        this.y = y
+    }
+
+    static get zero() {
+        return new Point(0, 0)
+    }
+
+    static get unit01() {
+        return new Point(0, 1)
+    }
+
+    static get unit10() {
+        return new Point(1, 0)
+    }
+
+    static get unit11() {
+        return new Point(1, 1)
+    }
+
+    static fromFunc(f) {
+        return new Point(f(0), f(1))
+    }
+
+    applyFunc(f) {
+        return new Point(f(this.x), f(this.y))
+    }
+
+    iapplyFunc(f) {
+        this.x = f(this.x)
+        this.y = f(this.y)
+    }
+
+    copy() {
+        return new Point(this.x, this.y)
+    }
+
+    add(v) {
+        return new Point(this.x + v.x, this.y + v.y)
+    }
+
+    iadd(v) {
+        this.x += v.x
+        this.y += v.y
+    }
+
+    sub(v) {
+        return new Point(this.x - v.x, this.y - v.y)
+    }
+
+    isub(v) {
+        this.x -= v.x
+        this.y -= v.y
+    }
+
+    mul(v) {
+        return new Point(this.x * v.x, this.y * v.y)
+    }
+
+    imul(v) {
+        this.x *= v.x
+        this.y *= v.y
+    }
+
+    div(v) {
+        return new Point(this.x / v.x, this.y / v.y)
+    }
+
+    idiv(v) {
+        this.x /= v.x
+        this.y /= v.y
+    }
+
+    get length() {
+        return Math.sqrt(this.x * this.x + this.y * this.y)
+    }
+
+    get normalized() {
+        let m = this.length
+        return new Point(this.x / m, this.y / m)
+    }
+    
+    scale(x) {
+        return new Point(this.x * x, this.y * x)
+    }
+
+    lerp(v, t) {
+        let delta = v.sub(this)
+        return this.add(delta.scale(t))
+    }
+
+    ilerp(v, t) {
+        let delta = v.sub(this)
+        this.iadd(delta.scale(t))
+    }
+
+    dot(v) {
+        return this.x * v.x + this.y * v.y
+    }
+
+    iscale(x) {
+        this.x *= x
+        this.y *= x
+    }
+
+    cross(v) {
+        return this.x * v.y - this.y * v.x
+    }
+
+    round() {
+        return new Point(Math.round(this.x), Math.round(this.y))
+    }
+
+    static fromAngle(angle) {
+        return new Point(Math.cos(angle), Math.sin(angle))
+    }
+
+    static fromPolar(mag, angle) {
+        return new Point(mag * Math.cos(angle), mag * Math.sin(angle))
+    }
+
+    static fromArray(arr) {
+        return new Point(arr[0], arr[1])
+    }
+
+    set(x, y) {
+        if (x instanceof Point && y == undefined) {
+            this.x = x.x
+            this.y = x.y
+        } else {
+            this.x = x
+            this.y = y
+        }
+        
+    }
+
+    addX(x) {
+        return new Point(this.x + x, this.y)
+    }
+
+    addY(y) {
+        return new Point(this.x, this.y + y)
+    }
+
+    rotate(angle) {
+        let x = this.x * Math.cos(angle) - this.y * Math.sin(angle)
+        let y = this.x * Math.sin(angle) + this.y * Math.cos(angle)
+        return new Point(x, y)
+    }
+
+    irotate(angle) {
+        let x = this.x * Math.cos(angle) - this.y * Math.sin(angle)
+        let y = this.x * Math.sin(angle) + this.y * Math.cos(angle)
+        this.x = x
+        this.y = y
+    }
+
+    static randomAngle() {
+        let direction = Math.random() * Math.PI * 2
+        return Point.fromAngle(direction)
+    }
+
+    static random() {
+        return new Point(Math.random(), Math.random())
+    }
+
+    get angle() {
+        return Math.atan2(this.y, this.x)
+    }
+
+    angleDifference(v) {
+        return angleDifference(this.angle, v.angle)
+    }
+
+    angleTo(v) {
+        return Math.atan2(v.y - this.y, v.x - this.x)
+    }
+
+    equals(v) {
+        return this.x == v.x && this.y == v.y
+    }
+
+    map(f) {
+        return new Point(f(this.x), f(this.y))
+    }
+
+    product() {
+        return this.x * this.y
+    }
+
+    get array() {
+        return [this.x, this.y]
+    }
+
+    get min() {
+        return Math.min(...this.array)
+    }
+
+    get max() {
+        return Math.max(...this.array)
+    }
+
+    abs() {
+        return new Point(Math.abs(this.x), Math.abs(this.y))
+    }
+
+    toArray() {
+        return [this.x, this.y]
+    }
+
+    static fromEvent(event, element) {
+        let x = 0, y = 0
+
+        if (event.touches && event.touches[0]) {
+            x = event.touches[0].clientX
+            y = event.touches[0].clientY
+        } else if (event.originalEvent && event.originalEvent.changedTouches[0]) {
+            x = event.originalEvent.changedTouches[0].clientX
+            y = event.originalEvent.changedTouches[0].clientY
+        } else if (event.clientX !== undefined && event.clientY !== undefined) {
+            x = event.clientX
+            y = event.clientY
+        } else if (event.changedTouches && event.changedTouches.length > 0) {
+            x = event.changedTouches[0].clientX
+            y = event.changedTouches[0].clientY
+        }
+
+        const rect = element.getBoundingClientRect()
+        return new Point(x - rect.left, y - rect.top)
+    }
+
+    distance(geometry2dObject) {
+        if (geometry2dObject.type == "Line") {
+            return geometry2dObject.distance(this)
+        } else if (geometry2dObject.type == "LineSegment") {
+            return geometry2dObject.distance(this)
+        } else if (geometry2dObject.type == "Point") {
+            return this.sub(geometry2dObject).length
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.distance(this)
+        } else {
+            throw UnknownGeometry2dComparisonError()
+        }
+    }
+
+    intersect(geometry2dObject) {
+        if (geometry2dObject.type == "Line") {
+            return geometry2dObject.distance(this) == 0 ? this.copy() : null
+        } else if (geometry2dObject.type == "LineSegment") {
+            return geometry2dObject.distance(this) == 0 ? this.copy() : null
+        } else if (geometry2dObject.type == "Point") {
+            return this.sub(v).length == 0 ? this.copy() : null
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.distance(this) == 0 ? this.copy() : null
+        } else {
+            throw UnknownGeometry2dComparisonError()
+        }
+    }
+
+    _equalsSameType(point) {
+        return this.x == point.x && this.y == point.y
+    }
+
+}
+
+class Line extends Geometry2dObject {
+
+    constructor(point, angle) {
+        super("Line")
+        this.point = point
+        this.angle = angle
+    }
+
+    get directionVector() {
+        return Point.fromAngle(this.angle)
+    }
+
+    copy() {
+        return new Line(this.point.copy(), this.angle)
+    }
+
+    intersect(geometry2dObject) {
+        if (geometry2dObject.type == "Line") {
+            let firstLinePoint = this.point
+            let firstLineDirection = this.directionVector
+            let secondLinePoint = geometry2dObject.point
+            let secondLineDirection = new Point(
+                Math.cos(geometry2dObject.angle),
+                Math.sin(geometry2dObject.angle)
+            )
+
+            let crossOfDirections = firstLineDirection.cross(secondLineDirection)
+            if (crossOfDirections === 0) {
+                return null
+            }
+
+            let vectorBetweenLinePoints = secondLinePoint.sub(firstLinePoint)
+            let intersectionParameterOnFirstLine = vectorBetweenLinePoints.cross(secondLineDirection) / crossOfDirections
+
+            return firstLinePoint.add(
+                firstLineDirection.scale(intersectionParameterOnFirstLine)
+            )
+        } else if (geometry2dObject.type == "LineSegment") {
+            let infiniteLinePoint = this.point
+            let infiniteLineDirection = this.directionVector
+            let segmentStart = geometry2dObject.startPoint
+            let segmentEnd = geometry2dObject.endPoint
+            let segmentVector = segmentEnd.sub(segmentStart)
+
+            let crossOfDirections = infiniteLineDirection.cross(segmentVector)
+            if (crossOfDirections === 0) {
+                return null
+            }
+
+            let vectorFromLineToSegmentStart = 
+                segmentStart.sub(infiniteLinePoint)
+
+            let segmentParameter = 
+                vectorFromLineToSegmentStart.cross(infiniteLineDirection)
+                / crossOfDirections
+
+            if (segmentParameter < 0 || segmentParameter > 1) {
+                return null
+            }
+
+            let lineParameter = 
+                vectorFromLineToSegmentStart.cross(segmentVector)
+                / crossOfDirections
+
+            return infiniteLinePoint.add(
+                infiniteLineDirection.scale(lineParameter)
+            )
+        } else if (geometry2dObject.type == "Point") {
+            return geometry2dObject.intersect(this)
+
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.intersect(this)
+
+        } else {
+            throw UnknownGeometry2dComparisonError()
+        }
+    }
+
+    distance(geometry2dObject) {
+        if (geometry2dObject.type === "Point") {
+            // distance from point to infinite line
+            let pointToProject = geometry2dObject
+            let basePointOnLine = this.point
+            let directionUnitVector = this.directionVector  // already unit length
+            let vectorFromLineToPoint = pointToProject.sub(basePointOnLine)
+            let perpendicularMagnitude = 
+                Math.abs(vectorFromLineToPoint.cross(directionUnitVector))
+            return perpendicularMagnitude
+
+        } else if (geometry2dObject.type === "Line") {
+            // distance between two infinite lines
+            let otherLinePoint = geometry2dObject.point
+            let otherLineDirection = new Point(
+                Math.cos(geometry2dObject.angle),
+                Math.sin(geometry2dObject.angle)
+            )
+            let crossOfDirections = 
+                this.directionVector.cross(otherLineDirection)
+            if (crossOfDirections === 0) {
+                // parallel lines → distance is point-to-line
+                return this.distanceTo(otherLinePoint)
+            }
+            // non-parallel lines intersect → distance is zero
+            return 0
+
+        } else if (geometry2dObject.type === "LineSegment") {
+            // distance from infinite line to finite segment:
+            // minimal distance to either endpoint
+            let startPointOfSegment = geometry2dObject.startPoint
+            let endPointOfSegment = geometry2dObject.endPoint
+            let distanceToStart = this.distanceTo(startPointOfSegment)
+            let distanceToEnd = this.distanceTo(endPointOfSegment)
+            return Math.min(distanceToStart, distanceToEnd)
+
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.distance(this)
+
+        } else {
+            throw new UnknownGeometry2dComparisonError()
+        }
+    }
+
+    paramaterise(t) {
+        return this.point.add(this.directionVector.scale(t))
+    }
+
+    _equalsSameType(line) {
+        return this.angle == line.angle && this.point.equals(line.point)
+    }
+
+}
+
+class LineSegment extends Geometry2dObject {
+
+    constructor(startPoint, endPoint) {
+        super("LineSegment")
+        this.startPoint = startPoint
+        this.endPoint = endPoint
+    }
+
+    toArray() {
+        return [this.startPoint, this.endPoint]
+    }
+
+    intersect(geometry2dObject) {
+        if (geometry2dObject.type == "LineSegment") {
+            // algorithm found on https://paulbourke.net/geometry/pointlineplane/
+            const [s1, e1] = this.toArray()
+            const [s2, e2] = geometry2dObject.toArray()
+
+            const denominator = (e2.y - s2.y)*(e1.x - s1.x) - (e2.x - s2.x)*(e1.y - s1.y)
+            if (denominator == 0) {
+                return null
+            }
+
+            const ua = ((e2.x - s2.x) * (s1.y - s2.y) - (e2.y - s2.y) * (s1.x - s2.x)) / denominator
+            const ub = ((e1.x - s1.x) * (s1.y - s2.y) - (e1.y - s1.y) * (s1.x - s2.x)) / denominator
+
+            if (ua < 0 || ua > 1 || ub < 0 || ub > 1) return null
+            return new Point(
+                s1.x + ua * (e1.x - s1.x),
+                s1.y + ua * (e1.y - s1.y),
+            )
+
+        } else if (geometry2dObject.type == "Line") {
+            return geometry2dObject.intersect(this)
+
+        } else if (geometry2dObject.type == "Point") {
+            return geometry2dObject.intersect(this)
+
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.intersect(this)
+
+        } else {
+            throw UnknownGeometry2dComparisonError()
+        }
+    }
+
+    distance(geometry2dObject) {
+        if (geometry2dObject.type === "Point") {
+            // distance from point to this segment
+            let point = geometry2dObject
+            let segmentVector = this.endPoint.sub(this.startPoint)
+            let lengthSquared = segmentVector.dot(segmentVector)
+            if (lengthSquared === 0) {
+                // degenerate segment → just a point
+                return point.distance(this.startPoint)
+            }
+            // project (point – start) onto segmentVector
+            let t = point.sub(this.startPoint).dot(segmentVector) / lengthSquared
+            if (t < 0) {
+                return point.distance(this.startPoint)
+            } else if (t > 1) {
+                return point.distance(this.endPoint)
+            }
+            let projection = this.startPoint.add(segmentVector.scale(t))
+            return point.distance(projection)
+
+        } else if (geometry2dObject.type === "Line") {
+            // distance from infinite line to this segment
+            // delegate to line.distanceTo(segment)
+            return geometry2dObject.distanceTo(this)
+
+        } else if (geometry2dObject.type === "LineSegment") {
+            // minimal distance between two finite segments
+            // if they intersect, distance is zero
+            if (this.intersect(geometry2dObject) !== null) {
+                return 0
+            }
+            // otherwise, consider endpoint‐to‐segment distances
+            let otherSegment = geometry2dObject
+            let distances = [
+                this.distanceTo(otherSegment.startPoint),
+                this.distanceTo(otherSegment.endPoint),
+                otherSegment.distanceTo(this.startPoint),
+                otherSegment.distanceTo(this.endPoint)
+            ]
+            return Math.min(...distances)
+
+        } else if (geometry2dObject.type === "GeometryObjectCollection") {
+            return geometry2dObject.distance(this)
+
+        } else {
+            throw new UnknownGeometry2dComparisonError()
+        }
+    }
+    
+    paramaterise(t) {
+        if (t < 0 || t > 1) {
+            throw Error("Invalid t value")
+        }
+        return this.startPoint.lerp(this.endPoint, t)
+    }
+
+    _equalsSameType(lineSegment) {
+        return this.startPoint.equals(lineSegment.startPoint) && this.endPoint.equals(lineSegment.endPoint)
+    }
+
+}
+
+class GeometryObjectCollection extends Geometry2dObject {
+
+    constructor(objects) {
+        super("GeometryObjectCollection")
+        this.objects = objects ?? []
+    }
+
+    get size() {
+        return this.objects.length
+    }
+
+    addObject(object) {
+        this.objects.push(object)
+    }
+
+    addObjects(objects) {
+        this.objects.push(...objects)
+    }
+
+    concat(geometryObjectCollection) {
+        const collection = this.copy()
+        for (const obj of geometryObjectCollection.objects) {
+            collection.addObject(obj.copy())
+        }
+        return collection
+    }
+
+    selfIntersect() {
+        const intersections = []
+        for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
+                if (i <= j) continue
+                    
+                const intersection = this.objects[i].intersect(this.objects[j])
+                if (intersection !== null) {
+                    intersections.push(intersection)
+                }
+            }
+        }
+        return new GeometryObjectCollection(intersections)
+    }
+
+    intersect(geometry2dObject) {
+        const intersections = []
+        for (const object of this.objects) {
+            const intersection = object.intersect(geometry2dObject)
+            if (intersection !== null) {
+                intersections.push(intersection)
+            }
+        }
+        return new GeometryObjectCollection(intersections)
+    }
+
+    distance(geometry2dObject) {
+        let minDistance = Infinity
+        for (const object of this.objects) {
+            const distance = object.distance(geometry2dObject)
+            if (distance < minDistance) {
+                minDistance = distance
+            }
+        }
+        return minDistance
+    }
+
+    copy() {
+        return new GeometryObjectCollection(
+            this.objects.map(o => o.copy())
+        )
+    }
+
+    _equalsSameType(objectCollection) {
+        return (
+            this.length == objectCollection.length
+            && objectCollection.objects.every((o, i) => o.equals(this.objects[i]))
+        )
+    }
+
+}
+
+terminal.modules.geometry2d = {
+    Point,
+    Line,
+    LineSegment,
+    Geometry2dObject,
+    GeometryObjectCollection,
+    UnknownGeometry2dComparisonError,
+    NotImplementedGeometry2dError
 }
 
 // ------------------- js/modules/mathenv.js --------------------
@@ -25722,6 +32864,108 @@ terminal.modules.mathenv.setValue("sum", (startX, endX, func) => {
     return sum
 })
 
+terminal.modules.mathenv.setValue("sha256", function sha256(ascii) {
+    // from https://geraintluff.github.io/sha256/
+    
+	function rightRotate(value, amount) {
+		return (value>>>amount) | (value<<(32 - amount));
+	};
+	
+	var mathPow = Math.pow;
+	var maxWord = mathPow(2, 32);
+	var lengthProperty = 'length'
+	var i, j; // Used as a counter across the whole file
+	var result = ''
+
+	var words = [];
+	var asciiBitLength = ascii[lengthProperty]*8;
+	
+	//* caching results is optional - remove/add slash from front of this line to toggle
+	// Initial hash value: first 32 bits of the fractional parts of the square roots of the first 8 primes
+	// (we actually calculate the first 64, but extra values are just ignored)
+	var hash = sha256.h = sha256.h || [];
+	// Round constants: first 32 bits of the fractional parts of the cube roots of the first 64 primes
+	var k = sha256.k = sha256.k || [];
+	var primeCounter = k[lengthProperty];
+	/*/
+	var hash = [], k = [];
+	var primeCounter = 0;
+	//*/
+
+	var isComposite = {};
+	for (var candidate = 2; primeCounter < 64; candidate++) {
+		if (!isComposite[candidate]) {
+			for (i = 0; i < 313; i += candidate) {
+				isComposite[i] = candidate;
+			}
+			hash[primeCounter] = (mathPow(candidate, .5)*maxWord)|0;
+			k[primeCounter++] = (mathPow(candidate, 1/3)*maxWord)|0;
+		}
+	}
+	
+	ascii += '\x80' // Append Ƈ' bit (plus zero padding)
+	while (ascii[lengthProperty]%64 - 56) ascii += '\x00' // More zero padding
+	for (i = 0; i < ascii[lengthProperty]; i++) {
+		j = ascii.charCodeAt(i);
+		if (j>>8) return; // ASCII check: only accept characters in range 0-255
+		words[i>>2] |= j << ((3 - i)%4)*8;
+	}
+	words[words[lengthProperty]] = ((asciiBitLength/maxWord)|0);
+	words[words[lengthProperty]] = (asciiBitLength)
+	
+	// process each chunk
+	for (j = 0; j < words[lengthProperty];) {
+		var w = words.slice(j, j += 16); // The message is expanded into 64 words as part of the iteration
+		var oldHash = hash;
+		// This is now the undefinedworking hash", often labelled as variables a...g
+		// (we have to truncate as well, otherwise extra entries at the end accumulate
+		hash = hash.slice(0, 8);
+		
+		for (i = 0; i < 64; i++) {
+			var i2 = i + j;
+			// Expand the message into 64 words
+			// Used below if 
+			var w15 = w[i - 15], w2 = w[i - 2];
+
+			// Iterate
+			var a = hash[0], e = hash[4];
+			var temp1 = hash[7]
+				+ (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) // S1
+				+ ((e&hash[5])^((~e)&hash[6])) // ch
+				+ k[i]
+				// Expand the message schedule if needed
+				+ (w[i] = (i < 16) ? w[i] : (
+						w[i - 16]
+						+ (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15>>>3)) // s0
+						+ w[i - 7]
+						+ (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2>>>10)) // s1
+					)|0
+				);
+			// This is only used once, so *could* be moved below, but it only saves 4 bytes and makes things unreadble
+			var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) // S0
+				+ ((a&hash[1])^(a&hash[2])^(hash[1]&hash[2])); // maj
+			
+			hash = [(temp1 + temp2)|0].concat(hash); // We don't bother trimming off the extra ones, they're harmless as long as we're truncating when we do the slice()
+			hash[4] = (hash[4] + temp1)|0;
+		}
+		
+		for (i = 0; i < 8; i++) {
+			hash[i] = (hash[i] + oldHash[i])|0;
+		}
+	}
+
+    const hashArray = []
+	
+	for (i = 0; i < 8; i++) {
+		for (j = 3; j + 1; j--) {
+			var b = (hash[i]>>(j*8))&255
+            hashArray.push(b)
+		}
+	}
+
+	return hashArray;
+})
+
 terminal.modules.mathenv.setValue("terminal", terminal)
 
 // ------------------- js/modules/matrix.js --------------------
@@ -25774,6 +33018,8 @@ class MatrixCell {
 
         let bestFraction = null
         let bestError = Infinity
+        let bestNumerator = null
+        let bestDenominator = null
         for (let denominator = 1; denominator < 10000; denominator++) {
             let numerator = Math.round(this.value * denominator)
             const newValue = numerator / denominator
@@ -25787,7 +33033,21 @@ class MatrixCell {
             if (error < bestError) {
                 bestError = error
                 bestFraction = `${numerator}/${denominator}`
+                bestNumerator = numerator
+                bestDenominator = denominator
             }
+        }
+
+        if (bestNumerator == 0) {
+            return "0"
+        }
+
+        if (bestDenominator == 1) {
+            return bestNumerator.toString()
+        }
+
+        if (bestError > 1e-5) {
+            return this.toString()
         }
 
         return bestFraction
@@ -25799,26 +33059,26 @@ class MatrixCell {
             return new MatrixCell(f(this.value, other.value))
         } else {
             let str = `(${templateString})`
-                .replace("x", this.value)
-                .replace("y", other.value)
+                .replace("$1", this.value)
+                .replace("$2", other.value)
             return new MatrixCell(str)
         } 
     }
 
     mul(other) {
-        return this._arithmeticFunc(other, (x, y) => x * y, "x*y")
+        return this._arithmeticFunc(other, (x, y) => x * y, "$1*$2")
     }
 
     add(other) {
-        return this._arithmeticFunc(other, (x, y) => x + y, "x+y")
+        return this._arithmeticFunc(other, (x, y) => x + y, "$1+$2")
     }
 
     sub(other) {
-        return this._arithmeticFunc(other, (x, y) => x - y, "x-y")
+        return this._arithmeticFunc(other, (x, y) => x - y, "$1-$2")
     }
 
     div(other) {
-        return this._arithmeticFunc(other, (x, y) => x / y, "x/y")
+        return this._arithmeticFunc(other, (x, y) => x / y, "$1/$2")
     }
 
     copy() {
@@ -25843,6 +33103,9 @@ class MatrixCell {
                     .replaceAll(/-1\*([a-zA-Z])/g, "-$1")
                     .replaceAll(/\(([a-zA-Z])\*1\)/g, "$1")
                     .replaceAll(/\(1\*([a-zA-Z])\)/g, "$1")
+                    .replaceAll(/\(([a-zA-Z])\*0\)/g, "0")
+                    .replaceAll(/\(0\*([a-zA-Z])\)/g, "0")
+                    .replaceAll(/\(([a-zA-Z0-9])\)/g, "$1")
                     .replaceAll(/\(\(([a-zA-Z])\*([a-zA-Z])\)\*([a-zA-Z])\)/g, "($1*$2*$3)")
                     .replaceAll(/\(([a-zA-Z])\*\(([a-zA-Z])\*([a-zA-Z])\)\)/g, "($1*$2*$3)")
                     .replaceAll(/\(\(([a-zA-Z])\+([a-zA-Z])\)\+([a-zA-Z])\)/g, "($1*$2*$3)")
@@ -25921,6 +33184,29 @@ class Matrix {
         return new Matrix(dimensions, arr)
     }
 
+    static vector(arr, transpose=false) {
+        const v = Matrix.fromFunc(arr.length, 1, i => arr[i])
+        if (transpose) {
+            return v.transpose()
+        } else {
+            return v
+        }
+    }
+
+    static fromFunc(n, m, f) {
+        return Matrix.fromArray(
+            Array.from({length: n}).map((_, i) => Array.from({length: m}).map((_, j) => f(i, j)))
+        )
+    }
+
+    static zero(n) {
+        return Matrix.fromFunc(n, n, () => 0)
+    }
+
+    static unit(n) {
+        return Matrix.fromFunc(n, n, (i, j) => i == j ? 1 : 0)
+    }
+
     get nRows() {
         return this.dimensions.rows
     }
@@ -25981,11 +33267,11 @@ class Matrix {
         )
     }
 
-    toStringArray() {
+    toStringArray(simplify=true) {
         return this._data.map(
             row => row.map(
                 element => {
-                    if (typeof element.value === "number") {
+                    if (typeof element.value === "number" && simplify) {
                         return element.toSimplifiedString()
                     }
                     return element.toString()
@@ -26002,8 +33288,8 @@ class Matrix {
         return this._data[i]
     }
 
-    toString() {
-        let stringArray = this.toStringArray()
+    toString(simplify=true) {
+        let stringArray = this.toStringArray(simplify)
         const getColumnWidth = ci => Math.max(...stringArray.map(row => row[ci].length))
         const columnWidths = Array.from({length: this.dimensions.columns}, (_, ci) => getColumnWidth(ci))
 
@@ -26041,6 +33327,27 @@ class Matrix {
             }
         }
         return result
+    }
+
+    norm(squared=false) {
+        if (this.dimensions.rows != 1 && this.dimensions.columns != 1) {
+            throw new Error("Can't take norm of non-vector")
+        }
+
+        let squaredSum = null
+        if (this.dimensions.rows == 1) {
+            squaredSum = this.getRow(0).map(v => v.mul(v)).reduce((p, c) => p.add(c), new MatrixCell(0))
+        } else if (this.dimensions.columns == 1) {
+            squaredSum = this.getColumn(0).map(v => v.mul(v)).reduce((p, c) => p.add(c), new MatrixCell(0))
+        } else {
+            throw new Error("Can't take norm of non-vector matrix")
+        }
+
+        if (squared) {
+            return squaredSum
+        } else {
+            return Math.sqrt(squaredSum.value)
+        }
     }
 
     transpose() {
@@ -26119,6 +33426,10 @@ class Matrix {
             }
         }
         return result
+    }
+
+    copy() {
+        return this.map(c => c.copy())
     }
 
     static RandomIntegers(n, m, maxInt=10) {
@@ -26281,6 +33592,7 @@ async function inputMatrix(dimensions) {
     const goodColor = "rgba(0, 255, 0, 0.5)"
 
     let inputs = []
+    let elements = []
     let finishButton = null
 
     const updateInputWidth = () => {
@@ -26289,13 +33601,19 @@ async function inputMatrix(dimensions) {
 
         for (let input of inputs) {
             input.style.width = `${inputWidth * terminal.charWidth}px`
-        } 
-        finishButton.style.width = `${(dimensions.columns * (inputWidth + 1) + 1) * terminal.charWidth}px`
+            input.style.marginTop = "5px"
+            input.style.marginBottom = "5px"
+        }
+
+        const finishButtonWidth = Math.max(
+            (dimensions.columns * (inputWidth + 1) + 1) * terminal.charWidth, 9 * terminal.charWidth)
+
+        finishButton.style.width = `${finishButtonWidth}px`
     }
 
     for (let ri = 0; ri < dimensions.rows; ri++) {
         for (let ci = 0; ci < dimensions.columns; ci++) {
-            terminal.print(ci == 0 ? "[" : " ")
+            elements.push(terminal.print(ci == 0 ? "[" : " ", undefined, {forceElement: true}))
             let input = terminal.createStyledInput()
 
             const setBad = () => {
@@ -26307,6 +33625,12 @@ async function inputMatrix(dimensions) {
                 input.style.backgroundColor = goodColor
                 input.dataset.valid = true
             }
+
+            input.addEventListener("keydown", event => {
+                if (event.ctrlKey && event.key == "c") {
+                    terminal.interrupt()
+                }
+            })
 
             input.style.textAlign = "center"
             setBad()
@@ -26334,33 +33658,47 @@ async function inputMatrix(dimensions) {
 
             inputs.push(input)
         }
-        terminal.printLine("]")
+        elements.push(terminal.printLine("]", undefined, {forceElement: true}))
     }
 
     inputs[0].focus()
 
-    return new Promise(resolve => {
-        finishButton = terminal.createTerminalButton({
-            text: "Submit",
-            charWidth: dimensions.columns * (inputWidth + 1) + 1,
-            onPress: () => {
-                if (inputs.find(inp => inp.dataset.valid == "false")) {
-                    return
-                }
+    let finished = false
 
-                for (let input of inputs) {
-                    input.style.backgroundColor = "transparent"
-                    input.oninput = () => {}
-                }
-
-                finishButton.remove()
-
-                resolve(matrix)
+    finishButton = terminal.createTerminalButton({
+        text: "Submit",
+        charWidth: dimensions.columns * (inputWidth + 1) + 1,
+        onPress: () => {
+            if (inputs.find(inp => inp.dataset.valid == "false")) {
+                return
             }
-        })
-    
-        terminal.parentNode.appendChild(finishButton)
+
+            for (let input of inputs) {
+                input.style.backgroundColor = "transparent"
+                input.oninput = () => {}
+            }
+
+            for (let element of elements) {
+                element.remove()
+            }
+
+            terminal.printLine(matrix.toString())
+
+            finished = true
+        }
     })
+
+    terminal.parentNode.appendChild(finishButton)
+    updateInputWidth()
+
+    elements.push(finishButton)
+    elements.push(...inputs)
+
+    while (!finished) {
+        await terminal.sleep(500)
+    }
+
+    return matrix
 }
 
 terminal.modules.matrix = {
@@ -26572,6 +33910,257 @@ function indexOfMax(arr) {
 
 terminal.modules.neural = {
     Net, Node, sigmoid, indexOfMax
+}
+
+// ------------------- js/modules/np.js --------------------
+const NpDataType = Object.freeze({
+    Int8: "Int8",
+    Uint8: "Uint8",
+    Uint8Clamped: "Uint8Clamped",
+    Int16: "Int16",
+    Uint16: "Uint16",
+    Int32: "Int32",
+    Uint32: "Uint32",
+    Float16: "Float16",
+    Float32: "Float32",
+    Float64: "Float64",
+    BigInt64: "BigInt64",
+    BigUint64: "BigUint64"
+})
+
+const int8 = "Int8"
+const uint8 = "Uint8"
+const uint8Clamped = "Uint8Clamped"
+const int16 = "Int16"
+const uint16 = "Uint16"
+const int32 = "Int32"
+const uint32 = "Uint32"
+const float16 = "Float16"
+const float32 = "Float32"
+const float64 = "Float64"
+const bigInt64 = "BigInt64"
+const bigUint64 = "BigUint64"
+
+const NpAllDataTypes = new Set(Object.keys(NpDataType))
+
+function* iterateShape(shape) {
+    const totalSize = shape.reduce((p, c) => p * c, 1)
+    const shapeIndeces = shape.map(() => 0)
+    for (let i = 0; i < totalSize; i++) {
+        let t = i
+        for (let j = 0; j < shape.length; j++) {
+            const shapeIndex = shape.length - j - 1
+            shapeIndeces[shapeIndex] = t % shape[shapeIndex]
+            t = (t - shapeIndeces[shapeIndex]) / shape[shapeIndex]
+        }
+        yield shapeIndeces
+    }
+}
+
+class NpArray {
+
+    constructor(arrayData, dtype=null) {
+        // make sure initialization is correct
+        dtype ??= float64
+        if (!NpAllDataTypes.has(dtype)) {
+            throw new TypeError(`data type '${dtype}' not understood`)
+        }
+
+        if (!Array.isArray(arrayData)) {
+            throw new TypeError("expected arrayData to be an array")
+        }
+
+        // find shape of data
+        this.shape = []
+        let tempData = arrayData
+        while (Array.isArray(tempData)) {
+            this.shape.push(tempData.length)
+            tempData = tempData[0]
+        }
+
+        // initialize 1d array representing NpArray
+        const totalSize = this.shape.reduce((p, c) => p * c, 1)
+        const relevantClass = terminal.window[dtype + "Array"]
+        this._data = new relevantClass(totalSize)
+
+        // fill data
+        let i = 0
+        for (const shapeIndeces of iterateShape(this.shape)) {
+            // use shapeIndeces to locate value
+            let value = arrayData
+            for (const shapeIndex of shapeIndeces) {
+                if (!Array.isArray(value)) {
+                    throw new Error("arrayData has invalid shape: must be (hyper-)rectangular")
+                }
+
+                value = value[shapeIndex]
+            }
+
+            // check if it even exists
+            if (value === undefined) {
+                throw new Error("arrayData has invalid shape: must be (hyper-)rectangular")
+            }
+
+            // fill value in array
+            this._data[i] = value
+            i++
+        }
+    }
+
+    *[Symbol.iterator]() {
+        for (let i = 0; i < this.size; i++) {
+            yield this._data[i]
+        }
+    }
+
+    get size() {
+        return this._data.length
+    }
+
+    at(...indeces) {
+        if (indeces.length > this.shape.length) {
+            throw new Error("got too many indeces")
+        } else if (indeces.length == this.shape.length) {
+            let totalIndexSum = 0
+            let cumulativeFactor = 1
+            for (let i = 0; i < this.shape.length; i++) {
+                const shapeSize = this.shape[this.shape.length - i - 1]
+                const givenIndex = indeces[this.shape.length - i - 1]
+                if (!Number.isInteger(givenIndex)) {
+                    throw new Error("expected integers as indeces")
+                }
+                
+                const realIndex = mod(givenIndex, shapeSize)
+                totalIndexSum += realIndex * cumulativeFactor
+                console.log(realIndex, shapeSize)
+                cumulativeFactor *= shapeSize
+            }
+            return this._data[totalIndexSum]
+        } else {
+            throw new Error("Not Implemented")
+        }
+    }
+
+    toString() {
+        let outstring = "array("
+        for (let i = 0; i < this.size; i++) {
+            for (const shapeSize of this.shape) {
+                if (i % shapeSize == 0) {
+                    outstring += "."
+                }
+            }
+            outstring += `${this._data[i]}`
+        }
+        return outstring
+    }
+
+    static isNpArray(data) {
+        if (data instanceof NpArray) {
+            return true
+        } else {
+            return false
+        }
+    }
+
+    get _val() {
+        if (this.size > 1) {
+            throw new Error("Can't get value of multivalued array")
+        }
+        return this._data[0]
+    }
+
+}
+
+function array(data, dtype=null) {
+    return new NpArray(data, dtype)
+}
+
+function asarray(data, dtype=null) {
+    if (NpArray.isNpArray(data)) {
+        return data
+    } else if (Array.isArray(data)) {
+        return new NpArray(data, dtype)
+    } else if (typeof data === "number") {
+        return new NpArray([data], dtype)
+    } else {
+        throw new Error("Unable to convert data to array")
+    }
+}
+
+function mod(n, modulus) {
+    return ((n % modulus) + modulus) % modulus
+}
+
+terminal.modules.np = {
+    NpArray, NpDataType, NpAllDataTypes, array,
+    asarray, mod, iterateShape,
+    int8,
+    uint8,
+    uint8Clamped,
+    int16,
+    uint16,
+    int32,
+    uint32,
+    float16,
+    float32,
+    float64,
+    bigInt64,
+    bigUint64,
+}
+
+// ------------------- js/modules/progressbar.js --------------------
+class ProgressBar {
+
+    constructor({
+        width = 40
+    }={}) {
+        this.width = width
+        this.outputElement = terminal.print("", undefined, {forceElement: true})
+        this.removed = false
+    }
+
+    update(progress) {
+        if (this.removed) {
+            return
+        }
+
+        const borderHorizontal = "+" + "-".repeat(this.width - 2) + "+"
+        const text = borderHorizontal + "\n|"
+        const middleChars = Array.from({length: this.width - 2}).map((_, i) => {
+            const p = i / (this.width - 3)
+            return (p <= progress) ? "#" : " "
+        })
+
+        const progressText = Math.floor(100 * progress) + "%"
+        let cursorIndex = Math.round(middleChars.length / 2 - Math.floor(progressText.length / 2))
+        middleChars[cursorIndex - 1] = " "
+        middleChars[cursorIndex + progressText.length] = " "
+        for (let i = 0; i < progressText.length; i++) {
+            middleChars[cursorIndex + i] = progressText[i]
+        }
+
+        this.outputElement.textContent = text + middleChars.join("") + "|\n" + borderHorizontal + "\n"
+    }
+
+    finish() {
+        this.update(1)
+    }
+
+    remove() {
+        this.outputElement.remove()
+        this.removed = true
+    }
+
+}
+
+function printProgressBar(opts) {
+    const bar = new ProgressBar(opts)
+    bar.update(0)
+    return bar
+}
+
+terminal.modules.progressbar = {
+    printProgressBar, ProgressBar
 }
 
 // ------------------- js/modules/pyscript.js --------------------
@@ -26896,6 +34485,10 @@ class Dataset {
 
     get min() {
         return Math.min(...this.numbers)
+    }
+
+    addNumber(n) {
+        this.numbers.push(n)
     }
 
     subset(start, end) {
@@ -27317,27 +34910,49 @@ async function getMP3FromUpload() {
     })
 }
 
-async function getImageFromUpload() {
+async function getImageFromUpload({
+    multiple=false
+}={}) {
     return new Promise(async (resolve, reject) => {
         let input = terminal.document.createElement("input")
         input.setAttribute("type", "file")
         input.setAttribute("accept", "image/*")
+
+        if (multiple) {
+            input.setAttribute("multiple", "true")
+        }
+
         input.click()
+
+        let images = []
+        let numExpectedImages = []
 
         input.onchange = function(event) {
             if (!input.value.length) {
                 reject(new Error("No image selected"))
                 return
             }
-            let fileReader = new FileReader()
-            fileReader.onload = function(event) {
-                let image = terminal.document.createElement("img")
-                image.onload = function() {
-                    resolve(image)
+
+            numExpectedImages = input.files.length
+            for (let file of input.files) {
+                let fileReader = new FileReader()
+                fileReader.onload = function(event) {
+                    let image = terminal.document.createElement("img")
+                    image.name = file.name
+                    image.onload = function() {
+                        if (multiple) {
+                            images.push(image)
+                            if (images.length >= numExpectedImages) {
+                                resolve(images)
+                            }
+                        } else {
+                            resolve(image)
+                        }
+                    }
+                    image.src = event.target.result
                 }
-                image.src = event.target.result
+                fileReader.readAsDataURL(file)
             }
-            fileReader.readAsDataURL(input.files[0])
         }
 
         terminal.document.body.onfocus = () => {
@@ -27405,6 +35020,8 @@ terminal.modules.window = {
             windowContainer.style.margin = "0"
             windowContainer.style.position = "fixed"
             windowContainer.style.transform = "translate(0, 0)"
+
+            windowContainer.style.setProperty("--border-radius", "0px")
 		}
 
         if (iframeUrl) {

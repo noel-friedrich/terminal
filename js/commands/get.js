@@ -6,8 +6,10 @@ terminal.addCommand("get", async function(args) {
         return
     }
     let value = await CliApi.get(args.key)
-    terminal.print(">>> ", Color.COLOR_2)
     terminal.printLine(value)
+
+    terminal.addLineBreak()
+    await terminal.copy(value, {printMessage: true})
 }, {
     description: "get a value from the server",
     args: {
