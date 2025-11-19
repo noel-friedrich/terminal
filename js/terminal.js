@@ -2583,8 +2583,9 @@ class Terminal {
         input.autocomplete = "off"
         input.autocorrect = "off"
         input.autocapitalize = "off"
-        input.spellcheck = "false"
+        input.spellcheck = false
         input.name = "terminal-input"
+        input.style.fontSize = "var(--font-size)"
         return input
     }
 
@@ -3122,7 +3123,7 @@ class Terminal {
 
     printLink(msg, url, color, endLine=true) {
         let element = this.print(msg, color, {forceElement: true, element: "a"})
-        element.href = url
+        element.href = url ?? msg
         if (endLine) this.printLine()
     }
 
