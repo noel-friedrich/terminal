@@ -243,5 +243,6 @@ terminal.addCommand("hangman", async function(args) {
     }
 }, {
     description: "play a game of hangman",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

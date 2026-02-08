@@ -38,19 +38,19 @@ terminal.addCommand("isprime", async function(args) {
         } else {
             terminal.printLine(`${args.n} is not prime`)
         }
-
-        let n = args.n
-        let distanceCount = 1
-        if (args["find-next"]) {
-            await sleep(10)
-            while (!isPrime(++n).result) {distanceCount++}
-            terminal.printLine(`the next prime is ${n} (diff=${distanceCount})`)
-        }
+    }
+    
+    let n = args.n
+    let distanceCount = 1
+    if (args["find-next"]) {
+        while (!isPrime(++n).result) {distanceCount++}
+        terminal.printLine(`the next prime is ${n} (diff=${distanceCount})`)
     }
 }, {
     description: "Check if a number is prime",
     args: {
         "n:i": "The number to check",
         "?f=find-next:b": "if n is not prime, find the next one"
-    }
+    },
+    category: "maths"
 })

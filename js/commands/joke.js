@@ -6,5 +6,5 @@ terminal.addCommand("joke", async function(args) {
     terminal.printLine(joke.punchline)
 }, {
     description: "tell a joke",
+    category: "fun"
 })
-

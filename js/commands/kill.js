@@ -13,6 +13,7 @@ terminal.addCommand("kill", async function(args) {
     description: "kill a process",
     args: {
         "process": "the process to kill"
-    }
+    },
+    category: "terminal-manipulation"
 })
 

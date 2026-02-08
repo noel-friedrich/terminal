@@ -16,5 +16,6 @@ terminal.addCommand("rm", async function(args) {
     description: "remove a file",
     args: {
         "file:f": "file to remove"
-    }
+    },
+    category: "terminal-manipulation"
 })

@@ -5,5 +5,8 @@ terminal.addCommand("download", function(args) {
     downloadFile(file)
 }, {
     description: "download a file",
-    args: {"file:f": "the file to download"}
+    args: {
+        "file:f": "the file to download"
+    },
+    category: "terminal-manipulation"
 })

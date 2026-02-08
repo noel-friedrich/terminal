@@ -29,6 +29,7 @@ terminal.addCommand("wc", function(args) {
     args: {
         "?f=file:f": "file to open",
         "?s": "string to count instead of file"
-    }
+    },
+    category: "terminal-manipulation"
 })
 

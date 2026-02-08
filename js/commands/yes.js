@@ -13,6 +13,6 @@ terminal.addCommand("yes", async function(args) {
     },
     standardVals: {
         message: "y"
-    }
+    },
+    category: "terminal-manipulation"
 })
-

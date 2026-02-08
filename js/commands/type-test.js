@@ -224,5 +224,6 @@ terminal.addCommand("type-test", async function(args) {
     
 }, {
     description: "test your typing speed",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

@@ -17,5 +17,6 @@ terminal.addCommand("freq", async function(args) {
     },
     defaultValues: {
         time: 0.5
-    }
+    },
+    category: "fun"
 })

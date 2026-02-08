@@ -34,5 +34,6 @@ terminal.addCommand("matmul", async function(args) {
     args: {
         "?A:m": "matrix A",
         "?B:m": "matrix B",
-    }
+    },
+    category: "maths"
 })

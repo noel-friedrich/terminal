@@ -253,5 +253,6 @@ terminal.addCommand("panik", async function(args) {
     }
 }, {
     description: "[german command] mäßige hilfe bei einer panikattacke",
-    isSecret: true
+    isSecret: true,
+    category: "tools"
 })

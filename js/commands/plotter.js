@@ -11,5 +11,6 @@ terminal.addCommand("plotter", async function(args) {
     while (1) await sleep(1000)
 }, {
     description: "plot mathematical functions",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "maths"
 })

@@ -11,6 +11,7 @@ terminal.addCommand("mkdir", async function(args) {
     description: "create a new directory",
     args: {
         "name:s": "name for your shiny new directory"
-    }
+    },
+    category: "terminal-manipulation"
 })
 

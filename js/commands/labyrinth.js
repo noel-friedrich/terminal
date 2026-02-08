@@ -276,5 +276,6 @@ terminal.addCommand("labyrinth", async function(args) {
     },
     standardVals: {
         fps: 30
-    }
+    },
+    category: "games"
 })

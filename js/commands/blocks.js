@@ -322,7 +322,7 @@ terminal.addCommand("blocks", async function(args) {
     }
 
 }, {
-	description: "3d raycasting test",
+	description: "3d raycasting simulation",
     args: {
         "?fov:i:1~720": "Field of view in degrees",
         "?res=resolution:i:1~1000": "Resolution (width) in Pixels",
@@ -338,5 +338,6 @@ terminal.addCommand("blocks", async function(args) {
         roomY: 10,
         roomZ: 10,
         viewDistance: 13
-    }
+    },
+    category: "simulations"
 })

@@ -456,5 +456,6 @@ terminal.addCommand("shoot", async function(args) {
 	defaultValues: {
 		l: 3,
 		s: 20
-	}
+	},
+    category: "games"
 })

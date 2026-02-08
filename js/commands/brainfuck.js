@@ -126,6 +126,7 @@ terminal.addCommand("brainfuck", function(args) {
     }
     printMemory(memoryResult)
 }, {
-    description: "parse given brainfuck code",
-    args: ["*code"]
+    description: "interpret given brainfuck code",
+    args: ["*code"],
+    category: "tools"
 })

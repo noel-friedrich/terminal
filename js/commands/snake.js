@@ -206,5 +206,6 @@ terminal.addCommand("snake", async function(args) {
     standardVals: {
         s: 2
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

@@ -182,5 +182,6 @@ terminal.addCommand("old-edit", async function(args) {
         "?file:f": "the file to open",
     },
     isSecret: true,
+    category: "terminal-manipulation"
 })
 

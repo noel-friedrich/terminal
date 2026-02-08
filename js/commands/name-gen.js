@@ -10,5 +10,6 @@ terminal.addCommand("name-gen", async function(args) {
     })
 }, {
     description: "start a name generator",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "fun"
 })

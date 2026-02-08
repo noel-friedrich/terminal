@@ -12,6 +12,6 @@ terminal.addCommand("bc", async function() {
         }
     }
 }, {
-    description: "start a bc (basic calculator) session"
+    description: "start a (b)asic (c)alculator session",
+    category: "maths"
 })
-

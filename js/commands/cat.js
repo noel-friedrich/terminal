@@ -47,5 +47,6 @@ terminal.addCommand("cat", async function(args) {
     description: "print file content",
     args: {
         "file:f": "file to display the content of"
-    }
+    },
+    category: "terminal-manipulation"
 })

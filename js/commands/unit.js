@@ -210,5 +210,6 @@ terminal.addCommand("unit", async function(args) {
         "s=start-unit:s": "starting unit",
         "r=result-unit:s": "resulting unit",
         "?l=list-units:b": "list all known units"
-    }
+    },
+    category: "tools"
 })

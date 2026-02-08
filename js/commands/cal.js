@@ -182,6 +182,7 @@ terminal.addCommand("cal", async function(args) {
     args: {
         "?month": "the month to print",
         "?year": "the year to print"
-    }
+    },
+    category: "tools"
 })
 

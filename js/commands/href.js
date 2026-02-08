@@ -22,6 +22,7 @@ terminal.addCommand("href", function(args) {
     args: {
         "?u=url:s": "url to open",
         "?f=file:s": "file to open"
-    }
+    },
+    category: "tools"
 })
 

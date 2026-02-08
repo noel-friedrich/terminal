@@ -41,5 +41,6 @@ terminal.addCommand("whoami", async function() {
         terminal.printLine(infoContent)
     }
 }, {
-    description: "get client info"
+    description: "get client info",
+    category: "information"
 })

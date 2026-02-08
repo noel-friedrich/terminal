@@ -25,5 +25,6 @@ terminal.addCommand("watti", async function(args) {
     isSecret: true,
     args: {
         "action:e:list|add": "<enum>"
-    }
+    },
+    category: "admin"
 })

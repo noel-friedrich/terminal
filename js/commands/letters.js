@@ -463,6 +463,6 @@ terminal.addCommand("letters", function(args) {
     args: {
         "*text": "the text to print"
     },
-    example: "letters hello world"
+    category: "tools"
 })
 

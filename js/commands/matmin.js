@@ -14,5 +14,6 @@ terminal.addCommand("matmin", async function(args) {
     description: "find the matrix of minors of a given matrix",
     args: {
         "?A:sm": "matrix to find minors of",
-    }
+    },
+    category: "maths"
 })

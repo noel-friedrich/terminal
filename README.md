@@ -68,18 +68,18 @@ The following list can also be viewed using the `whatis *` command
 | `background` | change the background color of the terminal |
 | `barrel-roll` | Do a barrel roll! |
 | `base64` | encode/decode a message using base64 |
-| `bc` | start a bc (basic calculator) session |
+| `bc` | start a (b)asic (c)alculator session |
 | `bezier` | play with bezier curves |
 | `bin` | convert a number to another base |
 | `binomcdf` | calculate the binomial cumulative distribution function |
 | `binompdf` | calculate binomial distribution value |
-| `blocks` | 3d raycasting test |
-| `brainfuck` | parse given brainfuck code |
+| `blocks` | 3d raycasting simulation |
+| `brainfuck` | interpret given brainfuck code |
 | `cal` | print a calendar |
 | `cardoid` | start a cardoid generator |
 | `cat` | print file content |
 | `cd` | change current directory |
-| `ceasar` | shift the letters of a text |
+| `ceasar` | encrypt text using a ceasar cipher |
 | `changes` | see latest changes to the terminal |
 | `cheese` | take a foto with your webcam |
 | `chess` | play a game of chess against the computer |
@@ -97,11 +97,12 @@ The following list can also be viewed using the `whatis *` command
 | `copy` | copy the file content to the clipboard |
 | `coville` | interactive virus simulation (in german) |
 | `cowsay` | let the cow say something |
-| `cowthink` | let the cow say something |
+| `cowthink` | let the cow think something |
 | `cp` | copy a file |
 | `crossp` | calculate the cross product of 2 3d vectors |
 | `curl` | download a file from the internet |
 | `cw` | get the calendar week of a date |
+| `datediff` | calculate the difference between two dates |
 | `debug` | activate the debug mode to enable untested new features |
 | `donut` | display a spinning donut |
 | `download` | download a file |
@@ -185,7 +186,6 @@ The following list can also be viewed using the `whatis *` command
 | `ncr` | calculate binomial distribution value |
 | `neural-car` | start a neural car simulation |
 | `neural-rocket` | trains neural networks to fly rockets |
-| `np` | start a noelpy interpreter for calculations |
 | `nsolve` | solve an equation using the newton-raphson method |
 | `number-guess` | guess a random number |
 | `old-edit` | edit a file of the current directory (old version of editor) |
@@ -194,7 +194,6 @@ The following list can also be viewed using the `whatis *` command
 | `pascal` | print a pascal triangle |
 | `password` | Generate a random password |
 | `pendulum` | start a pendulum wave simulation |
-| `perilious-path` | play perilous path |
 | `physics` | start a physics simulation |
 | `pi` | calculate pi to the n-th digit |
 | `pi-blocks` | simulate the bouncy blocks from 3b1b |
@@ -204,6 +203,7 @@ The following list can also be viewed using the `whatis *` command
 | `plotter` | plot mathematical functions |
 | `polyrythm` | creates a polyrythm |
 | `pong` | play a game of pong against the computer |
+| `ppath` | play perilous path |
 | `primes` | generate mersenne primes |
 | `pull` | pull a file from the server |
 | `push` | push a file to the server |
@@ -214,12 +214,13 @@ The following list can also be viewed using the `whatis *` command
 | `rate` | rate a programming language |
 | `raycasting` | play with raycasting |
 | `reboot` | reboot the website |
-| `reload` | Reloads the terminal |
+| `reload` | forces a reload of all website assets |
 | `rename` | rename a file or folder |
 | `reset` | reset the terminal |
 | `reverse` | reverse a message |
 | `rm` | remove a file |
 | `rndm` | generate a random number based on the current time |
+| `rndm-teams` | create random teams of a certain size |
 | `say` | Say something |
 | `sc` | manage the startup commands |
 | `scarpet` | draws the Sierpinski carpet using the chaos game |
@@ -232,7 +233,6 @@ The following list can also be viewed using the `whatis *` command
 | `shutdown` | shutdown the terminal |
 | `simulate` | Run a simulation. Doesn't work well on phones |
 | `sl` | Steam Locomotive |
-| `sleep` | sleep for a number of seconds |
 | `slime` | Start a slime simulation |
 | `snake` | play a game of snake |
 | `sodoku` | Solve or generate a sodoku puzzle |

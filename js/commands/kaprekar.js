@@ -40,6 +40,7 @@ terminal.addCommand("kaprekar", async function(args) {
     description: "display the kaprekar steps of a number",
     args: {
         "n:n:1~999999999": "the number to display the kaprekar steps of"
-    }
+    },
+    category: "maths"
 })
 

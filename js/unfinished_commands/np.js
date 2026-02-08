@@ -9,5 +9,6 @@ terminal.addCommand("np", async function(args) {
     terminal.printLine(a.toString())
 }, {
     description: "start a noelpy interpreter for calculations",
-    isSecret: false
+    isSecret: false,
+    category: "games"
 })

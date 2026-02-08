@@ -76,5 +76,6 @@ terminal.addCommand("sc", async function(args) {
     },
     defaultValues: {
         mode: "list"
-    }
+    },
+    category: "terminal-manipulation"
 })

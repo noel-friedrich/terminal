@@ -10,5 +10,6 @@ terminal.addCommand("raycasting", async function(args) {
     })
 }, {
     description: "play with raycasting",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "simulations"
 })

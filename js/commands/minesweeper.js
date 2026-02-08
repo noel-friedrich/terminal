@@ -382,5 +382,6 @@ terminal.addCommand("minesweeper", async function(args) {
         height: 10,
         bombs: 20
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

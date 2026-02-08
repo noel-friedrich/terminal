@@ -82,5 +82,6 @@ terminal.addCommand("session", async function(args) {
     description: "manage a filesystem session",
     args: {
         "action:e:begin|reset|save|load|end": "<enum>"
-    }
+    },
+    category: "terminal-manipulation"
 })  

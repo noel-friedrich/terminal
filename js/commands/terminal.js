@@ -10,5 +10,6 @@ terminal.addCommand("terminal", async function(args) {
     })
 }, {
     description: "a terminal inside a terminal",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "fun"
 })

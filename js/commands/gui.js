@@ -4,5 +4,6 @@ terminal.addCommand("gui", async function(args) {
     description: "open the GUI page for a given command",
     args: {
         "command:c": "a terminal command"
-    }
+    },
+    category: "tools"
 }) 

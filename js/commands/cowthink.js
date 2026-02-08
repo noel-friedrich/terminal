@@ -58,6 +58,9 @@ terminal.addCommand("cowthink", function(args) {
     }
     terminal.printLine(output.slice(0, -3))
 }, {
-    description: "let the cow say something",
-    args: ["*thought"]
+    description: "let the cow think something",
+    args: {
+        "*thought": "message to think"
+    },
+    category: "fun"
 })

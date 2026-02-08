@@ -56,5 +56,6 @@ terminal.addCommand("primes", async function() {
         await sleep(0)
     }
 }, {
-    description: "generate mersenne primes"
+    description: "generate mersenne primes",
+    category: "maths"
 })

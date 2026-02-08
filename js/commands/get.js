@@ -15,6 +15,7 @@ terminal.addCommand("get", async function(args) {
     args: {
         key: "the key to get the value of"
     },
-    disableEqualsArgNotation: true
+    disableEqualsArgNotation: true,
+    category: "tools"
 })
 

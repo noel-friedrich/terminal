@@ -10,8 +10,10 @@ terminal.addCommand("whatis", async function(args) {
         return
     }
 
-    if (args.command == "whatis")
+    if (args.command == "whatis") {
+        terminal.printEasterEgg("What is Recursion?-Egg")
         throw new Error("Recursion.")
+    }
 
     if (!terminal.commandExists(args.command))
         throw new Error(`command not found: ${args.command}`)
@@ -20,5 +22,6 @@ terminal.addCommand("whatis", async function(args) {
     terminal.printLine(`${func.name}: ${func.description}`)
 }, {
     description: "display a short description of a command",
-    args: ["command"]
+    args: ["command"],
+    category: "information"
 })

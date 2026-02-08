@@ -14,5 +14,6 @@ terminal.addCommand("plane", async function(args) {
     args: {
         "?f=fullscreen:b": "open in fullscreen mode"
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

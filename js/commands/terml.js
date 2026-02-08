@@ -1192,5 +1192,6 @@ terminal.addCommand("terml", async function(args) {
 	description: "run a .terml file",
 	args: {
 		"file": "the file to run"
-	}
+	},
+    category: "tools"
 })

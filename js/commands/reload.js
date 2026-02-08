@@ -5,5 +5,6 @@ terminal.addCommand("reload", async function(args) {
     localStorage.setItem("loadIndex", newLoadIndex)
     terminal.reload()
 }, {
-    description: "Reloads the terminal",
+    description: "forces a reload of all website assets",
+    category: "terminal-manipulation"
 })

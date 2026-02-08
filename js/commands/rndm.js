@@ -41,6 +41,7 @@ terminal.addCommand("rndm", async function(args) {
     standardVals: {
         min: 1,
         max: 100,
-    }
+    },
+    category: "tools"
 })
 

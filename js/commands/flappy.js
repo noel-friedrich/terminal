@@ -247,5 +247,6 @@ terminal.addCommand("flappy", async function(args) {
         "?f=fullscreen:b": "fullscreen",
         "?s=silent:b": "silent mode"
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

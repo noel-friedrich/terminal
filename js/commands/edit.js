@@ -115,5 +115,6 @@ terminal.addCommand("edit", async function(args) {
     description: "edit a file",
     args: {
         "file:f": "file to edit",
-    }
+    },
+    category: "terminal-manipulation"
 })

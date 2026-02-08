@@ -102,5 +102,6 @@ terminal.addCommand("python", async function(args) {
         "?f=file:f": "the script to run",
         "?c=code:s": "the code to run"
     },
-    disableEqualsArgNotation: true
+    disableEqualsArgNotation: true,
+    category: "tools"
 })

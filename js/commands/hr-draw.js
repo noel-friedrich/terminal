@@ -114,5 +114,6 @@ terminal.addCommand("hr-draw", async function(args) {
         width: 5,
         height: 5
     },
-    isSecret: true
+    isSecret: true,
+    category: "tools"
 })

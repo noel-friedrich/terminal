@@ -13,5 +13,6 @@ terminal.addCommand("crossp", function(args) {
         "x2:n": "the x component of the second vector",
         "y2:n": "the y component of the second vector",
         "z2:n": "the z component of the second vector"
-    }
+    },
+    category: "maths"
 })

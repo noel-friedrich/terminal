@@ -39,6 +39,7 @@ terminal.addCommand("pascal", async function(args) {
     },
     standardVals: {
         depth: 10
-    }
+    },
+    category: "maths"
 })
 

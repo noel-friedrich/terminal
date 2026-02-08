@@ -17,6 +17,7 @@ terminal.addCommand("f", async function(args) {
     description: "calculate friendship score with a friend",
     args: {
         "*name": "name of friend"
-    }
+    },
+    category: "fun"
 })
 

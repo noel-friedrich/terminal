@@ -11,6 +11,7 @@ terminal.addCommand("ncr", async function(args) {
     args: {
         "n:n:0~100": "the number of trials",
         "k:n:0~100": "the number of successes"
-    }
+    },
+    category: "maths"
 })
 

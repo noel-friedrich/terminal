@@ -962,5 +962,6 @@ terminal.addCommand("chess", async function() {
     
 }, {
     description: "play a game of chess against the computer",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

@@ -260,5 +260,6 @@ terminal.addCommand("pi-blocks", async function(args) {
     },
     defaultValues: {
         speed: 1
-    }
+    },
+    category: "simulations"
 })

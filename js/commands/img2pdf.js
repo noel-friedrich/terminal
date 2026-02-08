@@ -112,5 +112,6 @@ terminal.addCommand("img2pdf", async function(args) {
     defaultValues: {
         filename: null,
         padding: 5,
-    }
+    },
+    category: "tools"
 })

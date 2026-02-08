@@ -67,5 +67,6 @@ terminal.addCommand("mv", async function(args) {
         "file:f": "file to move",
         "d=directory:f": "directory to move to",
         "?n=name:s": "new filename",
-    }
+    },
+    category: "terminal-manipulation"
 })

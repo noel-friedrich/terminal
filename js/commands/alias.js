@@ -49,6 +49,7 @@ terminal.addCommand("alias", function(args) {
         "?*command:s": "name of the command to be aliased",
         "?s=show:b": "show all aliases",
         "?r=remove:s": "remove a given alias"
-    }
+    },
+    category: "terminal-manipulation"
 })
 

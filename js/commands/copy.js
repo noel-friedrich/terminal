@@ -16,5 +16,6 @@ terminal.addCommand("copy", async function(rawArgs) {
     }
 }, {
     description: "copy the file content to the clipboard",
-    rawArgMode: true
+    rawArgMode: true,
+    category: "terminal-manipulation"
 })

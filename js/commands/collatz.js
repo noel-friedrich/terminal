@@ -61,4 +61,5 @@ terminal.addCommand("collatz", async function(args) {
 		"?v=visualize:b": "visualize the numbers as a graph",
 		"?l=log-scale:b": "use a logarithmic scale to graph the numbers"
 	},
+    category: "maths"
 })

@@ -351,5 +351,6 @@ terminal.addCommand("hyp-lines", async function(args) {
     defaultValues: {
         width: 50,
         height: 40
-    }
+    },
+    category: "maths"
 })

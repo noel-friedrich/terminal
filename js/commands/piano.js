@@ -84,5 +84,6 @@ terminal.addCommand("piano", async function(args) {
         await sleep(100)
     }
 }, {
-    description: "play a piano with your keyboard"
+    description: "play a piano with your keyboard",
+    category: "fun"
 })

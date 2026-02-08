@@ -9,5 +9,6 @@ terminal.addCommand("turtlo", async function(args) {
     },
     defaultValues: {
         size: 1
-    }
+    },
+    category: "fun"
 })

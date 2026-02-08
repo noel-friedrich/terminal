@@ -11,5 +11,7 @@ terminal.addCommand("live-rocket", async function(args) {
     while (1) await sleep(100)
 }, {
     description: "a simple avoid game that you steer using camera input",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    isGame: true,
+    category: "games"
 })

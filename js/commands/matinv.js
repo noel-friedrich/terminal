@@ -14,5 +14,6 @@ terminal.addCommand("matinv", async function(args) {
     description: "find the inverse of a matrix",
     args: {
         "?A:sm": "matrix to invert",
-    }
+    },
+    category: "maths"
 })

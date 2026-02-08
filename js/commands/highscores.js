@@ -51,5 +51,6 @@ terminal.addCommand("highscores", async function(args) {
     standardVals: {
         "n": null,
         "l": 10
-    }
+    },
+    category: "games"
 })

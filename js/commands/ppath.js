@@ -1,4 +1,4 @@
-terminal.addCommand("perilious-path", async function(args) {
+terminal.addCommand("ppath", async function(args) {
     await terminal.modules.load("window", terminal)
     let terminalWindow = terminal.modules.window.make({
         iframeUrl: terminal.baseUrl + "../perilious-path/",
@@ -12,5 +12,6 @@ terminal.addCommand("perilious-path", async function(args) {
 }, {
     description: "play perilous path",
     isGame: true,
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "games"
 })

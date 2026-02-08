@@ -10,5 +10,6 @@ terminal.addCommand("eval", async function(argString) {
     }
 }, {
     description: "evaluate javascript code",
-    rawArgMode: true
+    rawArgMode: true,
+    category: "tools"
 })

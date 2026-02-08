@@ -151,10 +151,11 @@ terminal.addCommand("water", async function(args) {
         return {maxLength, bestGrid}
     }
 
-    const {maxLength, bestGrid} = await computeMaximumLength(6)
+    const {maxLength, bestGrid} = await computeMaximumLength(5)
     terminal.printLine(maxLength)
     terminal.printLine(bestGrid.toString())
 }, {
     description: "compute solutions to the longest water problem",
-    isSecret: true
+    isSecret: true,
+    category: "maths"
 })

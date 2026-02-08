@@ -30,5 +30,6 @@ terminal.addCommand("fibo", function(args) {
     },
     defaultValues: {
         n: 10
-    }
+    },
+    category: "maths"
 })

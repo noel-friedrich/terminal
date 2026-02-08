@@ -54,5 +54,6 @@ terminal.addCommand("curl", async function(args) {
     args: {
         "url:s": "the url to download the file from"
     },
-    disableEqualsArgNotation: true
+    disableEqualsArgNotation: true,
+    category: "terminal-manipulation"
 })

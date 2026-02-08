@@ -8,5 +8,6 @@ terminal.addCommand("font", function(args) {
     terminal.data.font = args.font
 }, {
     description: "change the font of the terminal",
-    args: ["*font"]
+    args: ["*font"],
+    category: "terminal-manipulation"
 })

@@ -57,6 +57,7 @@ terminal.addCommand("wurzle-stats", async function(args) {
         "?d=date:s": "date to see the stats of",
         "?password": "admin password required to see stats",
     },
-    isSecret: true
+    isSecret: true,
+    category: "admin"
 })
 

@@ -3,4 +3,5 @@ terminal.addCommand("echo", function(rawArgs) {
 }, {
     description: "print a line of text",
     rawArgMode: true,
+    category: "terminal-manipulation"
 })

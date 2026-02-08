@@ -393,5 +393,6 @@ terminal.addCommand("4inarow", async function(args) {
     standardVals: {
         depth: 4
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

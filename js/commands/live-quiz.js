@@ -10,5 +10,7 @@ terminal.addCommand("live-quiz", async function(args) {
     })
 }, {
     description: "a simple quiz game that uses your camera as input for your answer",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    isGame: true,
+    category: "games"
 })

@@ -201,5 +201,6 @@ terminal.addCommand("2048", async function(args) {
     await HighscoreApi.uploadScore(score)
 }, {
    description: "play a game of 2048",
-   isGame: true
+   isGame: true,
+   category: "games"
 })

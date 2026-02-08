@@ -32,6 +32,7 @@ terminal.addCommand("compliment", function() {
     }
     terminal.printLine(sentence)
 }, {
-    description: "get info about yourself"
+    description: "get info about yourself",
+    category: "fun"
 })
 

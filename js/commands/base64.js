@@ -17,4 +17,5 @@ terminal.addCommand("base64", async function(args) {
         "?d=decode:b": "decode the message instead of encoding it",
         "?c=copy:b": "copy the result to the clipboard"
     },
+    category: "tools"
 })

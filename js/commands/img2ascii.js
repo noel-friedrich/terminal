@@ -55,5 +55,6 @@ terminal.addCommand("img2ascii", async function(args) {
     },
     defaultValues: {
         width: 60
-    }
+    },
+    category: "fun"
 })

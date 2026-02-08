@@ -11,5 +11,6 @@ terminal.addCommand("cardoid", async function(args) {
     while (1) await sleep(100)
 }, {
     description: "start a cardoid generator",
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {"?f=fullscreen:b": "Open in fullscreen mode"},
+    category: "simulations"
 })

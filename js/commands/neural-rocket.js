@@ -349,5 +349,6 @@ terminal.addCommand("neural-rocket", async function(args) {
     defaultValues: {
         "population": 100,
     },
-    isSecret: true
+    isSecret: true,
+    category: "simulations"
 })

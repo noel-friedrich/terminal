@@ -8,5 +8,6 @@ terminal.addCommand("image-crop", async function() {
         terminalWindow.close()
     })
 }, {
-    description: "start image cropper program"
+    description: "start image cropper program",
+    category: "tools"
 })

@@ -306,5 +306,6 @@ terminal.addCommand("voronoi", async function(args) {
     },
     defaultValues: {
         n: 8
-    }
+    },
+    category: "simulations"
 })

@@ -8,4 +8,5 @@ terminal.addCommand("cd", function(args) {
         "directory:f": "the directory relative to your current path"
     },
     description: "change current directory",
+    category: "terminal-manipulation"
 })

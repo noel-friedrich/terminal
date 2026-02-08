@@ -66,5 +66,6 @@ terminal.addCommand("wurzle-admin", async function(args) {
     defaultValues: {
         author: "noel"
     },
-    isSecret: true
+    isSecret: true,
+    category: "admin"
 })

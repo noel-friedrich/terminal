@@ -1,5 +1,6 @@
 terminal.addCommand("clear", async function() {
     terminal.clear(true)
 }, {
-    description: "clear the terminal"
+    description: "clear the terminal",
+    category: "terminal-manipulation"
 })

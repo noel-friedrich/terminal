@@ -35,5 +35,6 @@ terminal.addCommand("vigenere", async function(args) {
         "?d=decrypt:b": "decrypt the message instead of encrypting it",
         "?c=copy:b": "copy the result to the clipboard"
     },
+    category: "tools"
 })
 

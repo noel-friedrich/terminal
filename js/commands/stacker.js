@@ -152,5 +152,6 @@ terminal.addCommand("stacker", async function(args) {
     await HighscoreApi.uploadScore(score)
 }, {
     description: "play a stacker game",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

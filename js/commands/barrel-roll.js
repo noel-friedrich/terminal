@@ -23,5 +23,6 @@ terminal.addCommand("barrel-roll", async function(args) {
     defaultValues: {
         duration: 2000,
         repeats: 1,
-    }
+    },
+    category: "fun"
 })

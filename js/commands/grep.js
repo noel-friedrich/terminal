@@ -93,6 +93,7 @@ terminal.addCommand("grep", async function(args) {
         "?i=ignore-case:b": "ignore case",
         "?v=invert-match:b": "invert match",
         "?x=match-whole-lines:b": "match whole lines",
-    }
+    },
+    category: "terminal-manipulation"
 })
 

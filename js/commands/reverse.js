@@ -10,6 +10,7 @@ terminal.addCommand("reverse", async function(args) {
     args: {
         "*message": "the message to reverse",
         "?c": "copy the reversed message to the clipboard"
-    }
+    },
+    category: "tools"
 })
 

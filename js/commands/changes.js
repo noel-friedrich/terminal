@@ -47,4 +47,6 @@ terminal.addCommand("changes", async function(args) {
         limit: 10
     },
     isSecret: true,
+    unFinished: true,
+    category: "tools"
 })

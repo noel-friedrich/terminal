@@ -67,6 +67,7 @@ terminal.addCommand("cp", async function(args) {
     },
     defaultValues: {
         directory: "."
-    }
+    },
+    category: "terminal-manipulation"
 })
 

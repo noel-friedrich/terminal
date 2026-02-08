@@ -33,5 +33,6 @@ terminal.addCommand("cheese", async function(args) {
 
 }, {
     description: "take a foto with your webcam",
+    category: "fun"
 })
 

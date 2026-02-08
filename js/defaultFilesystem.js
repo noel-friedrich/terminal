@@ -1,12 +1,9 @@
-const about_txt_content = `<noel-friedrich>
-
-    \\O_   This is me, Noel Friedrich.
- ,/\\/     I am a student still learning.
-   /      I also really love rainy weather.
-   \\      And command line interfaces.
-   \`      (because i like to feel cool)
-
-</noel-friedrich>`
+const about_txt_content = `
+   \\O_   Hi, I'm Noel! I enjoy Maths,
+,/\\/     creative projects, dancing in
+  /      rainy weather, Dublin, Zürich,
+  \\      Peine, YouTube, social projects
+  \`      and learning cool things.`
 
 const contact_txt = `E-Mail: noel.friedrich@outlook.de`
 

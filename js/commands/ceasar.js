@@ -17,13 +17,14 @@ terminal.addCommand("ceasar", function(args) {
     }
     terminal.printLine()
 }, {
-    description: "shift the letters of a text",
+    description: "encrypt text using a ceasar cipher",
     args: {
         "text": "the text to shift",
         "?s=shift:i:-26~26": "the shift value"
     },
     standardVals: {
         shift: 1
-    }
+    },
+    category: "tools"
 })
 

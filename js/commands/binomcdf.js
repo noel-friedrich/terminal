@@ -11,6 +11,6 @@ terminal.addCommand("binomcdf", async function(args) {
         "p:n:0~1": "the probability of success",
         "lower:n:0~1000": "the lower bound",
         "upper:n:0~1000": "the upper bound"
-    }
+    },
+    category: "maths"
 })
-

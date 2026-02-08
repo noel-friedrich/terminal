@@ -53,6 +53,7 @@ terminal.addCommand("cw", function(args) {
     },
     standardVals: {
         date: null
-    }
+    },
+    category: "tools"
 })
 

@@ -306,4 +306,5 @@ terminal.addCommand("avoida", async function(args) {
 }, {
     description: "play a game of avoida",
     isGame: true,
+    category: "games"
 })

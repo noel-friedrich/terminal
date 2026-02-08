@@ -58,6 +58,7 @@ terminal.addCommand("upload", async function(args) {
     description: "upload a file from your computer",
     args: {
         "?f=filename:s": "name of your shiny new uploaded file",
-    }
+    },
+    category: "terminal-manipulation"
 })
 

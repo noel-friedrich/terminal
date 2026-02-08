@@ -331,5 +331,6 @@ terminal.addCommand("matvisualize", async function(args) {
         x: 0,
         y: 0,
         zoom: 5
-    }
+    },
+    category: "maths"
 })

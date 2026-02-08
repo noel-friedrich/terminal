@@ -825,4 +825,5 @@ terminal.addCommand("lunar-lander", async function(args) {
         particles: 10,
     },
     isGame: true,
+    category: "games"
 })

@@ -90,5 +90,6 @@ terminal.addCommand("spion", async function(args) {
         "?a=add:b": "add a new place",
         "?l=list:s": "list a given places roles"
     },
-    isSecret: true
+    isSecret: true,
+    category: "admin"
 })

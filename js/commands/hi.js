@@ -51,5 +51,6 @@ terminal.addCommand("hi", async function(args) {
     await terminal.animatePrint(" to see if there's some")
     await terminal.animatePrint("command that you will enjoy?")
 }, {
-    description: "say hello to the terminal"
+    description: "say hello to the terminal",
+    category: "fun"
 })

@@ -22,5 +22,6 @@ terminal.addCommand("pull", async function(args) {
     description: "pull a file from the server",
     args: {
         "file": "file to pull"
-    }
+    },
+    category: "terminal-manipulation"
 })

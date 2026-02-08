@@ -22,5 +22,6 @@ terminal.addCommand("color-test", function(args) {
     },
     defaultValues: {
         size: 60
-    }
+    },
+    category: "fun"
 })

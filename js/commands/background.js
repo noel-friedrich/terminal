@@ -14,5 +14,6 @@ terminal.addCommand("background", function(args) {
     }
 }, {
     description: "change the background color of the terminal",
-    args: ["color"]
+    args: ["color"],
+    category: "terminal-manipulation"
 })

@@ -67,5 +67,6 @@ terminal.addCommand("f-optimize", async function(args) {
     defaultValues: {
         seconds: 99999999
     },
-    description: "finds a good nonce value for the friendship score generator"
+    description: "finds a good nonce value for the friendship score generator",
+    category: "tools"
 })

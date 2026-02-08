@@ -201,5 +201,6 @@ terminal.addCommand("todo", async function(args) {
         "?r=rm-item:b": "remove an item from the todo list",
         "?e=edit-item:b": "edit an item of the todo list",
         "?rm-completed:b": "remove all completed todos from the todo list"
-    }
+    },
+    category: "tools"
 })

@@ -37,5 +37,6 @@ terminal.addCommand("say", async function({ text, pitch, language }) {
     defaultValues: {
         pitch: 1,
         language: "en-US"
-    }
+    },
+    category: "fun"
 })

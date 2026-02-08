@@ -77,5 +77,6 @@ terminal.addCommand("time", async function(args) {
     },
     defaultValues: {
         size: 3,
-    }
+    },
+    category: "tools"
 })

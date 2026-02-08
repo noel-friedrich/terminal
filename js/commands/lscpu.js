@@ -33,6 +33,7 @@ terminal.addCommand("lscpu", function() {
         ["gpu renderer", renderer]
     ])
 }, {
-    description: "get some helpful info about your cpu"         
+    description: "get some helpful info about your cpu",
+    category: "information"         
 })
 

@@ -47,6 +47,7 @@ terminal.addCommand("style", async function(args) {
     args: ["?preset"],
     standardVals: {
         preset: null
-    }
+    },
+    category: "terminal-manipulation"
 })
 

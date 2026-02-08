@@ -69,6 +69,7 @@ terminal.addCommand("cmatrix", async function(args) {
     description: "show the matrix",
     args: {
         "?nf=not-fullscreen:b": "make the window fullscreen"
-    }
+    },
+    category: "fun"
 })
 

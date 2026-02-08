@@ -63,5 +63,7 @@ terminal.addCommand("mateig", async function(args) {
     args: {
         "?A:sm": "square matrix",
     },
-    isSecret: true
+    isSecret: true,
+    unFinished: true,
+    category: "maths"
 })

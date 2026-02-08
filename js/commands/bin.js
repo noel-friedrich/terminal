@@ -11,5 +11,6 @@ terminal.addCommand("bin", async function(args) {
     standardVals: {
         t: 2,
         f: 10
-    }
+    },
+    category: "tools"
 })

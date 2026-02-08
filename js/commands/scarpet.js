@@ -61,5 +61,6 @@ terminal.addCommand("scarpet", async function(args) {
     defaultValues: {
         speed: 30,
         size: 50
-    }
+    },
+    category: "simulations"
 })

@@ -113,6 +113,7 @@ terminal.addCommand("whatday", function(args) {
     
 }, {
     description: "get the weekday of a date",
-    args: ["DD.MM.YYYY"]
+    args: ["DD.MM.YYYY"],
+    category: "tools"
 })
 

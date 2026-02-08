@@ -524,5 +524,6 @@ terminal.addCommand("construct", async function(args) {
     defaultValues: {
         fps: 30
     },
-    isSecret: true
+    isSecret: true,
+    category: "maths"
 })

@@ -43,5 +43,6 @@ terminal.addCommand("weather", async () => {
   }
 }, {
   description: "Get the current weather",
-  author: "Colin Chadwick"
+  author: "Colin Chadwick",
+  category: "information"
 })

@@ -200,4 +200,5 @@ terminal.addCommand("contact", async function(args) {
     }
 }, {
     description: "Open contact form",
+    category: "fun"
 })

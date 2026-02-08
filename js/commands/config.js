@@ -134,5 +134,6 @@ terminal.addCommand("config", async function(args) {
     description: "manage the terminal configuration",
     args: {
         "?e=edit:e:foreground|background|font|color1|color2|storage|history": "edit a given property",
-    }
+    },
+    category: "terminal-manipulation"
 })

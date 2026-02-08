@@ -331,5 +331,6 @@ terminal.addCommand("greed", async function(args) {
     isGame: true,
     args: {
         "?b": "play the bigger version"
-    }
+    },
+    category: "games"
 })

@@ -8,5 +8,6 @@ terminal.addCommand("bezier", async function() {
         terminalWindow.close()
     })
 }, {
-    description: "play with bezier curves"
+    description: "play with bezier curves",
+    category: "simulations"
 })

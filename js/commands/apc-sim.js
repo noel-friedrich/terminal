@@ -388,5 +388,8 @@ terminal.addCommand("apc-sim", async function(args) {
     args: {
         "problem:e:can-x-see-q": "problem to animate",
         "?f=fullscreen:b": "open in fullscreen"
-    }
+    },
+    isSecret: true,
+    unFinished: true,
+    category: "simulations"
 })

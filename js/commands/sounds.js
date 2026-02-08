@@ -77,5 +77,6 @@ terminal.addCommand("sounds", async function(args) {
         interval: 500,
         length: 10,
         alphabet: " abcdefghijklmnopqrstuvwxyz.,\n"
-    }
+    },
+    category: "fun"
 })

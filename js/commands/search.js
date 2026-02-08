@@ -8,6 +8,7 @@ terminal.addCommand("search", async function(args) {
     },
     standardVals: {
         b: "https://www.google.com/search?q="
-    }
+    },
+    category: "tools"
 })
 

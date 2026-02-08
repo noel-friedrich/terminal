@@ -138,5 +138,6 @@ terminal.addCommand("polyrythm", async function(args) {
     },
     defaultValues: {
         time: 4000
-    }
+    },
+    category: "fun"
 })

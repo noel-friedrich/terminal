@@ -111,6 +111,7 @@ terminal.addCommand("morse", async function(args) {
     description: "translate latin to morse or morse to latin",
     args: {
         "*text": "text to translate"
-    }
+    },
+    category: "tools"
 })
 

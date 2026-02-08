@@ -20,6 +20,7 @@ terminal.addCommand("shutdown", async function() {
     await sleep(1000)
     await terminal.animatePrint("Let's just not shutdown. Have a good day!")
 }, {
-    description: "shutdown the terminal"
+    description: "shutdown the terminal",
+    category: "fun"
 })
 

@@ -25,5 +25,7 @@ terminal.addCommand("error404", async function() {
     return new Promise(resolve => {})
 }, {
     description: "Display a 404 error",
-    rawArgMode: true
+    rawArgMode: true,
+    isSecret: true,
+    category: "terminal-manipulation"
 })

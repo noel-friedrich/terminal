@@ -17,5 +17,6 @@ terminal.addCommand("history", function(args) {
     },
     standardVals: {
         l: 1000
-    }
+    },
+    category: "information"
 })

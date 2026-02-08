@@ -15,5 +15,6 @@ terminal.addCommand("rename", async function(args) {
     args: {
         "file:f": "the file or folder to rename",
         "name:s": "the new name of the file or folder"
-    }
+    },
+    category: "terminal-manipulation"
 })

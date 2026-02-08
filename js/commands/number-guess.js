@@ -24,5 +24,6 @@ terminal.addCommand("number-guess", async function(args) {
 
 }, {
     description: "guess a random number",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

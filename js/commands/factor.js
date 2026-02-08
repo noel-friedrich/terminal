@@ -51,5 +51,6 @@ terminal.addCommand("factor", async function(args) {
     },
     standardVals: {
         n: null
-    }
+    },
+    category: "maths"
 })

@@ -54,5 +54,6 @@ terminal.addCommand("highscore-admin", async function(args) {
         "?l=list:b": "List all unconfirmed highscores",
         "?t=tinder:b": "Play Tinder Swiping with highscores",
         "?d=delete:b": "Delete password from local storage"
-    }
+    },
+    category: "admin"
 })

@@ -39,4 +39,5 @@ terminal.addCommand("du", function(args) {
     args: {
         "?folder:f": "folder to display storage of"
     },
+    category: "information"
 })

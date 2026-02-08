@@ -327,5 +327,6 @@ terminal.addCommand("turing", async function(args) {
         startingState: "0",
         maxSteps: 100000,
         turboTapeSize: 10000,
-    }
+    },
+    category: "tools"
 })

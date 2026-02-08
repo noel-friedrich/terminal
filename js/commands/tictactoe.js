@@ -219,5 +219,6 @@ terminal.addCommand("tictactoe", async function(args) {
     standardVals: {
         d: "impossible"
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

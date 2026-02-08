@@ -741,5 +741,6 @@ terminal.addCommand("sodoku", async function(args) {
         "?fen:s": "a FEN string to load",
         "?give-fen:b": "output the FEN string for the inputted puzzle"
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

@@ -10,5 +10,6 @@ terminal.addCommand("wave", async function() {
 
     while (true) await sleep(100)
 }, {
-    description: "play with a wave"
+    description: "play with a wave",
+    category: "simulations"
 })

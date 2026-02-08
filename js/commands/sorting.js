@@ -271,6 +271,7 @@ terminal.addCommand("sorting", async function(args) {
         algorithm: null,
         n: 20,
         speed: 1,
-    }
+    },
+    category: "simulations"
 })
 

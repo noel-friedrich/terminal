@@ -626,5 +626,6 @@ terminal.addCommand("qr", async function(args) {
     description: "generate a qr code",
     args: {
         "*text": "the text to encode"
-    }
+    },
+    category: "tools"
 })

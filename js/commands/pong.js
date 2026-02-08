@@ -214,5 +214,6 @@ terminal.addCommand("pong", async function(args) {
     
 }, {
     description: "play a game of pong against the computer",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

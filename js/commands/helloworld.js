@@ -77,4 +77,6 @@ terminal.addCommand("helloworld", async function() {
 }, {
     description: "display the hello-world text",
     rawArgMode: true,
+    isSecret: true,
+    category: "terminal-manipulation"
 })

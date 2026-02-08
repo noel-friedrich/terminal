@@ -36,5 +36,6 @@ terminal.addCommand("highscore-remove", async function(args) {
     standardVals: {
         "n": null,
         "l": Infinity
-    }
+    },
+    category: "admin"
 })

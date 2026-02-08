@@ -549,5 +549,6 @@ terminal.addCommand("longjump", async function(args) {
     isGame: true,
     args: {
         "?f=fullscreen:b": "Play in fullscreen"
-    }
+    },
+    category: "games"
 })

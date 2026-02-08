@@ -248,5 +248,6 @@ terminal.addCommand("mill2player", async function() {
 
 }, {
     description: "play a game of mill with a friend locally",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

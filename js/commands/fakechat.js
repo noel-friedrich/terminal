@@ -373,5 +373,6 @@ terminal.addCommand("fakechat", async function(args) {
         s: 1,
         x: 720,
         y: 1560,
-    }
+    },
+    category: "fun"
 })

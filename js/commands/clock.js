@@ -79,6 +79,7 @@ terminal.addCommand("clock", async function(args) {
     description: "display a clock",
     args: {
         "?m=millis:b": "display milliseconds"
-    }
+    },
+    category: "fun"
 })
 

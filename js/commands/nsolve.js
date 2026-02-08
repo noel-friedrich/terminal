@@ -64,7 +64,8 @@ terminal.addCommand("nsolve", async function(args) {
         "?l=list:b": "list all intermediate values"
     },
     defaultValues: {
-        startn: 0.71,
+        startn: 0.8652559794322651,
         iterations: 1000
-    }
+    },
+    category: "maths"
 })

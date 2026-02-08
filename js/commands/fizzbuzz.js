@@ -15,6 +15,7 @@ terminal.addCommand("fizzbuzz", function(args) {
     },
     standardVals: {
         max: 15
-    }
+    },
+    category: "fun"
 })
 

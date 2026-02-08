@@ -11,6 +11,7 @@ terminal.addCommand("man", async function(args) {
         ["name", command.name],
         ["author", command.author],
         ["description", command.description],
+        ["category", command.category ?? "unknown"],
         ["is a game", command.info.isGame ? "yes" : "no"],
         ["is secret", command.info.isSecret ? "yes" : "no"]
     ]
@@ -42,6 +43,7 @@ terminal.addCommand("man", async function(args) {
 }, {
     description: "show the manual page for a command",
     args: {"command:c": "the command to show the manual page for"},
-    helpVisible: true
+    helpVisible: true,
+    category: "information"
 })
 

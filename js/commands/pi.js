@@ -45,7 +45,8 @@ terminal.addCommand("pi", async function(args) {
     },
     standardVals: {
         n: 100
-    }
+    },
+    category: "maths"
 })
 
 

@@ -40,7 +40,8 @@ terminal.addCommand("name", async function(args) {
 }, {
 	description: "set a default name for the highscore system to use",
 	args: {
-		"method": "set | get | reset",
+		"method:e:set|get|reset": "set | get | reset",
 		"?newname": "the new name"
 	},
+    category: "tools"
 })

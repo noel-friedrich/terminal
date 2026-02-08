@@ -8,5 +8,6 @@ terminal.addCommand("debug", function(args) {
 	terminal.log("Activated Debug Mode")
 } ,{
 	description: "activate the debug mode to enable untested new features",
-	isSecret: true
+	isSecret: true,
+    category: "terminal-manipulation"
 })

@@ -14,5 +14,6 @@ terminal.addCommand("cmdnotfound", async function(commandName, tokens) {
 }, {
     description: "display that a command was not found",
     rawArgMode: true,
-    isSecret: true
+    isSecret: true,
+    category: "terminal-manipulation"
 })

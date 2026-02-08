@@ -57,6 +57,7 @@ terminal.addCommand("mandelbrot", async function(args) {
     args: {
         "?x:i:10~1000": "width of the plot",
         "?y:i:10~1000": "height of the plot"
-    }
+    },
+    category: "maths"
 })
 

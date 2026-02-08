@@ -24,5 +24,6 @@ terminal.addCommand("reset", async function(args) {
     description: "reset the terminal",
     args: {
         "?n=now:b": "reset now"
-    }
+    },
+    category: "terminal-manipulation"
 })

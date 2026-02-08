@@ -5,5 +5,6 @@ terminal.addCommand("echonum", function(args) {
     args: {
         "number:n": "number to echo"
     },
-    isSecret: true
+    isSecret: true,
+    category: "terminal-manipulation"
 })

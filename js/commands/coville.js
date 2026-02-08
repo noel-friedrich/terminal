@@ -12,5 +12,8 @@ terminal.addCommand("coville", async function(args) {
 }, {
     description: "interactive virus simulation (in german)",
     isSecret: true,
-    args: {"?f=fullscreen:b": "Open in fullscreen mode"}
+    args: {
+        "?f=fullscreen:b": "Open in fullscreen mode"
+    },
+    category: "simulations"
 })

@@ -18,6 +18,6 @@ terminal.addCommand("zip", async function() {
     terminal.printEasterEgg("Zipper-Egg")
 
 }, {
-    description: "zip a file"
+    description: "zip a file",
+    category: "fun"
 })
-

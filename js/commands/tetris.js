@@ -382,5 +382,6 @@ terminal.addCommand("tetris", async function(args) {
 
 }, {
     description: "play a classic game of tetris",
-    isGame: true
+    isGame: true,
+    category: "games"
 })

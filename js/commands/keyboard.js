@@ -37,5 +37,6 @@ terminal.addCommand("keyboard", function(args) {
     },
     defaultValues: {
         m: "status"
-    }
+    },
+    category: "terminal-manipulation"
 })

@@ -16,5 +16,6 @@ terminal.addCommand("foreground", function(args) {
     description: "change the foreground color of the terminal",
     args: {
         "color": "the color to change the foreground to"
-    }
+    },
+    category: "terminal-manipulation"
 })

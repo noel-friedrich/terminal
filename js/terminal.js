@@ -496,7 +496,7 @@ class TerminalData {
         "foreground": "#ffffff",
         "font": "\"Cascadia Code\", monospace",
         "accentColor1": "#ffff00",
-        "accentColor2": "#8bc34a",
+        "accentColor2": "#ffffff",
         "history": "[]",
         "storageSize": "1000000",
         "startupCommands": "[\"helloworld\"]",
@@ -1032,6 +1032,8 @@ class TerminalParser {
                 argOptions.typeName = "integer"
             } else if (type == "b") {
                 argOptions.type = argOptions.typeName = "boolean"
+            } else if (type == "d") {
+                argOptions.type = argOptions.typeName = "date"
             } else if (type == "s") {
                 argOptions.type = argOptions.typeName = "string"
             } else if (type == "f") {
@@ -1442,6 +1444,28 @@ class TerminalParser {
                 return error(`At property "${argOption.name}": Expected a boolean`)
             }
             addVal(trueForms.includes(value))
+        } else if (argOption.type == "date") {
+            if (value.toLowerCase() == "today") {
+                const t = new Date()
+                addVal(new Date(t.getFullYear(), t.getMonth(), t.getDate()))
+            } else if (value.toLowerCase() == "tomorrow") {
+                const t = new Date()
+                addVal(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1))
+            } else if (value.toLowerCase() == "yesterday") {
+                const t = new Date()
+                addVal(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1))
+            } else {
+                if (!/^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,4}$/.test(value)) {
+                    return error(`At property "${argOption.name}": Invalid date (use DD.MM.YYYY)`)
+                }
+
+                const [day, month, year] = value.split(".").map(n => parseInt(n))
+                const date = new Date(year, month - 1, day)
+                if (date.getDate() != day || date.getMonth() != month - 1 || date.getFullYear() != year) {
+                    return error(`At property "${argOption.name}": Invalid date (doesn't exist)`)
+                }
+                addVal(date)
+            }
         } else if (argOption.type == "bigint") {
             try {
                 addVal(BigInt(value))
@@ -1662,6 +1686,7 @@ class Command {
         this.description = info.description ?? ""
         this.defaultValues = info.defaultValues ?? info.standardVals ?? {}
         this.author = info.author ?? "Noel Friedrich"
+        this.category = info.category ?? "misc"
         this.windowScope = null
     }
 
@@ -1886,7 +1911,18 @@ const UtilityFunctions = {
             [array[cI], array[rI]] = [array[rI], array[cI]]
         }
         return array
-    }
+    },
+
+    capitalize(string) {
+        // capitalizes every word in the string
+        return string.split(" ").map(w => {
+            if (w.length == 0) {
+                return w
+            }
+
+            return w[0].toUpperCase() + w.slice(1)
+        }).join(" ")
+    }    
 
 }
 

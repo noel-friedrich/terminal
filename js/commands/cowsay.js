@@ -63,5 +63,8 @@ terminal.addCommand("cowsay", function(args) {
     }
 }, {
     description: "let the cow say something",
-    args: ["*message"]
+    args: {
+        "*message": "message to moo"
+    },
+    category: "fun"
 })

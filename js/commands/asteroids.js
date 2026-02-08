@@ -479,5 +479,6 @@ terminal.addCommand("asteroids", async function(args) {
         "?f=fullscreen:b": "start in fullscreen mode",
         "?c=chaos:b": "start with chaos mode enabled",
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

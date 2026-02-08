@@ -12,6 +12,7 @@ terminal.addCommand("head", function(args) {
     args: ["file", "?l:i:1~1000"],
     standardVals: {
         l: 10
-    }
+    },
+    category: "terminal-manipulation"
 })
 

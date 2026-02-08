@@ -31,6 +31,6 @@ terminal.addCommand("donut", async function() {
               await sleep(30);}
 
 }, {
-    description: "display a spinning donut"
+    description: "display a spinning donut",
+    category: "fun"
 })
-

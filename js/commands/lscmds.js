@@ -2,24 +2,11 @@ terminal.addCommand("lscmds", async function(args) {
     let functions = [...terminal.visibleFunctions]
         .sort((a, b) => a.name.localeCompare(b.name))
         .sort((a, b) => a.name.length - b.name.length)
-    if (args.m) {
-        functions.sort((a, b) => a.name.localeCompare(b.name))
-        let maxFuncLength = terminal.visibleFunctions.reduce((p, c) => Math.max(p, c.name.length), 0)
-        const allDescriptions = functions.map(f => f.description ? f.description : "undefined")
-        let maxDescLength = allDescriptions.reduce((p, c) => Math.max(p, c.length), 0)
-        let text = ""
-        for (let i = 0; i < functions.length; i++) {
-            let func = functions[i]
-            let description = allDescriptions[i]
-            let funcPart = stringPadBack("\`" + func.name + "\`", maxFuncLength + 2)
-            let descpart = stringPadBack(description, maxDescLength)
-            text += `| ${funcPart} | ${descpart} |\n` 
-        }
-        terminal.printLine(text)
-        await terminal.copy(text)
-        terminal.printLine("Copied to Clipboard ✓")
-        return
-    }
+
+    const allCategories = Array.from(new Set(functions.map(f => f.category)))
+    const categoryColors = Object.fromEntries(allCategories.map((c, i) => {
+        return [c, Color.hsl(i / allCategories.length, 1, 0.8)]
+    }))
 
     function createTableData(columns) {
         let columnHeight = Math.ceil(functions.length / columns)
@@ -29,7 +16,7 @@ terminal.addCommand("lscmds", async function(args) {
         while (true) {
             let func = functions[functionIndex]
             if (!func) break
-            tableData[functionIndex % columnHeight][columnIndex] = func.name
+            tableData[functionIndex % columnHeight][columnIndex] = func
             if (functionIndex % columnHeight == columnHeight - 1) columnIndex++
             functionIndex++
         }
@@ -40,14 +27,20 @@ terminal.addCommand("lscmds", async function(args) {
         let columnWidths = []
         for (let i = 0; i < tableData[0].length; i++) {
             let column = tableData.map(row => row[i])
-            columnWidths.push(Math.max(...column.map(c => c === undefined ? 0 : c.length)))
+            columnWidths.push(Math.max(...column.map(c => !c ? 0 : c.name.length)))
         }
 
-        for (let row of tableData) {
+        for (let row of tableData) {    
             for (let i = 0; i < row.length; i++) {
                 let cell = row[i]
+                let commandName = cell ? cell.name : ""
                 let width = columnWidths[i]
-                terminal.printCommand(stringPadBack(cell, width + 2), cell, undefined, false)
+                const background = cell ? categoryColors[cell.category] : new Color(0, 0, 0, 0)
+                terminal.printCommand(commandName, commandName, background, false)
+
+                if (i < row.length - 1) {
+                    terminal.print(" ".repeat(Math.max(0, width - commandName.length + 2)))
+                }
             }
             terminal.addLineBreak()
         }
@@ -57,18 +50,25 @@ terminal.addCommand("lscmds", async function(args) {
         let columnWidths = []
         for (let i = 0; i < tableData[0].length; i++) {
             let column = tableData.map(row => row[i])
-            columnWidths.push(Math.max(...column.map(c => c === undefined ? 0 : c.length)))
+            columnWidths.push(Math.max(...column.map(c => !c ? 0 : c.name.length)))
         }
 
         return columnWidths.reduce((p, c) => p + c + 2, 0)
     }
+
+    terminal.addLineBreak()
+    for (const category of allCategories) {
+        terminal.print(` ${capitalize(category.replaceAll("-", " "))} `, Color.BLACK, {background: categoryColors[category]})
+        terminal.print(" ")
+    }
+    terminal.addLineBreak(2)
 
     for (let tableWidth = 20; tableWidth >= 1; tableWidth--) {
         let tableData = createTableData(tableWidth)
 
         let width = calculateTableWidth(tableData)
 
-        if (width <= 90 || tableWidth == 1) {
+        if (width <= 91 || tableWidth == 1) {
             printTable(tableData)
             break
         }
@@ -81,13 +81,11 @@ terminal.addCommand("lscmds", async function(args) {
     terminal.printLine(" <cmd> to get more information about a command")
     terminal.print("- use ")
     terminal.printCommand("whatis *", "whatis *", undefined, false)
-    terminal.printLine(" to see all commands including their description")
+    terminal.printLine(" to see all commands including their descriptions")
 
 }, {
     description: "list all available commands",
     helpVisible: true,
-    args: {
-        "?m:b": "format output as markdown table"
-    }
+    category: "information"
 })
 

@@ -147,5 +147,6 @@ terminal.addCommand("sl", async function(args) {
     description: "Steam Locomotive",
     args: {
         "?f=F:b": "Make it fly"
-    }
+    },
+    category: "fun"
 })

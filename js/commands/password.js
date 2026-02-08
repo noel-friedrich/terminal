@@ -76,6 +76,7 @@ terminal.addCommand("password", async function(args) {
     standardVals: {
         l: 20,
         c: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&!?.,;:[]{}()_-+=*",
-    }
+    },
+    category: "tools"
 })
 

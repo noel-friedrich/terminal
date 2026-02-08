@@ -17,6 +17,7 @@ terminal.addCommand("set", async function(args) {
         key: "the key to set the value of",
         value: "the value to set"
     },
-    disableEqualsArgNotation: true
+    disableEqualsArgNotation: true,
+    category: "terminal-manipulation"
 })
 

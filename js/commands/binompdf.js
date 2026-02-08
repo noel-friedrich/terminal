@@ -12,6 +12,7 @@ terminal.addCommand("binompdf", async function(args) {
         "n:n:0~100": "the number of trials",
         "p:n:0~1": "the probability of success",
         "k:n:0~100": "the number of successes"
-    }
+    },
+    category: "maths"
 })
 

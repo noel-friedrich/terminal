@@ -43,5 +43,6 @@ terminal.addCommand("easter-eggs", async function(args) {
     description: "open easter egg hunt",
     args: {
         "?reset:b": "reset easter egg hunt"
-    }
+    },
+    category: "fun"
 })

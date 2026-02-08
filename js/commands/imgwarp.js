@@ -198,5 +198,7 @@ terminal.addCommand("imgwarp", async function(args) {
     args: {
         "f=function:s": "step distance function",
     },
-    isSecret: true
+    isSecret: true,
+    unFinished: true,
+    category: "tools"
 })

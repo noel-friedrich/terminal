@@ -53,5 +53,6 @@ terminal.addCommand("fraction", function(args) {
     },
     defaultValues: {
         d: 1000
-    }
+    },
+    category: "maths"
 })

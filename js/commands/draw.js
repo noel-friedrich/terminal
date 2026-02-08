@@ -8,5 +8,6 @@ terminal.addCommand("draw", async function() {
         terminalWindow.close()
     })
 }, {
-    description: "start simple drawing app"
+    description: "start simple drawing app",
+    category: "tools"
 })

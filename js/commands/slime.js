@@ -8,5 +8,6 @@ terminal.addCommand("slime", async function() {
         terminalWindow.close()
     })
 }, {
-    description: "Start a slime simulation"
+    description: "Start a slime simulation",
+    category: "simulations"
 })

@@ -80,6 +80,7 @@ terminal.addCommand("solve", async function(args) {
         l: -100,
         u: 100
     },
-    disableEqualsArgNotation: true
+    disableEqualsArgNotation: true,
+    category: "maths"
 })
 

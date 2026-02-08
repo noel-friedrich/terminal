@@ -10,5 +10,6 @@ terminal.addCommand("sha256", async function(args) {
     description: "calculate the SHA-256 hash of a message",
     args: {
         "*text:s": "ascii text to calculate hash of"
-    }
+    },
+    category: "tools"
 })

@@ -454,5 +454,6 @@ terminal.addCommand("enigma", async function(args) {
         "?t=translate:b": "Enables translation mode",
         "?r=reset:b": "Resets the machine",
         "?s=show:b": "Shows the current settings"
-    }
+    },
+    category: "fun"
 })

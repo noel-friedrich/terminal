@@ -1169,5 +1169,6 @@ terminal.addCommand("minigolf", async function(args) {
     defaultValues: {
         level: 1
     },
-    isGame: true
+    isGame: true,
+    category: "games"
 })

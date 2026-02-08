@@ -71,5 +71,6 @@ terminal.addCommand("shi", async function(args) {
     args: {
         "s=shoe-size:n:1~99999": "shoe size (european)",
         "l=height:n:1~999999": "body height in centimeters"
-    }
+    },
+    category: "tools"
 })

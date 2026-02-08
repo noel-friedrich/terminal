@@ -1085,5 +1085,6 @@ terminal.addCommand("neural-car", async function(args) {
     },
     defaultValues: {
         cars: 100,
-    }
+    },
+    category: "simulations"
 })

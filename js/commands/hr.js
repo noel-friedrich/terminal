@@ -154,5 +154,6 @@ terminal.addCommand("hr", async function(args) {
     },
     defaultValues: {
         fontmode: "5x5"
-    }
+    },
+    category: "tools"
 })

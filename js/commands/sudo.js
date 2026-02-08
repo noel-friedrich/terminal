@@ -28,5 +28,6 @@ terminal.addCommand("sudo", async function() {
     terminal.printEasterEgg("Hacker-Egg")
 }, {
     description: "try to use sudo",
-    args: ["**"]
+    args: ["**"],
+    category: "fun"
 })

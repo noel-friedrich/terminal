@@ -26,7 +26,10 @@ def main(commands):
                 content = content.replace(f"${key}$", str(value))
             
             folder_path = f"{commands_folder_path}/{command}"
-            os.makedirs(folder_path)
+            try:
+                os.makedirs(folder_path)
+            except Exception as e:
+                print(f"Failed to create {folder_path}. Reason: {e}")
             with open(f"{folder_path}/index.html", "w") as file:
                 file.write(content)
     

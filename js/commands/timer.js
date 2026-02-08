@@ -93,6 +93,6 @@ terminal.addCommand("timer", async function(rawArgs) {
 
 }, {
     description: "set a timer",
-    rawArgMode: true
+    rawArgMode: true,
+    category: "tools"
 })
-

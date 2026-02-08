@@ -176,5 +176,6 @@ terminal.addCommand("plot", async function(args) {
         xmin: -3, xmax: 3.1,
         ymin: -3, ymax: 3.1,
         playtime: 2500
-    }
+    },
+    category: "fun"
 })

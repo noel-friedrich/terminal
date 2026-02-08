@@ -15,5 +15,6 @@ terminal.addCommand("push", async function(args) {
     description: "push a file to the server",
     args: {
         "file:f": "file to push"
-    }
+    },
+    category: "terminal-manipulation"
 })

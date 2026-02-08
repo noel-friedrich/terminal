@@ -32,7 +32,7 @@ terminal.addCommand("lorem", async function(args) {
 
     if (args.c) {
         terminal.addLineBreak()
-        await terminal.copy(output, {printMessage: true})
+        await terminal.copy(copyOutput, {printMessage: true})
     }
 }, {
     description: "generate lorem ipsum text",
@@ -42,5 +42,6 @@ terminal.addCommand("lorem", async function(args) {
     },
     defaultValues: {
         l: 100
-    }
+    },
+    category: "tools"
 })

@@ -186,5 +186,6 @@ terminal.addCommand("stat", async function(args) {
         background: null,
         length: 100,
         linewidth: 2,
-    }
+    },
+    category: "tools"
 })

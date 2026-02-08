@@ -11,4 +11,5 @@ terminal.addCommand("games", function() {
     }
 }, {
     description: "shows the game menu",
+    category: "fun"
 })

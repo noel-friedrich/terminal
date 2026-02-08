@@ -52,6 +52,7 @@ terminal.addCommand("ls", function(args) {
     },
     standardVals: {
         folder: ""
-    }
+    },
+    category: "information"
 })
 

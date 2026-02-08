@@ -12,4 +12,5 @@ terminal.addCommand("help", function() {
     terminal.printLine("\n(there are also A LOT of secret ones)")
 }, {
     description: "shows this help menu",
+    category: "information"
 })

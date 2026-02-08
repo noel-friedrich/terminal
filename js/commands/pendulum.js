@@ -20,5 +20,6 @@ terminal.addCommand("pendulum", async function(args) {
     standardVals: {
         n: 20,
         o: 0.025
-    }
+    },
+    category: "simulations"
 })

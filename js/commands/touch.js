@@ -10,6 +10,7 @@ terminal.addCommand("touch", async function(args) {
     description: "create a file in the current directory",
     args: {
         "filename:s": "the name of the file"
-    }
+    },
+    category: "terminal-manipulation"
 })
 

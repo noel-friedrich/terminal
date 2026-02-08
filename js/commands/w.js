@@ -3,6 +3,6 @@ terminal.addCommand("w", function() {
     terminal.print("root   ", Color.COLOR_1)
     terminal.printLine(((Date.now() - terminal.startTime) / 1000) + "s")
 }, {
-    description: "print the current time elapsed"
+    description: "print the current time elapsed",
+    category: "terminal-manipulation"
 })
-

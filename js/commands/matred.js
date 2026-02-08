@@ -154,5 +154,6 @@ terminal.addCommand("matred", async function(args) {
     description: "reduce a given matrix to reduced row echelon form",
     args: {
         "?A:m": "matrix to reduce",
-    }
+    },
+    category: "maths"
 })

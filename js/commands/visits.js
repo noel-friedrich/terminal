@@ -4,5 +4,6 @@ terminal.addCommand("visits", async function(args) {
     ).then(response => response.json())
     terminal.printTable(visits.map(v => [v["url"], v["visits"]]), ["url", "visits"])
 }, {
-    "description": "Shows the number of page visits",
+    description: "Shows the number of page visits",
+    category: "tools"
 })

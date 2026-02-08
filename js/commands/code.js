@@ -196,5 +196,6 @@ terminal.addCommand("code", async function(args) {
     args: {
         "?c=command:c": "the command to show the source code of",
         "?s=string:s": "print a highlighted string"
-    }
+    },
+    category: "terminal-manipulation"
 })

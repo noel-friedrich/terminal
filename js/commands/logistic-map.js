@@ -80,5 +80,6 @@ terminal.addCommand("logistic-map", async function(args) {
         w: 80,
         h: 20
     },
+    category: "maths"
 })
 

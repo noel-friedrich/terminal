@@ -828,5 +828,6 @@ terminal.addCommand("simulate", async function(args) {
         "?g=gravity:n:0~99999999": "initial gravity constant in gravity based simulations",
         "?s=skip-ticks:i": "ticks to simulate before rendering",
         "?h=start-being-halted:b": "simulation will start being stopped"
-    }
+    },
+    category: "simulations"
 })
