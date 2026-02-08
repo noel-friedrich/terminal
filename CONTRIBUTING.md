@@ -76,7 +76,7 @@ terminal.addCommand("<command-name>", async function(args) {
     description: "<command-description>",
     author: "<command-author>",
     // other options
-}
+})
 ```
 
 Because each command lives in a seperate file, you may use your own
