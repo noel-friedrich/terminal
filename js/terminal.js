@@ -3127,6 +3127,7 @@ class Terminal {
         element.classList.add("clickable")
         if (color) element.style.color = color.string.hex
         if (endLine) this.addLineBreak()
+        return element
     }
 
     printEasterEgg(eggName, {endLine=true}={}) {
