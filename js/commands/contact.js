@@ -199,6 +199,6 @@ terminal.addCommand("contact", async function(args) {
         info.input.value = ""
     }
 }, {
-    description: "Open contact form",
+    description: "open a contact form",
     category: "fun"
 })

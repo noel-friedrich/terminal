@@ -259,7 +259,8 @@ function updateTurtlo() {
 function startTurtlo(cssClass=null, silent=false) {
     if (!silent) {
         terminal.print("to remove turtlo, use ")
-        terminal.printCommand("kill turtlo", "kill turtlo", Color.COLOR_1)
+        terminal.printCommand("kill turtlo", "kill turtlo", Color.COLOR_1, false)
+        terminal.printLine(" (please don't)")
     }
     removeExistingTurtlos()
     if (terminal.turtlo.intervalFunc)

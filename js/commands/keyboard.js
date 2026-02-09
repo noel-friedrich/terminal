@@ -33,7 +33,7 @@ terminal.addCommand("keyboard", function(args) {
 }, {
     description: "Toggle mobile mode",
     args: {
-        "?m=mode:s": "status | on | off | auto"
+        "?m=mode:e:status|on|off|auto": "pick a mode"
     },
     defaultValues: {
         m: "status"

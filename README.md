@@ -93,7 +93,7 @@ The following list can also be viewed using the `whatis *` command
 | `compliment` | get info about yourself |
 | `config` | manage the terminal configuration |
 | `construct` | animate the construction of a given number (using ruler and compass only) |
-| `contact` | Open contact form |
+| `contact` | open a contact form |
 | `copy` | copy the file content to the clipboard |
 | `coville` | interactive virus simulation (in german) |
 | `cowsay` | let the cow say something |
@@ -136,7 +136,7 @@ The following list can also be viewed using the `whatis *` command
 | `hangman` | play a game of hangman |
 | `head` | display the first lines of a file |
 | `helloworld` | display the hello-world text |
-| `help` | shows this help menu |
+| `help` | shows some useful commands |
 | `hi` | say hello to the terminal |
 | `highscore-admin` | Highscore Admin Management |
 | `highscore-remove` | Remove a highscore |
