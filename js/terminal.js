@@ -3409,7 +3409,7 @@ class Terminal {
         }
     }
 
-    log(msg, {type="info", time="auto", date="auto", timestamp="auto", template="[TYPE] [TIMESTAMP] MSG"}={}) {
+    log(msg, {type="info", time="auto", date="auto", timestamp="auto", template="[TYPE] [DATE TIME] MSG"}={}) {
         if (!this.hasInitted) {
             this.addToLogBuffer(msg, type, time, date, template)
             return
