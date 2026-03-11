@@ -7,6 +7,7 @@ terminal.addCommand("slime", async function() {
     terminal.onInterrupt(() => {
         terminalWindow.close()
     })
+    while (1) await sleep(100)
 }, {
     description: "Start a slime simulation",
     category: "simulations"
