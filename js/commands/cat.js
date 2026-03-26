@@ -1,22 +1,14 @@
 terminal.addCommand("cat", async function(args) {
-    const specialCases = {
-        "turtlo": "no, turtlo isn't a cat"
-    }
+    const file = terminal.getFile(args.file)
 
-    if (args.file in specialCases) {
-        terminal.printLine(specialCases[args.file])
+    if (file.name.toLowerCase() == "turtlo") {
+        terminal.printLine("no, turtlo isn't a cat.\n")
+        terminal.printEasterEgg("Turtlo-Cat-Egg")
         return
     }
 
-    let file = terminal.getFile(args.file)
-
     if (file.isDirectory) {
         throw new Error("Cannot read directory data")
-    }
-
-    if (args.file.name == "passwords.json") {
-        let favoriteUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        setTimeout(() => terminal.href(favoriteUrl), 1000)
     }
 
     if (!file.content)
@@ -42,6 +34,13 @@ terminal.addCommand("cat", async function(args) {
         terminal.printLink(file.content)
     } else {
         terminal.printLine(file.content)
+    }
+
+    if (file.name == "passwords.json") {
+        const favouriteUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        setTimeout(() => terminal.href(favouriteUrl), 1000)
+        terminal.addLineBreak()
+        terminal.printEasterEgg("Secret-Passwords-Egg")
     }
 }, {
     description: "print file content",
