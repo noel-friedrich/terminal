@@ -14,7 +14,7 @@
 ## Introduction
 
 The page is build to work like a Unix-Terminal, including:
-* 217 commands such as `ls`, `cd` and of course `cowsay`
+* 219 commands such as `ls`, `cd` and of course `cowsay`
 * a file-system that you can navigate and manipulate
 * TAB-Autocompletion (TABA) and Command-Validity Checking (CVC)
 * multiple ways to get rickrolled
@@ -206,6 +206,7 @@ The following list can also be viewed using the `whatis *` command
 | `pong` | play a game of pong against the computer |
 | `ppath` | play perilous path |
 | `primes` | generate mersenne primes |
+| `projects` | open the projects page |
 | `pull` | pull a file from the server |
 | `push` | push a file to the server |
 | `pv` | print a message with a typing animation |
@@ -245,6 +246,7 @@ The following list can also be viewed using the `whatis *` command
 | `stat` | show a statistic of a given data set |
 | `style` | change the style of the terminal |
 | `sudo` | try to use sudo |
+| `sylver-coinage` | play the conway two-player sylver-coin game |
 | `terminal` | a terminal inside a terminal |
 | `terml` | run a .terml file |
 | `tetris` | play a classic game of tetris |
